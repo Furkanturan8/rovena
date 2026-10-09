@@ -31,7 +31,7 @@ Sırayla 01'den başla. Kod örneklerini görmek için ilgili dosyayı yanında 
 | Shared modülü | Tamamlandı | errorx, response, httpx, auth, logging |
 | Identity servisi | Tamamlandı | Kayıt, giriş, refresh, profil, admin rol yönetimi; birim, HTTP ve Postgres entegrasyon testleri |
 | Catalog servisi | Tamamlandı | Kategori, ürün, varyant, görsel; arama/filtre; admin yönetimi; aynı test seti |
-| API şemaları (OpenAPI) | Tamamlandı | Identity ve Catalog; sözleşme testi (Inventory şeması eklenecek) |
+| API şemaları (OpenAPI) | Tamamlandı | Identity, Catalog ve Inventory; sözleşme testi |
 | Inventory servisi | Tamamlandı | Varyant bazlı stok, rezervasyon yaşam döngüsü, süre aşımı, hareket defteri; birim, HTTP ve eşzamanlılık testleri |
 | Order servisi (Saga, Outbox) | Sırada | Rezervasyon uçları REST olarak hazır; RabbitMQ bu adımda devreye girecek |
 | Payment servisi | Planlı | |

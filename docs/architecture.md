@@ -40,8 +40,8 @@ flowchart TD
     Payment --> PostgreSQL
 
     Order <--> RabbitMQ
-    Inventory <--> RabbitMQ
     Payment <--> RabbitMQ
+    Order -->|"REST: reserve, commit, release (internal key)"| Inventory
 
     Identity -. telemetry .-> Observability
     Catalog -. telemetry .-> Observability
@@ -235,6 +235,7 @@ REST/HTTP is the default for request-response operations, such as:
 * Loading a user's cart
 * Retrieving order history
 * Administrative product management
+* Stock reservations during checkout (Order to Inventory), because the caller needs the answer immediately: either the stock is held or it is not, and which item is missing
 
 Service-to-service calls must have explicit timeouts, error handling, and bounded retries where appropriate.
 
@@ -246,13 +247,13 @@ RabbitMQ carries domain events and commands used in workflows that do not requir
 
 Initial event examples:
 
-* `OrderCreated`
-* `StockReserved`
-* `StockReservationFailed`
+* `PaymentRequested`
 * `PaymentSucceeded`
 * `PaymentFailed`
 * `OrderConfirmed`
 * `OrderCancelled`
+
+Stock reservation is intentionally not an event flow (see section 7 and the "Hybrid checkout" decision in section 13): Inventory exposes idempotent REST endpoints instead, so there are no `StockReserved` or `StockReservationFailed` events.
 
 Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
 
@@ -264,48 +265,60 @@ Consumers must tolerate duplicate message delivery. Message handling should be i
 
 Checkout spans multiple independently committed service transactions. A single PostgreSQL transaction cannot atomically cover the entire workflow.
 
-The Order Service coordinates a Saga.
+The Order Service coordinates a Saga. It is a hybrid: **stock is reserved with a synchronous REST call**, **payment travels over RabbitMQ**.
+
+Why the split: a reservation either succeeds or fails right now, and the customer needs to know which item is missing, so a request/response call is the natural fit. Payment, in contrast, is slow and may involve retries, so it benefits from an asynchronous, durable message with an outbox.
 
 ```mermaid
 sequenceDiagram
     participant UI as React
     participant O as Order Service
-    participant Q as RabbitMQ
     participant I as Inventory Service
+    participant Q as RabbitMQ
     participant P as Payment Service
 
     UI->>O: Submit checkout with idempotency key
-    O->>O: Create pending order and outbox record
-    O-->>UI: Return pending order
-    O->>Q: Publish OrderCreated
-
-    Q->>I: Reserve stock
-    I->>I: Commit reservation transaction
-    I->>Q: Publish StockReserved or StockReservationFailed
-
-    Q->>O: Deliver inventory outcome
-    O->>Q: Request payment after stock reservation
-
-    Q->>P: Process mock payment
-    P->>P: Record payment outcome
-    P->>Q: Publish payment result
-
-    Q->>O: Deliver payment outcome
-    O->>O: Confirm or cancel order
-
-    Note over O,I: Failed payment triggers stock release
+    O->>O: Create pending order (local transaction)
+    O->>I: POST /internal/reservations (idempotent per order)
+    alt not enough stock
+        I-->>O: 409 insufficient stock, names the variant
+        O->>O: Cancel order
+        O-->>UI: Order cancelled
+    else stock reserved
+        I-->>O: reservation id, expires_at
+        O->>O: Store reservation and PaymentRequested outbox record (one transaction)
+        O-->>UI: Return pending order
+        O->>Q: Publish PaymentRequested (outbox publisher)
+        Q->>P: Process mock payment
+        P->>P: Record payment outcome and outbox record (one transaction)
+        P->>Q: Publish PaymentSucceeded or PaymentFailed
+        Q->>O: Deliver payment outcome
+        alt payment succeeded
+            O->>I: POST /internal/reservations/{id}/commit
+            O->>O: Confirm order
+        else payment failed
+            O->>I: POST /internal/reservations/{id}/release
+            O->>O: Cancel order
+        end
+    end
 ```
 
 Workflow rules:
 
-1. Create an order in a pending state and persist the event in the same local database transaction.
-2. Reserve inventory before proceeding to payment.
-3. Process payment through the Payment Service.
-4. Confirm the order only after the required successful outcomes are recorded.
-5. On payment failure, cancel the order and release the inventory reservation.
-6. Make compensation operations idempotent and recover incomplete workflows after service restarts.
+1. Create an order in a pending state in a local database transaction.
+2. Reserve inventory before asking for payment. Reserving is idempotent per order id, so a retried or timed-out call is safe.
+3. Persist the reservation and the `PaymentRequested` event in the same local transaction (Transactional Outbox).
+4. Process payment through the Payment Service, which answers with an event.
+5. On payment success, commit the reservation and confirm the order. On failure, release the reservation and cancel the order.
+6. Make every step and compensation idempotent: commit and release can be repeated, events can be delivered twice.
 
-The implementation should explicitly define timeout, reservation expiration, retry, and recovery behavior. An order must not remain pending indefinitely without a recovery mechanism.
+Failure and recovery:
+
+* Inventory releases a reservation by itself when it expires (default 15 minutes), so an abandoned checkout never holds stock forever.
+* Order must not leave an order pending indefinitely: a recovery job finds orders that are stuck (no payment outcome after a timeout, or a crash between two steps), then retries the missing step or cancels the order and releases the reservation.
+* If the release call itself fails, it is retried; the expiry above is the final safety net.
+
+The implementation should explicitly define timeouts, retry counts, and the recovery job's schedule.
 
 ## 8. Reliability Patterns
 
@@ -404,6 +417,7 @@ Service boundaries may evolve as domain knowledge grows. Splitting a service fur
 * **RabbitMQ for asynchronous workflows:** Supports event-driven integration without requiring a Kafka cluster.
 * **PostgreSQL per service:** Establishes clear data ownership while allowing a shared local database server.
 * **Mock payment provider:** Enables realistic payment workflow development without processing real payments.
+* **Hybrid checkout:** Stock reservation is a synchronous, idempotent REST call from Order to Inventory because its result is needed immediately and must name the failing item; payment is asynchronous over RabbitMQ. This keeps Inventory free of a message consumer and avoids a second saga participant waiting for events.
 * **Saga and Transactional Outbox:** Address cross-service consistency and reliable event publication.
 * **Docker Compose first:** Keeps local development reproducible without premature orchestration complexity.
 

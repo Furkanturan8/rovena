@@ -483,3 +483,110 @@ func TestListAndAvailability(t *testing.T) {
 		t.Fatalf("low-stock list = %+v, want the item with 1 available", items)
 	}
 }
+
+// A paid order cannot be cancelled by the compensating action, and a cancelled one cannot be
+// paid for later. Both must leave the stock exactly as it was.
+func TestCommitAndReleaseRefuseEachOthersReservations(t *testing.T) {
+	h := setup(t)
+	variantID := h.newStock(t, 10)
+
+	paid, _, err := h.reserve(uuid.New(), item(variantID, 3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.reservations.Commit(h.ctx, paid.ID); err != nil {
+		t.Fatal(err)
+	}
+	h.assertStock(t, variantID, 7, 0)
+
+	if _, err := h.reservations.Release(h.ctx, paid.ID); !errors.Is(err, domain.ErrReservationCommitted) {
+		t.Fatalf("release of a committed reservation: err = %v, want ErrReservationCommitted", err)
+	}
+	h.assertStock(t, variantID, 7, 0)
+	if got, _ := h.reservations.Get(h.ctx, paid.ID); got.Status != domain.ReservationCommitted {
+		t.Fatalf("status = %q, want it to stay committed", got.Status)
+	}
+
+	// Committing again is a no-op, not a second sale.
+	for i := range 2 {
+		if _, err := h.reservations.Commit(h.ctx, paid.ID); err != nil {
+			t.Fatalf("repeat commit %d: %v", i+1, err)
+		}
+	}
+	h.assertStock(t, variantID, 7, 0)
+	movements, total, err := h.stock.Movements(h.ctx, domain.MovementFilter{VariantID: variantID, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sales := 0
+	for _, m := range movements {
+		if m.Type == domain.MovementSale {
+			sales++
+		}
+	}
+	if sales != 1 {
+		t.Fatalf("%d sale movements out of %d, want exactly 1", sales, total)
+	}
+
+	cancelled, _, err := h.reserve(uuid.New(), item(variantID, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.reservations.Release(h.ctx, cancelled.ID); err != nil {
+		t.Fatal(err)
+	}
+	h.assertStock(t, variantID, 7, 0)
+	if _, err := h.reservations.Commit(h.ctx, cancelled.ID); !errors.Is(err, domain.ErrReservationClosed) {
+		t.Fatalf("commit of a released reservation: err = %v, want ErrReservationClosed", err)
+	}
+	h.assertStock(t, variantID, 7, 0)
+}
+
+// The sweep takes its work in batches ordered by expiry. Reservations that are already closed
+// must never occupy a batch slot, or one old committed order could block every later expiry.
+func TestExpireDueBatchOnlyContainsPendingReservations(t *testing.T) {
+	h := setup(t)
+	variantID := h.newStock(t, 10)
+
+	longGone := application.NewReservationService(h.reservationRepo, -2*time.Hour)
+	closed, _, err := longGone.Reserve(h.ctx, application.ReserveInput{
+		OrderID: uuid.New(), Items: []domain.ReservationItem{item(variantID, 2)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.reservations.Commit(h.ctx, closed.ID); err != nil { // paid, but its expires_at is the oldest
+		t.Fatal(err)
+	}
+
+	recentlyDue := application.NewReservationService(h.reservationRepo, -time.Hour)
+	abandoned, _, err := recentlyDue.Reserve(h.ctx, application.ReserveInput{
+		OrderID: uuid.New(), Items: []domain.ReservationItem{item(variantID, 3)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.assertStock(t, variantID, 8, 3)
+
+	// One slot per sweep. Other due holds in the database may go first, so keep sweeping;
+	// the committed reservation, if it were selected, would be re-selected forever.
+	for range 100 {
+		if _, err := h.reservationRepo.ExpireDue(h.ctx, time.Now(), 1); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := h.reservations.Get(h.ctx, abandoned.ID); got.Status == domain.ReservationExpired {
+			break
+		}
+	}
+	got, err := h.reservations.Get(h.ctx, abandoned.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.ReservationExpired {
+		t.Fatalf("status = %q: the abandoned hold was never reached", got.Status)
+	}
+	h.assertStock(t, variantID, 8, 0)
+	if c, _ := h.reservations.Get(h.ctx, closed.ID); c.Status != domain.ReservationCommitted {
+		t.Fatalf("committed reservation changed to %q", c.Status)
+	}
+}

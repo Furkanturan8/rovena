@@ -32,7 +32,7 @@ info:
     and details such as `variant_id`, `requested`, `available` on a failed reservation (409/404).
 servers:
   - url: http://localhost:8080
-    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 503 with an HTML page, not the JSON envelope.
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 429 with the usual JSON error and a `Retry-After` header.
 tags:
   - name: Storefront
     description: Public

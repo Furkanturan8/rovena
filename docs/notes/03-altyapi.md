@@ -74,7 +74,7 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 - `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye, `/api/v1/stock` ve `/admin/stock/...` isteklerini `http://inventory:8083`'e yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
 - Inventory'nin `/api/v1/internal/...` uçları **bilerek yönlendirilmez**: rezervasyon uçları yalnızca servisler arasıdır, internetten erişilebilir olmamalıdır ([11](11-inventory-servisi.md)).
-- `limit_req`: IP başına saniyede 30 istek sınırı (kaba saldırı koruması).
+- `limit_req`: IP başına saniyede 30 istek (burst 60) sınırı (kaba saldırı koruması). Aşılırsa `limit_req_status 429` sayesinde JSON zarflı **429** ve `Retry-After` döner. Nginx'in varsayılanı 503'tür ve bir kesinti gibi okunur; bu yüzden bilerek değiştirildi.
 - `X-Request-ID` başlığı yoksa üretir ve servise iletir. Bir isteği tüm servislerin loglarında izlemek için kullanılır.
 - `resolver 127.0.0.11` + `set $identity ...`: Nginx, servis henüz ayakta değilken de başlayabilsin diye adresi istek anında çözer.
 - Bilinmeyen yollar 404 döner.

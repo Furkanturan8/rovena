@@ -108,6 +108,7 @@ make vet     # statik analiz
 | `catalog/.../postgres/search_integration_test.go` | (Gerçek Postgres) arama, filtre, sıralama, sayfalama SQL'i |
 | `inventory/internal/application/service_test.go` | Rezervasyon yaşam döngüsü, sipariş başına idempotentlik, hep-ya-hiç rezervasyon, süre aşımı süpürmesi, rezerve stoğun düzeltmeyle silinememesi |
 | `inventory/.../transport/http/http_test.go` | Üç ayrı yetki kuralı (herkese açık / internal anahtar / admin JWT), 201-vs-200 tekrar davranışı, `no-store`, hata eşleme |
+| `inventory/.../transport/http/security_test.go` | Dahili anahtar benzerleri, anahtarın admin yetkisi vermemesi, `alg: none`, log hijyeni, CORS, bilinmeyen yol/metot, gövde sınırı |
 | `inventory/.../postgres/integration_test.go` | (Gerçek Postgres) tek adet stoğa sekiz eşzamanlı sipariş, aynı siparişin eşzamanlı tekrarı, ters sıralı kalemlerde deadlock olmaması, transaction geri alma, süpürme |
 
 ### Testlerin üç katmanı

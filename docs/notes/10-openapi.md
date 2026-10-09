@@ -55,7 +55,7 @@ Elle yazılmış bir şema zamanla kodla çelişir: alan eklenir ama dosya unutu
 
 Testin işe yaradığı da denendi: şemadan bir alan silindiğinde ("undocumented field"), gerçekte dönen bir durum kodu silindiğinde ("status not documented") ve bir alanın tipi yanlış yazıldığında ("is not of type") üçünü de yakaladı.
 
-İlk gerçek çalıştırmada API ile şema arasında uyumsuzluk çıkmadı, ama bir **altyapı bulgusu** çıktı: betik çok hızlı istek atınca Nginx `limit_req` 429 yerine **503 ve HTML** döndürdü (JSON zarfı değil). Nginx'in varsayılan davranışı budur; `limit_req_status 429;` ile düzeltilebilir. Şimdilik şemada ve README'de belgelendi.
+İlk gerçek çalıştırmada API ile şema arasında uyumsuzluk çıkmadı, ama bir **altyapı bulgusu** çıktı: betik çok hızlı istek atınca Nginx `limit_req` 429 yerine **503 ve HTML** döndürdü (JSON zarfı değil). Nginx'in varsayılan davranışı budur ve bir kesinti gibi okunur. `limit_req_status 429;` ile düzeltildi: gateway artık JSON zarflı 429 ve `Retry-After` döner (`nginx.conf` içindeki `@rate_limited` konumu). Şemalar bu davranışı belgeliyor.
 
 ## Sınırlar
 

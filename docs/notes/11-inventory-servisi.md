@@ -165,6 +165,10 @@ Entegrasyon testlerinin en önemlileri eşzamanlılıkla ilgili:
 - **`TestOppositeItemOrderDoesNotDeadlock`:** Aynı iki varyantı ters sırada isteyen 30 rezervasyon → hiçbiri deadlock'a girmez.
 - **`TestMultiItemReserveRollsBackCompletely`:** İkinci kalem yetmezse ne stok tutulur ne rezervasyon satırı kalır.
 - **`TestAdjustCannotEatIntoReservedStock`**, **`TestExpireDueReleasesAbandonedHolds`**, **`TestReleaseIsIdempotent`**.
+- **`TestCommitAndReleaseRefuseEachOthersReservations`:** Ödenmiş (commit) bir rezervasyon release edilemez, bırakılmış bir rezervasyon commit edilemez, ikinci commit ikinci satış yazmaz (hareket defterinde tam bir `sale` satırı).
+- **`TestExpireDueBatchOnlyContainsPendingReservations`:** Süpürücü işi 200'lük gruplarla alır. Kapanmış (ör. ödenmiş) bir rezervasyon gruptan yer kaplarsa, vadesi geçmiş gerçek rezervasyonlar sırası gelmeden açlıktan kalabilir.
+
+HTTP katmanına ayrıca `security_test.go` eklendi: dahili anahtarın benzerleri (bir karakter eksik/fazla, büyük harf, anahtarın içine boşluk, başka başlık adı, sorgu/çerez/gövde, `Bearer` olarak) reddedilir; anahtar admin uçlarını açmaz; `alg: none` token reddedilir; **loglar anahtarı ve token'ları içermez**; CORS dahili anahtar başlığına izin vermez; bilinmeyen yol/metot standart hata zarfıyla döner; 64 KB gövde sınırı (gerçek soketle); bozuk/yanlış tipli gövdeler iş yapılmadan reddedilir.
 
 ### Testlerin testi: mutasyon
 
@@ -177,7 +181,17 @@ Catalog'da olduğu gibi kod bilerek bozulup testlerin kırmızıya döndüğü k
 | `order_id` çakışmasının idempotent ele alınması kaldırıldı | **Yakalandı** — eşzamanlı tekrar testi "duplicate key" hatasıyla düştü |
 | `FOR UPDATE` kaldırıldı | **Yakalanmadı** (aşağıya bakın) |
 
-Son satır dürüstçe not edilmeye değer. `FOR UPDATE` olmadan da sonuç yanlış çıkmıyor, çünkü Postgres `UPDATE` sırasında satırı zaten kilitler ve CHECK kısıtları imkânsız bir sonucu engelliyor. Fark **hatanın kalitesinde**: iki transaction gerçekten çakıştığında, kilidi olmayan sürümde kaybeden taraf temiz bir 409 yerine ham bir CHECK ihlali (yani istemciye 500) alıyor. Bu, onay ile bırakma arasına yapay 60 ms gecikme konularak **kanıtlandı**: gecikmeyle birlikte mutasyon testi düşürüyor, `FOR UPDATE` geri konduğunda aynı gecikmeyle geçiyor.
+Bu ilk turdan sonra testlerin kendisi de ikinci bir mutasyon turundan geçirildi (HTTP/güvenlik katmanı ve repository). İki **gerçek boşluk** bulundu ve kapatıldı:
+
+| Bilerek bozulan | İlk sonuç | Düzeltme |
+| --- | --- | --- |
+| Release, commit edilmiş rezervasyonu da bırakabiliyor | Gerçek repository'de **yakalanmadı** (kural yalnızca sahte repository'ye karşı test ediliyordu) | `TestCommitAndReleaseRefuseEachOthersReservations` |
+| Süpürücü `pending` olmayanları da seçiyor | **Yakalanmadı**: sonuç aynı görünüyor, ama batch'i kapanmış kayıtlar doldurabilir | `TestExpireDueBatchOnlyContainsPendingReservations` |
+| `adjust` içindeki `on_hand + ? >= reserved` koşulu kaldırıldı | Yakalanmadı, **bilerek**: veritabanındaki `CHECK` aynı hatayı üretiyor (eşdeğer mutasyon). Koşul bir kemer, `CHECK` bir askı | yok |
+
+Dahili anahtar, CORS, rol/anahtar kontrolü, log sızıntısı ve gövde sınırı mutasyonlarının (7 adet) hepsi ilk seferde yakalandı.
+
+Birinci turdaki son satır dürüstçe not edilmeye değer. `FOR UPDATE` olmadan da sonuç yanlış çıkmıyor, çünkü Postgres `UPDATE` sırasında satırı zaten kilitler ve CHECK kısıtları imkânsız bir sonucu engelliyor. Fark **hatanın kalitesinde**: iki transaction gerçekten çakıştığında, kilidi olmayan sürümde kaybeden taraf temiz bir 409 yerine ham bir CHECK ihlali (yani istemciye 500) alıyor. Bu, onay ile bırakma arasına yapay 60 ms gecikme konularak **kanıtlandı**: gecikmeyle birlikte mutasyon testi düşürüyor, `FOR UPDATE` geri konduğunda aynı gecikmeyle geçiyor.
 
 Bu deneyden iki sonuç çıktı:
 
@@ -186,7 +200,11 @@ Bu deneyden iki sonuç çıktı:
 
 ## Order servisiyle bağlantı (sıradaki adım)
 
-Checkout akışında Inventory'nin rolü hazır: Order rezervasyon alır, ödeme sonucuna göre `commit` ya da `release` çağırır. Şu an bu uçlar **REST**; Order servisi geldiğinde aynı adımlar RabbitMQ olaylarıyla (`OrderCreated` → `StockReserved`/`StockReservationFailed`) tetiklenecek ve Saga ile Transactional Outbox devreye girecek. Idempotentlik ve telafi (release) kuralları şimdiden o dünyaya göre tasarlandı: mesaj kuyruğunda aynı mesaj birden fazla gelebilir.
+Checkout akışında Inventory'nin rolü hazır: Order rezervasyon alır, ödeme sonucuna göre `commit` ya da `release` çağırır.
+
+**Karar: hibrit Saga.** Bu uçlar REST olarak kalıyor; Inventory'ye RabbitMQ tüketicisi eklenmeyecek. Gerekçe: rezervasyonun sonucu (alındı ya da hangi kalem yetmiyor) Order'ın **hemen** bilmesi gereken bir cevaptır, bu bir istek/cevap işidir. Olay tabanlı olsaydı Order cevabı beklemek için ayrı bir durum makinesi tutmak zorunda kalırdı. Asenkron kısım ödemedir (yavaş, yeniden denenebilir): onun için RabbitMQ ve Transactional Outbox kullanılacak. `docs/architecture.md` bölüm 7 bu kararı ve akışı gösterir.
+
+Idempotentlik ve telafi (release) kuralları buna uygun tasarlandı: Order bir çağrıyı zaman aşımından sonra güvenle tekrar edebilir (aynı `order_id` aynı rezervasyonu döner, commit/release tekrarı stoğu ikinci kez oynatmaz). Order çökerse de Inventory'nin süpürücüsü rezervasyonu süresi dolunca kendisi bırakır; stok sonsuza kadar kilitli kalmaz.
 
 ## Dosya haritası
 

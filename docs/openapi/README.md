@@ -37,7 +37,7 @@ Servisler varsayılan olarak yalnızca `http://localhost:5173` kaynağına CORS 
 
 - **Cevap zarfı:** başarı `{"success": true, "data": ...}`, hata `{"success": false, "message": "...", "fields": {...}}`. `fields` yalnızca 422'de gelir ve `variants[0].price_cents` gibi alan yolları içerir.
 - **Para** kuruş cinsinden tam sayıdır: `459900` = 4.599,00 TL.
-- **Limitler:** `/auth/*` için IP başına dakikada 20 istek (aşılınca 429). Gateway IP başına saniyede 30 istek (burst 60) izin verir; aşılırsa **503 ve HTML** döner (JSON zarfı değil). Betikle çok hızlı istek atarsan bunu görürsün.
+- **Limitler:** `/auth/*` için IP başına dakikada 20 istek (aşılınca 429). Gateway IP başına saniyede 30 istek (burst 60) izin verir; aşılırsa JSON zarflı **429** ve `Retry-After: 1` döner (ayrıca `/auth/*` kendi 429'unu servisten alır). Betikle çok hızlı istek atarsan bunu görürsün.
 - `/healthz` ve `/readyz` gateway'den geçmez; servis portlarındadır (Identity 8081, Catalog 8082, Inventory 8083).
 - Stok sorgusu (`GET /stock`) `Cache-Control: no-store` döner: stok saniyeler içinde değişir, önbellekteki cevap olmayan stoğu vaat ederdi.
 - Public katalog uçları `Cache-Control: public, max-age=60` döner; arka arkaya aynı isteği atıp eski veri görürsen istemci önbelleğindendir.
