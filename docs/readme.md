@@ -61,9 +61,10 @@ The development environment runs locally with Docker Compose.
 
 ```bash
 cp .env.example .env      # fill in every value; JWT_SECRET: openssl rand -base64 48
-make up                   # postgres, rabbitmq, identity and catalog (+ migrations), nginx gateway
+make up                   # postgres, rabbitmq, identity, catalog and inventory (+ migrations), nginx gateway
 make seed-admin           # creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD
 make seed-catalog         # loads demo categories and products
+make seed-inventory       # gives every demo variant an opening stock
 make test
 ```
 
@@ -87,7 +88,23 @@ The gateway listens on `http://localhost:8080`. Current API surface:
 | GET | `/api/v1/products/:idOrSlug` | public |
 | GET, POST, PATCH, DELETE | `/api/v1/admin/products[/:id]`, `/admin/products/:id/variants[/:variantId]`, `/admin/categories[/:id]` | admin |
 
-Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`).
+**Inventory**
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/api/v1/stock?variant_ids=a,b,c` | public |
+| GET, POST | `/api/v1/admin/stock[/:variantId]` | admin |
+| POST | `/api/v1/admin/stock/:variantId/receipts`, `/adjustments` | admin |
+| GET | `/api/v1/admin/stock/:variantId/movements` | admin |
+| POST, GET | `/api/v1/internal/reservations[/:id]`, `/:id/commit`, `/:id/release`, `/by-order/:orderId` | internal key, not routed by the gateway |
+
+Reservations are the service-to-service API the Order Service will drive: reserving is idempotent per
+order, committing turns a hold into a sale, releasing is the compensating action, and holds that are
+never resolved expire after `RESERVATION_TTL` (default 15 minutes).
+
+OpenAPI schemas for every service live in [`docs/openapi/`](openapi/README.md) (import them into Postman/Insomnia/Bruno to try the API).
+
+Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`).
 
 ## Project Goals
 

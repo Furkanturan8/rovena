@@ -1,0 +1,451 @@
+openapi: 3.0.3
+info:
+  title: Rovena Identity API
+  version: 1.0.0
+  description: |
+    Registration, login, token refresh and user management.
+
+    **Authentication.** Protected endpoints expect `Authorization: Bearer <access_token>`.
+    Access tokens are short-lived JWTs (15 minutes). Use `POST /auth/refresh` with the
+    refresh token to get a new pair; every refresh token can be used **once** (rotation).
+    Presenting an already-used refresh token revokes all sessions of that user.
+
+    **Response envelope.** Success: `{"success": true, "data": ...}`.
+    Error: `{"success": false, "message": "...", "fields": {...}}` (`fields` only on validation errors,
+    keyed by field path such as `password` or `images[0].url`).
+
+    **Rate limit.** All `/auth/*` routes share one budget of 20 requests per minute per IP (429 when exceeded).
+
+    Requests go through the gateway on port 8080. `/healthz` and `/readyz` exist only on the
+    service's own port (8081).
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 503 with an HTML page, not the JSON envelope.
+tags:
+  - name: Auth
+    description: Public endpoints (rate limited)
+  - name: Profile
+    description: The signed-in user
+  - name: Users (admin)
+    description: Requires the `admin` role
+  - name: Health
+    description: Only on the service port, not through the gateway
+paths:
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a customer account
+      description: Always creates a `customer`. Any `role` sent by the client is ignored. Returns tokens, so the user is signed in immediately.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterRequest'}
+            example:
+              email: jane@example.com
+              password: s3cretpass1
+              first_name: Jane
+              last_name: Doe
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409':
+          description: Email is already registered
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Email is already registered}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      description: A wrong password and an unknown email return the same 401 response.
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+            example:
+              email: jane@example.com
+              password: s3cretpass1
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuthEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Invalid email or password}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for a new token pair
+      description: |
+        The presented refresh token is invalidated and a new pair is returned.
+        Re-using an invalidated token returns 401 and revokes **all** refresh tokens of that user.
+      operationId: refresh
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshRequest'}
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokensEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401':
+          description: Unknown, expired, revoked or reused refresh token
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Invalid or expired refresh token}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      description: Idempotent. Returns 204 even if the token is unknown or already revoked. The access token stays valid until it expires.
+      operationId: logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RefreshRequest'}
+      responses:
+        '204': {description: Logged out}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/users/me:
+    get:
+      tags: [Profile]
+      summary: Get the signed-in user
+      operationId: getMe
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The current user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Profile]
+      summary: Update the signed-in user's name
+      description: Only `first_name` and `last_name` can be changed. Omitted fields keep their value. Email and role cannot be changed here.
+      operationId: updateMe
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProfileRequest'}
+            example: {first_name: Jane, last_name: Doe}
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/users:
+    get:
+      tags: [Users (admin)]
+      summary: List users (newest first)
+      operationId: listUsers
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of users
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPageEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/users/{id}:
+    get:
+      tags: [Users (admin)]
+      summary: Get a user by id
+      operationId: getUser
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/UserId'}
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/users/{id}/role:
+    patch:
+      tags: [Users (admin)]
+      summary: Change a user's role
+      description: |
+        The last remaining admin cannot be demoted (409), even when several admins change roles at the same time.
+        The target's existing access tokens keep their old role until they expire (max 15 minutes).
+      operationId: changeRole
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/UserId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeRoleRequest'}
+            example: {role: admin}
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Would demote the last admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Cannot demote the last admin}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /healthz:
+    servers: [{url: 'http://localhost:8081', description: Identity service port}]
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+  /readyz:
+    servers: [{url: 'http://localhost:8081', description: Identity service port}]
+    get:
+      tags: [Health]
+      summary: Readiness (database reachable)
+      operationId: readyz
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+        '503':
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from login, register or refresh.
+  parameters:
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+      description: Values below 1 are treated as 1.
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: Values above 100 are clamped to 100.
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  responses:
+    BadRequest:
+      description: Malformed JSON, wrong field type or invalid path id
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Malformed request body}
+    Unauthorized:
+      description: Missing, malformed, expired or invalidly signed access token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid or expired access token}
+    Forbidden:
+      description: The token is valid but the user is not an admin
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Forbidden}
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: User not found}
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example:
+            success: false
+            message: Validation failed
+            fields: {email: must be a valid email address, password: must be at least 8 characters}
+    TooManyRequests:
+      description: More than 20 requests per minute from this IP on /auth/*
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: 'Too many requests, try again later'}
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string}
+        fields:
+          type: object
+          additionalProperties: {type: string}
+          description: Field path to message. Present on 422 only.
+    Readiness:
+      type: object
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, enum: [ok, unavailable]}
+    Role:
+      type: string
+      enum: [customer, admin]
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          format: password
+          description: At most 72 **bytes** (bcrypt limit); multi-byte characters count more than once.
+        first_name: {type: string, maxLength: 100}
+        last_name: {type: string, maxLength: 100}
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, format: password}
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: {type: string}
+    UpdateProfileRequest:
+      type: object
+      properties:
+        first_name: {type: string, maxLength: 100}
+        last_name: {type: string, maxLength: 100}
+    ChangeRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role: {$ref: '#/components/schemas/Role'}
+    User:
+      type: object
+      required: [id, email, first_name, last_name, role, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        email: {type: string, format: email}
+        first_name: {type: string}
+        last_name: {type: string}
+        role: {$ref: '#/components/schemas/Role'}
+        created_at: {type: string, format: date-time}
+    Tokens:
+      type: object
+      required: [access_token, access_expires_at, refresh_token, refresh_expires_at, token_type]
+      properties:
+        access_token: {type: string, description: 'JWT, sent as a Bearer token'}
+        access_expires_at: {type: string, format: date-time}
+        refresh_token: {type: string, description: Opaque; single use}
+        refresh_expires_at: {type: string, format: date-time}
+        token_type: {type: string, enum: [Bearer]}
+    AuthResult:
+      type: object
+      required: [user, tokens]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        tokens: {$ref: '#/components/schemas/Tokens'}
+    AuthEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AuthResult'}
+    TokensEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Tokens'}
+    UserEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/User'}
+    UserPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/User'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    UserPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/UserPage'}

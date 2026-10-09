@@ -11,7 +11,8 @@ rovena/
 ├── shared/                   Tüm servislerin ortak kullandığı Go kodu (ayrı Go modülü)
 ├── services/
 │   ├── identity/             Kullanıcı ve kimlik servisi (ayrı Go modülü)
-│   └── catalog/              Ürün kataloğu servisi (ayrı Go modülü)
+│   ├── catalog/              Ürün kataloğu servisi (ayrı Go modülü)
+│   └── inventory/            Stok ve rezervasyon servisi (ayrı Go modülü)
 ├── infrastructure/           Servis olmayan altyapı ayarları
 │   ├── postgres/             Veritabanlarını oluşturan başlangıç betiği
 │   └── nginx/                API Gateway ayarları
@@ -52,4 +53,4 @@ Go'da `internal/` altındaki paketler yalnızca onun bulunduğu modülün içind
 
 ## `cmd/` klasörü
 
-Bir Go modülü birden fazla çalıştırılabilir program üretebilir. Her biri `cmd/<ad>/main.go` içinde yaşar. Her serviste üç tane var (Identity ve Catalog): `api` (web sunucusu), `migrate` (veritabanı tablolarını kuran program), `seed` (başlangıç verisi: Identity'de ilk admin, Catalog'da demo ürünler). Ayrıntı: [05](05-identity-katmanlar.md).
+Bir Go modülü birden fazla çalıştırılabilir program üretebilir. Her biri `cmd/<ad>/main.go` içinde yaşar. Her serviste üç tane var: `api` (web sunucusu), `migrate` (veritabanı tablolarını kuran program), `seed` (başlangıç verisi: Identity'de ilk admin, Catalog'da demo ürünler, Inventory'de bu ürünlerin açılış stoğu). Ayrıntı: [05](05-identity-katmanlar.md).

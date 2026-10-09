@@ -51,6 +51,16 @@
 | **Advisory lock** | Bir satıra değil, uygulamanın seçtiği bir sayıya bağlı PostgreSQL kilidi; tabloyu ilgilendiren kuralları serileştirmek için kullanılır |
 | **Mass assignment** | İstemcinin göndermemesi gereken alanları (`role`, `id`) gönderip sunucunun bunları körü körüne kaydetmesi |
 | **User enumeration** | Giriş/kayıt cevaplarının farkından hangi e-postaların kayıtlı olduğunun anlaşılması |
+| **OpenAPI** | REST API'nin yollarını, parametrelerini ve cevap şemalarını anlatan standart, makine okunur format |
+| **Sözleşme testi (contract test)** | API'nin gerçek davranışının yazılı şemayla uyuştuğunu doğrulayan test |
+| **Şema (schema)** | Bir JSON'un hangi alanlara, tiplere ve kısıtlara sahip olması gerektiğinin tarifi |
+| **Overselling** | Elde olmayan malı satmak; stok servisinin engellemek için var olduğu asıl risk |
+| **Rezervasyon** | Stoğun bir sipariş için geçici olarak ayrılması; onaylanır (satış) ya da bırakılır |
+| **Koşullu güncelleme** | Kontrolü `UPDATE ... WHERE stok >= n` gibi güncellemenin kendi içine koymak; check-then-act yarışını ortadan kaldırır |
+| **TTL (time to live)** | Bir kaydın geçerlilik süresi; rezervasyonda "bu kadar süre sonra stok geri verilir" |
+| **Deadlock (kilitlenme)** | İki işlemin birbirinin kilidini beklemesi; sabit bir kilit sırası belirleyerek önlenir |
+| **Ledger (hareket defteri)** | Değişiklikleri üzerine yazmak yerine art arda ekleyen kayıt; "sayı neden bu" sorusu sonradan cevaplanabilir |
+| **Telafi işlemi (compensating action)** | Geri alınamayan bir adımın etkisini tersine çeviren işlem (rezervasyonu bırakmak gibi) |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
 | **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |

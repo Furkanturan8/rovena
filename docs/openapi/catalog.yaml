@@ -1,0 +1,721 @@
+openapi: 3.0.3
+info:
+  title: Rovena Catalog API
+  version: 1.0.0
+  description: |
+    Categories, products and variants.
+
+    **Public endpoints** (`/categories`, `/products`) need no token and only ever show `active`
+    products and their `active` variants. Responses carry `Cache-Control: public, max-age=60`.
+
+    **Admin endpoints** (`/admin/...`) need `Authorization: Bearer <access_token>` of a user with the
+    `admin` role. Get the token from the Identity API (`POST /auth/login`).
+
+    **Money** is an integer in minor units (kuruş): `459900` means 4,599.00 TRY.
+
+    **Product lifecycle.** `draft` (default, hidden) -> `active` (visible; needs at least one active
+    variant) -> `archived` (hidden). Products and variants are never deleted: `DELETE` archives a product,
+    and a variant is switched off with `active: false`.
+
+    **Response envelope.** Success: `{"success": true, "data": ...}`.
+    Error: `{"success": false, "message": "...", "fields": {...}}` (`fields` only on validation errors,
+    keyed by field path such as `variants[0].price_cents`).
+
+    Requests go through the gateway on port 8080. `/healthz` and `/readyz` exist only on the
+    service's own port (8082).
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 503 with an HTML page, not the JSON envelope.
+tags:
+  - name: Categories
+  - name: Products
+  - name: Categories (admin)
+  - name: Products (admin)
+  - name: Variants (admin)
+  - name: Health
+    description: Only on the service port, not through the gateway
+paths:
+  /api/v1/categories:
+    get:
+      tags: [Categories]
+      summary: List all categories
+      description: Flat list ordered by name. Build the tree on the client with `parent_id`.
+      operationId: listCategories
+      responses:
+        '200':
+          description: All categories
+          headers:
+            Cache-Control: {$ref: '#/components/headers/PublicCache'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CategoryListEnvelope'}
+  /api/v1/categories/{slug}:
+    get:
+      tags: [Categories]
+      summary: Get a category by slug
+      operationId: getCategory
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: {type: string}
+          example: giyim
+      responses:
+        '200':
+          description: The category
+          headers:
+            Cache-Control: {$ref: '#/components/headers/PublicCache'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CategoryEnvelope'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/products:
+    get:
+      tags: [Products]
+      summary: Search and filter products
+      description: |
+        Only `active` products are returned.
+
+        - `q`: every word must match the name or brand. Accent and case insensitive (`canta` finds "Çanta").
+        - `category`: slug; includes all subcategories.
+        - `size`, `color`, `min_price`, `max_price` must all match **the same variant** of a product,
+          and only active variants count.
+        - `price_from_cents` in the result is the cheapest active variant.
+      operationId: listProducts
+      parameters:
+        - {$ref: '#/components/parameters/Q'}
+        - {$ref: '#/components/parameters/Category'}
+        - {$ref: '#/components/parameters/Size'}
+        - {$ref: '#/components/parameters/Color'}
+        - {$ref: '#/components/parameters/MinPrice'}
+        - {$ref: '#/components/parameters/MaxPrice'}
+        - {$ref: '#/components/parameters/Sort'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of products
+          headers:
+            Cache-Control: {$ref: '#/components/headers/PublicCache'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+  /api/v1/products/{idOrSlug}:
+    get:
+      tags: [Products]
+      summary: Get an active product by id or slug
+      description: Draft and archived products return 404. Only active variants are included.
+      operationId: getProduct
+      parameters:
+        - name: idOrSlug
+          in: path
+          required: true
+          schema: {type: string}
+          example: deri-ceket
+      responses:
+        '200':
+          description: The product
+          headers:
+            Cache-Control: {$ref: '#/components/headers/PublicCache'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductEnvelope'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/admin/categories:
+    post:
+      tags: [Categories (admin)]
+      summary: Create a category
+      description: The slug is generated from the name (`Dış Giyim` -> `dis-giyim`, `-2` is appended on conflict). The parent cannot be changed later.
+      operationId: createCategory
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCategoryRequest'}
+            example: {name: Ayakkabı, description: Sneaker ve bot}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CategoryEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: The parent category does not exist
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Category not found}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/categories/{id}:
+    patch:
+      tags: [Categories (admin)]
+      summary: Rename or re-describe a category
+      description: The slug stays the same.
+      operationId: updateCategory
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateCategoryRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CategoryEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [Categories (admin)]
+      summary: Delete a category
+      description: Only possible while it has no products and no subcategories.
+      operationId: deleteCategory
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '204': {description: Deleted}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: The category still has products or subcategories
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Category still has products or subcategories}
+  /api/v1/admin/products:
+    get:
+      tags: [Products (admin)]
+      summary: List products of every status
+      description: Same filters as the public list, plus `status`. Without `status` all statuses are returned.
+      operationId: adminListProducts
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/ProductStatus'}
+        - {$ref: '#/components/parameters/Q'}
+        - {$ref: '#/components/parameters/Category'}
+        - {$ref: '#/components/parameters/Size'}
+        - {$ref: '#/components/parameters/Color'}
+        - {$ref: '#/components/parameters/MinPrice'}
+        - {$ref: '#/components/parameters/MaxPrice'}
+        - {$ref: '#/components/parameters/Sort'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of products
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      tags: [Products (admin)]
+      summary: Create a product
+      description: |
+        Created as `draft` unless `status` is given. `status: active` requires at least one variant.
+        Images and variants are created together with the product in one transaction.
+        SKUs are upper-cased and must be unique across the catalog.
+      operationId: createProduct
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateProductRequest'}
+            example:
+              name: Keten Gömlek
+              brand: Rovena
+              description: Hafif keten, regular fit.
+              category_id: 0199f3a0-0000-7000-8000-000000000000
+              status: active
+              images:
+                - {url: 'https://picsum.photos/seed/shirt/800/1000', alt: Ön görünüm}
+              variants:
+                - {sku: SHT-LNN-WHT-M, size: M, color: Beyaz, price_cents: 89900}
+                - {sku: SHT-LNN-WHT-L, size: L, color: Beyaz, price_cents: 89900}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: The category does not exist
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Category not found}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/products/{id}:
+    get:
+      tags: [Products (admin)]
+      summary: Get a product of any status, with all variants
+      operationId: adminGetProduct
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: The product
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Products (admin)]
+      summary: Update a product
+      description: |
+        Partial update. The slug never changes. Sending `images` **replaces the whole list**
+        (`[]` removes all images); omitting it keeps the current images.
+        Setting `status: active` needs at least one active variant (409 otherwise).
+      operationId: updateProduct
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProductRequest'}
+            example: {status: active}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [Products (admin)]
+      summary: Archive a product
+      description: The product disappears from the storefront. Nothing is deleted.
+      operationId: archiveProduct
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '204': {description: Archived}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/admin/products/{id}/variants:
+    post:
+      tags: [Variants (admin)]
+      summary: Add a variant to a product
+      description: A product cannot have two variants with the same size and color (case-insensitive).
+      operationId: addVariant
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VariantRequest'}
+            example: {sku: JKT-LTH-GRN-M, size: M, color: Yeşil, price_cents: 479900}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VariantEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/products/{id}/variants/{variantId}:
+    patch:
+      tags: [Variants (admin)]
+      summary: Update a variant
+      description: |
+        The SKU cannot be changed. Setting `active: false` on the **last active variant of an active
+        product** is rejected with 409; this holds even when two admins try it at the same moment.
+      operationId: updateVariant
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - name: variantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateVariantRequest'}
+            example: {price_cents: 429900}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VariantEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /healthz:
+    servers: [{url: 'http://localhost:8082', description: Catalog service port}]
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+  /readyz:
+    servers: [{url: 'http://localhost:8082', description: Catalog service port}]
+    get:
+      tags: [Health]
+      summary: Readiness (database reachable)
+      operationId: readyz
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+        '503':
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token of an admin, issued by the Identity API.
+  headers:
+    PublicCache:
+      description: Public responses may be cached for 60 seconds.
+      schema: {type: string, example: 'public, max-age=60'}
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Q:
+      name: q
+      in: query
+      schema: {type: string, maxLength: 100}
+      description: Free text over name and brand (all words must match).
+      example: deri çanta
+    Category:
+      name: category
+      in: query
+      schema: {type: string}
+      description: Category slug, including all subcategories.
+      example: giyim
+    Size:
+      name: size
+      in: query
+      schema: {type: string}
+      example: M
+    Color:
+      name: color
+      in: query
+      schema: {type: string}
+      example: Siyah
+    MinPrice:
+      name: min_price
+      in: query
+      schema: {type: integer, format: int64, minimum: 0}
+      description: Minor units (kuruş), inclusive.
+    MaxPrice:
+      name: max_price
+      in: query
+      schema: {type: integer, format: int64, minimum: 0}
+      description: Minor units (kuruş), inclusive. Must not be lower than `min_price`.
+    Sort:
+      name: sort
+      in: query
+      schema: {type: string, enum: [newest, price_asc, price_desc, name], default: newest}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+      description: Values below 1 are treated as 1.
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: Values above 100 are clamped to 100.
+  responses:
+    BadRequest:
+      description: Malformed JSON, wrong field type, invalid path id or invalid query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: 'sort must be one of: newest, price_asc, price_desc, name'}
+    Unauthorized:
+      description: Missing, malformed, expired or invalidly signed access token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid or expired access token}
+    Forbidden:
+      description: The token is valid but the user is not an admin
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Forbidden}
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Product not found}
+    Conflict:
+      description: |
+        One of: `SKU is already in use`, `Slug is already in use`,
+        `A variant with this size and color already exists`,
+        `An active product needs at least one active variant`.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: SKU is already in use}
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example:
+            success: false
+            message: Validation failed
+            fields: {name: must be at least 2 characters, 'variants[0].price_cents': is required}
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string}
+        fields:
+          type: object
+          additionalProperties: {type: string}
+          description: Field path to message. Present on 422 only.
+    Readiness:
+      type: object
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, enum: [ok, unavailable]}
+    ProductStatus:
+      type: string
+      enum: [draft, active, archived]
+    Category:
+      type: object
+      required: [id, parent_id, name, slug, description]
+      properties:
+        id: {type: string, format: uuid}
+        parent_id: {type: string, format: uuid, nullable: true}
+        name: {type: string}
+        slug: {type: string, example: dis-giyim}
+        description: {type: string}
+    Image:
+      type: object
+      required: [url, alt]
+      properties:
+        url: {type: string, format: uri}
+        alt: {type: string}
+    Variant:
+      type: object
+      required: [id, sku, size, color, price_cents, currency, active]
+      properties:
+        id: {type: string, format: uuid}
+        sku: {type: string, example: JKT-LTH-BLK-M}
+        size: {type: string, description: Empty when the product has no sizes}
+        color: {type: string, description: Empty when the product has no colors}
+        price_cents: {type: integer, format: int64, example: 459900}
+        currency: {type: string, example: TRY}
+        active: {type: boolean}
+    Product:
+      type: object
+      required: [id, category_id, name, slug, description, brand, status, images, variants, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        category_id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        description: {type: string}
+        brand: {type: string}
+        status: {$ref: '#/components/schemas/ProductStatus'}
+        images:
+          type: array
+          items: {$ref: '#/components/schemas/Image'}
+        variants:
+          type: array
+          items: {$ref: '#/components/schemas/Variant'}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    ProductSummary:
+      type: object
+      required: [id, category_id, name, slug, brand, status, price_from_cents, currency, thumbnail_url]
+      properties:
+        id: {type: string, format: uuid}
+        category_id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        brand: {type: string}
+        status: {$ref: '#/components/schemas/ProductStatus'}
+        price_from_cents:
+          type: integer
+          format: int64
+          nullable: true
+          description: Cheapest active variant; null when there is none.
+        currency: {type: string, example: TRY}
+        thumbnail_url: {type: string, description: 'First image; empty when there is none'}
+    ImageInput:
+      type: object
+      required: [url]
+      properties:
+        url: {type: string, format: uri, maxLength: 2048, description: Must be http or https}
+        alt: {type: string, maxLength: 200}
+    VariantRequest:
+      type: object
+      required: [sku, price_cents]
+      properties:
+        sku:
+          type: string
+          minLength: 2
+          maxLength: 64
+          description: Upper-cased by the server; letters, digits, `-` and `_` only. Unique across the catalog.
+          example: JKT-LTH-BLK-M
+        size: {type: string, maxLength: 32}
+        color: {type: string, maxLength: 32}
+        price_cents: {type: integer, format: int64, minimum: 1}
+    UpdateVariantRequest:
+      type: object
+      properties:
+        size: {type: string, maxLength: 32}
+        color: {type: string, maxLength: 32}
+        price_cents: {type: integer, format: int64, minimum: 1}
+        active: {type: boolean}
+    CreateProductRequest:
+      type: object
+      required: [name, category_id]
+      properties:
+        name: {type: string, minLength: 2, maxLength: 200}
+        description: {type: string, maxLength: 10000}
+        brand: {type: string, maxLength: 100}
+        category_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/ProductStatus'}
+        images:
+          type: array
+          maxItems: 10
+          items: {$ref: '#/components/schemas/ImageInput'}
+        variants:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/VariantRequest'}
+    UpdateProductRequest:
+      type: object
+      properties:
+        name: {type: string, minLength: 2, maxLength: 200}
+        description: {type: string, maxLength: 10000}
+        brand: {type: string, maxLength: 100}
+        category_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/ProductStatus'}
+        images:
+          type: array
+          maxItems: 10
+          description: Replaces the entire image list when present.
+          items: {$ref: '#/components/schemas/ImageInput'}
+    CreateCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 2, maxLength: 100}
+        description: {type: string, maxLength: 1000}
+        parent_id: {type: string, format: uuid, nullable: true}
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name: {type: string, minLength: 2, maxLength: 100}
+        description: {type: string, maxLength: 1000}
+    CategoryEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Category'}
+    CategoryListEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Category'}
+    ProductEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Product'}
+    VariantEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Variant'}
+    ProductPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ProductSummary'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    ProductPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/ProductPage'}

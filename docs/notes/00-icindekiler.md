@@ -15,6 +15,8 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 07 | [Bir isteğin yolculuğu](07-istegin-yolculugu.md) | Tarayıcıdan veritabanına ve geri, adım adım |
 | 08 | [Çalıştırma ve test](08-calistirma-ve-test.md) | Projeyi ayağa kaldırma, API deneme, testlerin mantığı |
 | 09 | [Catalog servisi](09-catalog-servisi.md) | Ürün/varyant modeli, arama ve filtreleme, arşivleme, servis sınırı |
+| 10 | [API sözleşmesi: OpenAPI](10-openapi.md) | OpenAPI dosyaları, nasıl okunur, sözleşme testi |
+| 11 | [Inventory servisi](11-inventory-servisi.md) | Stok, rezervasyon yaşam döngüsü, overselling'i engelleme, koşullu güncelleme ve kilitler |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -29,7 +31,8 @@ Sırayla 01'den başla. Kod örneklerini görmek için ilgili dosyayı yanında 
 | Shared modülü | Tamamlandı | errorx, response, httpx, auth, logging |
 | Identity servisi | Tamamlandı | Kayıt, giriş, refresh, profil, admin rol yönetimi; birim, HTTP ve Postgres entegrasyon testleri |
 | Catalog servisi | Tamamlandı | Kategori, ürün, varyant, görsel; arama/filtre; admin yönetimi; aynı test seti |
-| Inventory servisi | Sırada | Varyant bazlı stok, rezervasyon |
-| Order servisi (Saga, Outbox) | Planlı | |
+| API şemaları (OpenAPI) | Tamamlandı | Identity ve Catalog; sözleşme testi (Inventory şeması eklenecek) |
+| Inventory servisi | Tamamlandı | Varyant bazlı stok, rezervasyon yaşam döngüsü, süre aşımı, hareket defteri; birim, HTTP ve eşzamanlılık testleri |
+| Order servisi (Saga, Outbox) | Sırada | Rezervasyon uçları REST olarak hazır; RabbitMQ bu adımda devreye girecek |
 | Payment servisi | Planlı | |
 | Frontend | Planlı | Önce backend |

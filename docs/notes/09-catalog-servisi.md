@@ -196,5 +196,5 @@ Hepsi yakalandı. Bu işlem otomatik bir araçla değil elle yapıldı; ileride 
 
 ## Sonraki adımlarla bağlantı
 
-- **Inventory** varyant id'sini kullanarak stok tutacak. Yeni bir varyant eklendiğinde Inventory'nin bundan haberdar olması için Catalog bir olay (`VariantCreated`) yayınlayacak. Bu, Transactional Outbox'ın ilk gerçek kullanım yeri olabilir.
+- **Inventory** varyant id'sini kullanarak stok tutuyor ([11](11-inventory-servisi.md)). Yeni bir varyant eklendiğinde Inventory'nin bundan haberdar olması için Catalog bir olay (`VariantCreated`) yayınlayacak. Bu, Transactional Outbox'ın ilk gerçek kullanım yeri olabilir.
 - **Order** sipariş anında ürün adı, varyant ve fiyatı kendi tablosuna **kopyalar**; sonradan Catalog'da fiyat değişse de eski sipariş değişmez.

@@ -7,6 +7,7 @@ cp .env.example .env     # değerleri doldur; JWT_SECRET için: openssl rand -ba
 make up                  # tüm konteynerleri derler ve başlatır
 make seed-admin          # ilk admin kullanıcıyı oluşturur
 make seed-catalog        # demo kategori ve ürünleri yükler
+make seed-inventory      # bu ürünlerin varyantlarına açılış stoğu yazar
 docker compose ps        # durumları gör
 make logs                # logları izle
 make down                # durdur (veri kalır)
@@ -53,7 +54,27 @@ curl -s -X POST localhost:8080/api/v1/admin/products \
   -d '{"name":"Yeni Ürün","category_id":"<kategori-uuid>","variants":[{"sku":"NEW-1","size":"M","price_cents":10000}]}'
 ```
 
-Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog) → `{"checks":{"postgres":"ok"},"ready":true}`.
+Inventory'yi deneme (önce `make seed-inventory`):
+
+```bash
+# Vitrin: bir varyantın stok durumu (herkese açık)
+curl -s "localhost:8080/api/v1/stock?variant_ids=<varyant-uuid>"
+
+# Depo yönetimi (admin token'ı ile)
+curl -s localhost:8080/api/v1/admin/stock?below=10 -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -s -X POST localhost:8080/api/v1/admin/stock/<varyant-uuid>/receipts \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"quantity":20,"reason":"yeni sevkiyat"}'
+
+# Rezervasyon uçları gateway'den geçmez; servis portundan ve anahtarla çağrılır
+curl -s -X POST localhost:8083/api/v1/internal/reservations \
+  -H "X-Internal-Key: $INTERNAL_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"order_id":"'$(uuidgen)'","items":[{"variant_id":"<varyant-uuid>","quantity":1}]}'
+```
+
+Aynı `order_id` ile ikinci istek 201 yerine **200** ve aynı rezervasyonu döner; stok iki kez tutulmaz. Stok yetmezse 409 ve `fields` içinde hangi varyantta kaç adet kaldığı gelir.
+
+Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
 Veritabanına bakmak için (parolayı `.env` içinden al):
 
@@ -66,8 +87,8 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ## Testler
 
 ```bash
-make test               # shared + identity + catalog, HTTP testleri dahil (veritabanı gerekmez)
-make test-integration   # gerçek Postgres'e karşı Catalog ve Identity testleri (önce make up)
+make test               # shared + identity + catalog + inventory, HTTP testleri dahil (veritabanı gerekmez)
+make test-integration   # gerçek Postgres'e karşı Catalog, Identity ve Inventory testleri (önce make up)
 make vet     # statik analiz
 ```
 
@@ -85,6 +106,9 @@ make vet     # statik analiz
 | `catalog/.../transport/http/http_test.go` | HTTP katmanı: yetki matrisi, girdi doğrulama, hata eşleme, cache/CORS/request id, body limiti, sağlık uçları |
 | `catalog/.../postgres/integration_test.go` | (Gerçek Postgres) aynı anda iki varyantın kapatılması, yayın kuralı, olmayan ürüne varyant |
 | `catalog/.../postgres/search_integration_test.go` | (Gerçek Postgres) arama, filtre, sıralama, sayfalama SQL'i |
+| `inventory/internal/application/service_test.go` | Rezervasyon yaşam döngüsü, sipariş başına idempotentlik, hep-ya-hiç rezervasyon, süre aşımı süpürmesi, rezerve stoğun düzeltmeyle silinememesi |
+| `inventory/.../transport/http/http_test.go` | Üç ayrı yetki kuralı (herkese açık / internal anahtar / admin JWT), 201-vs-200 tekrar davranışı, `no-store`, hata eşleme |
+| `inventory/.../postgres/integration_test.go` | (Gerçek Postgres) tek adet stoğa sekiz eşzamanlı sipariş, aynı siparişin eşzamanlı tekrarı, ters sıralı kalemlerde deadlock olmaması, transaction geri alma, süpürme |
 
 ### Testlerin üç katmanı
 

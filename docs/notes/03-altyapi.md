@@ -20,6 +20,9 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `catalog-migrate` | Catalog tablolarını kurar, işi bitince kapanır | yok |
 | `catalog` | Catalog API sunucusu | 127.0.0.1:8082 |
 | `catalog-seed` | Demo kategori ve ürünleri yükler (`tools` profili) | yok |
+| `inventory-migrate` | Inventory tablolarını kurar, işi bitince kapanır | yok |
+| `inventory` | Inventory API sunucusu (içinde rezervasyon süpürücüsü de çalışır) | 127.0.0.1:8083 |
+| `inventory-seed` | Demo varyantlara açılış stoğu yazar (`tools` profili) | yok |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:
@@ -58,6 +61,9 @@ Catalog:
 - `00002_add_search_text.sql` → aksan duyarsız arama sütunu
 - `00003_variants_price_index.sql` → fiyat sıralamasını hızlandıran kısmi indeks
 
+Inventory:
+- `00001_create_inventory.sql` → stok kalemleri, rezervasyonlar, rezervasyon kalemleri, hareket defteri (stoğun söz verilenin altına düşmesini engelleyen `CHECK` kısıtlarıyla)
+
 `00002` dosyası, **uygulanmış bir migration'ın düzenlenmediği**, değişikliğin yeni dosyayla eklendiği örnektir.
 
 Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vardır. Hangilerinin uygulandığını [goose](https://github.com/pressly/goose) kütüphanesi veritabanındaki bir tabloda tutar. Yeni bir değişiklik her zaman **yeni bir dosya** olarak eklenir; eski migration düzenlenmez. `identity-migrate` konteyneri bunu `up` ile çalıştırır.
@@ -66,7 +72,8 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 `infrastructure/nginx/nginx.conf`:
 
-- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
+- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye, `/api/v1/stock` ve `/admin/stock/...` isteklerini `http://inventory:8083`'e yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
+- Inventory'nin `/api/v1/internal/...` uçları **bilerek yönlendirilmez**: rezervasyon uçları yalnızca servisler arasıdır, internetten erişilebilir olmamalıdır ([11](11-inventory-servisi.md)).
 - `limit_req`: IP başına saniyede 30 istek sınırı (kaba saldırı koruması).
 - `X-Request-ID` başlığı yoksa üretir ve servise iletir. Bir isteği tüm servislerin loglarında izlemek için kullanılır.
 - `resolver 127.0.0.11` + `set $identity ...`: Nginx, servis henüz ayakta değilken de başlayabilsin diye adresi istek anında çözer.
@@ -85,6 +92,7 @@ Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşıyacak. Şu an
 - Veritabanı parolaları (servis başına ayrı)
 - `RABBITMQ_*`
 - `JWT_SECRET`: token imzalama anahtarı, en az 32 karakter, **tüm servislerde aynı** olmalı. Sızarsa herkes admin token'ı üretebilir.
+- `INTERNAL_API_KEY`: servisler arası çağrıların ortak anahtarı (en az 32 karakter). Şimdilik yalnızca Inventory'nin rezervasyon uçları ister; Order servisi geldiğinde onu gönderen taraf olacak.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`: `make seed-admin` ile oluşturulacak ilk admin.
 
 Compose bu değerleri konteynerlere ortam değişkeni olarak verir; servis kodu `internal/infrastructure/config` paketiyle okur.
