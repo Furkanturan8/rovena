@@ -66,7 +66,7 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ## Testler
 
 ```bash
-make test               # shared + identity + catalog (veritabanı gerekmez)
+make test               # shared + identity + catalog, HTTP testleri dahil (veritabanı gerekmez)
 make test-integration   # gerçek Postgres'e karşı Catalog testleri (önce make up)
 make vet     # statik analiz
 ```
@@ -80,7 +80,9 @@ make vet     # statik analiz
 | `identity/internal/application/user_service_test.go` | Son admin düşürülemez, başka admin varsa düşürülebilir, geçersiz rol |
 | `catalog/internal/application/service_test.go` | Slug çakışması, taslak varsayılanı, yayın ve son aktif varyant kuralları, taslak/arşivin herkese açık görünmemesi |
 | `catalog/internal/domain/slug_test.go` | Türkçe slug ve arama metni normalizasyonu |
+| `catalog/.../transport/http/http_test.go` | HTTP katmanı: yetki matrisi, girdi doğrulama, hata eşleme, cache/CORS/request id, body limiti, sağlık uçları |
 | `catalog/.../postgres/integration_test.go` | (Gerçek Postgres) aynı anda iki varyantın kapatılması, yayın kuralı, olmayan ürüne varyant |
+| `catalog/.../postgres/search_integration_test.go` | (Gerçek Postgres) arama, filtre, sıralama, sayfalama SQL'i |
 
 ### Testler nasıl veritabansız çalışıyor?
 
@@ -88,8 +90,7 @@ make vet     # statik analiz
 
 ### Henüz olmayanlar
 
-- Gerçek Postgres'e karşı **entegrasyon testleri**: Catalog'da eşzamanlılık testleri var (`make test-integration`); eksikler Identity (unique kısıtı, eşzamanlı refresh) ve Catalog arama/filtre SQL'i, kategori ağacı. Testcontainers ile eklenebilir.
-- HTTP katmanı (handler/route) testleri.
+- **Identity** için gerçek Postgres entegrasyon testleri (unique kısıtı, eşzamanlı refresh) ve HTTP katmanı testleri. Catalog'da ikisi de var. Entegrasyon testleri şu an çalışan Compose Postgres'ine bağlanıyor; CI'da Testcontainers ile kendi kendine yeten hale getirilebilir.
 - Uçtan uca testler (birden fazla servis olunca).
 
 Bu eksikler bilerek not edilmiştir; ilerleyen adımlarda eklenecek.

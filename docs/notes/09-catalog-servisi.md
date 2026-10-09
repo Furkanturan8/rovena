@@ -148,9 +148,51 @@ Eklenen indeks: `variants (product_id, price_cents) WHERE active`. Alt sorgu her
 
 ## Test
 
-`internal/application/service_test.go` (sahte repository'lerle): slug çakışması, taslak varsayılanı ve SKU normalizasyonu, yayın kuralları, son aktif varyantın kapatılamaması, başka ürüne ait varyantın güncellenememesi, taslak/arşiv ürünlerin herkese açık uçlarda görünmemesi. `domain/slug_test.go`: Türkçe slug ve arama normalizasyonu.
+Catalog'da üç farklı test katmanı var; her biri farklı bir riski yakalar:
 
-**Entegrasyon testleri** (`repository/postgres/integration_test.go`, `integration` build etiketiyle; `make test-integration`, çalışan Postgres gerekir): eşzamanlı varyant kapatma yarışı (25 tur), kalan aktif varyantı olmayan ürünün yayınlanamaması, olmayan ürüne varyant eklenememesi. Arama/filtre SQL'i hâlâ yalnızca elle denendi, otomatik testi yok.
+| Katman | Dosya | Veritabanı | Neyi yakalar |
+| --- | --- | --- | --- |
+| Birim (iş kuralı) | `application/service_test.go`, `domain/slug_test.go` | Yok (sahte repository) | Slug çakışması, taslak varsayılanı, yayın kuralı, taslak/arşivin gizliliği, Türkçe slug ve arama metni |
+| HTTP | `transport/http/http_test.go` (+ `fakes_test.go`) | Yok (bellek içi repository) | Yetkilendirme matrisi, girdi doğrulama, hata eşleme, cache, CORS, request id, body limiti |
+| Entegrasyon | `repository/postgres/*_integration_test.go` | **Gerçek Postgres** | Arama/filtre SQL'i, kilit ve eşzamanlılık, transaction |
+
+### HTTP testleri nasıl çalışır?
+
+Gerçek Fiber uygulaması (`transport.NewApp`) ve gerçek servisler kurulur; yalnızca repository'ler bellek içi sahtelerle değiştirilir. İstekler `app.Test` ile ağ olmadan gönderilir, yani router, middleware sırası, JWT doğrulama, JSON doğrulama ve hata eşleme **birlikte** test edilir. Testler yaklaşık 0,3 saniyede biter.
+
+- **Yetkilendirme matrisi:** 10 admin yolu x 8 kimlik durumu (başlıksız, yanlış şema, boş bearer, bozuk token, yanlış imza, süresi dolmuş, customer, admin). Yeni bir admin yolu eklenirse buraya da eklenmelidir; unutulursa güvenlik açığı sessizce kalır.
+- **Girdi doğrulama:** 14 senaryo (kısa ad, geçersiz UUID, `javascript:` görsel adresi, 11 görsel, sıfır/negatif fiyat, fiyatı string gönderme, bozuk JSON...). Hatalı istek asla ürün oluşturmaz.
+- **Sorgu parametreleri:** Sınırların kırpılması (`page_size=100000` → 100), geçersiz `sort`/fiyat reddi ve **reddedilen isteğin repository'ye hiç ulaşmaması**.
+- **Bilgi sızıntısı:** Beklenmeyen bir hata (ör. bağlantı dizesi içeren) istemciye yalnızca "Internal server error" olarak gider; `/readyz` bağımlılık hatasının ayrıntısını göstermez.
+- **Body limiti** gerçek bir TCP soketiyle denenir: `app.Test` ağ katmanını atladığı için limit orada çalışmaz. Test aracının sınırını bilmek de testin parçasıdır.
+
+### Entegrasyon testleri
+
+Çalıştırma: `make up` sonrası `make test-integration` (`integration` build etiketi sayesinde `make test` bunları atlar). Her test kendi rastgele adlı kategorisini ve ürünlerini oluşturur, bitince siler; demo veriyle karışmaz.
+
+`search_integration_test.go` beş ürünlük bir fikstür kurar (aktif, taslak, pasif varyantlı, alt kategorideki...) ve şunları doğrular: aksan ve büyük/küçük harf duyarsız arama, tüm kelimelerin eşleşmesi, `%`/`_`/SQL enjeksiyonu denemelerinin zararsızlığı, alt kategorileri kapsayan kategori filtresi, **beden+renk+fiyatın aynı varyantta eşleşmesi**, pasif varyantın fiyat ve filtreye katılmaması, tüm sıralamalar, sayfalama (son sayfadan sonrası boş ama toplam doğru), durum filtresi, özet alanları (başlangıç fiyatı, ilk görsel), görsellerin değiştirilmesi ve yeniden adlandırmada arama sütununun yenilenmesi.
+
+### Testlerin testi: mutasyon
+
+"Hepsi geçti" tek başına bir şey kanıtlamaz; test hiçbir şeyi doğrulamıyor da olabilir. Bu yüzden kod **bilerek bozuldu** ve testlerin kırmızıya dönüp dönmediğine bakıldı:
+
+| Bilerek bozulan | Yakalayan test |
+| --- | --- |
+| Varyant filtreleri `active` koşulunu yok sayıyor | `price_range` |
+| Kategori filtresi alt kategorileri kapsamıyor | `category_includes_descendants` ve 7 test daha |
+| Başlangıç fiyatı pasif varyantı da sayıyor | `sorting`, `pagination`, `summary_data` |
+| Arama yalnızca ilk kelimeyi kullanıyor | `text_query` |
+| Güncellemede `search_text` yenilenmiyor | `TestGetAndUpdateImages` |
+| Admin grubunda rol kontrolü yok | `TestAdminRoutes_Authorization` |
+| Admin grubunda kimlik doğrulama yok | 4 test |
+| Liste yanıtında cache başlığı yok | `TestCacheHeaders` |
+| Herkese açık liste `active` filtresini uygulamıyor | 3 test |
+| Görsellerde `dive` doğrulaması yok | `TestCreateProduct_Validation` |
+| SKU çakışması 409 yerine 500 dönüyor | `TestDomainErrorsMapToHTTP` |
+| 5xx yanıtta ham hata gösteriliyor | `TestUnexpectedErrorsDoNotLeakDetails` |
+| Süresi dolmuş token kabul ediliyor | `TestAdminRoutes_Authorization` |
+
+Hepsi yakalandı. Bu işlem otomatik bir araçla değil elle yapıldı; ileride CI'da bir mutasyon aracı (ör. `go-mutesting`) düşünülebilir.
 
 ## Sonraki adımlarla bağlantı
 

@@ -29,6 +29,7 @@ type harness struct {
 	products   *application.ProductService
 	variants   *postgres.VariantRepository
 	categoryID uuid.UUID
+	root       *domain.Category
 }
 
 func setup(t *testing.T) *harness {
@@ -52,16 +53,28 @@ func setup(t *testing.T) *harness {
 	}
 	h.products = application.NewProductService(postgres.NewProductRepository(db), h.variants)
 
-	cat, err := h.categories.Create(ctx, application.CreateCategoryInput{Name: "itest-" + uuid.NewString()})
+	h.root = h.newCategory(t, nil)
+	h.categoryID = h.root.ID
+	return h
+}
+
+// newCategory creates a uniquely named category and removes it (and its products)
+// when the test ends. Cleanups run LIFO, so children are removed before parents.
+func (h *harness) newCategory(t *testing.T, parent *domain.Category) *domain.Category {
+	t.Helper()
+	in := application.CreateCategoryInput{Name: "itest-" + uuid.NewString()}
+	if parent != nil {
+		in.ParentID = &parent.ID
+	}
+	cat, err := h.categories.Create(h.ctx, in)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.categoryID = cat.ID
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(ctx, "DELETE FROM products WHERE category_id = ?", cat.ID)
-		_ = h.categories.Delete(ctx, cat.ID)
+		_, _ = h.db.ExecContext(h.ctx, "DELETE FROM products WHERE category_id = ?", cat.ID)
+		_ = h.categories.Delete(h.ctx, cat.ID)
 	})
-	return h
+	return cat
 }
 
 func (h *harness) activeProduct(t *testing.T, skuPrefix string, variants int) *domain.Product {

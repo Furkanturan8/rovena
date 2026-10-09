@@ -44,6 +44,10 @@
 | **Partial index (kısmi indeks)** | Yalnızca bir koşulu sağlayan satırları kapsayan indeks (`WHERE active`) |
 | **EXPLAIN ANALYZE** | PostgreSQL'in bir sorguyu nasıl çalıştırdığını ve ne kadar sürdüğünü gösteren komut |
 | **Entegrasyon testi** | Sahte bağımlılık yerine gerçek veritabanı gibi gerçek parçalarla yapılan test |
+| **Mutasyon testi** | Kodu bilerek bozup testlerin başarısız olup olmadığına bakarak testlerin kalitesini ölçme |
+| **Test double (sahte)** | Gerçek bir bağımlılığın yerine geçen test nesnesi (bellek içi repository gibi) |
+| **Build tag** | Bir dosyanın yalnızca belirli bir bayrakla (`-tags integration`) derlenmesini sağlayan Go işareti |
+| **Fixture** | Bir testin ihtiyaç duyduğu, önceden kurulan örnek veri |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
 | **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |
