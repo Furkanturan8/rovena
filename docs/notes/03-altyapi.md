@@ -56,6 +56,7 @@ Identity:
 Catalog:
 - `00001_create_catalog.sql` → kategoriler, ürünler, görseller, varyantlar (+ `pg_trgm` eklentisi)
 - `00002_add_search_text.sql` → aksan duyarsız arama sütunu
+- `00003_variants_price_index.sql` → fiyat sıralamasını hızlandıran kısmi indeks
 
 `00002` dosyası, **uygulanmış bir migration'ın düzenlenmediği**, değişikliğin yeni dosyayla eklendiği örnektir.
 

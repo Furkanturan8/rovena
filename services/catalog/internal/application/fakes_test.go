@@ -113,7 +113,10 @@ type fakeVariants struct{ s *fakeStore }
 func (f fakeVariants) Create(_ context.Context, v *domain.Variant) error {
 	f.s.mu.Lock()
 	defer f.s.mu.Unlock()
-	p := f.s.products[v.ProductID]
+	p, ok := f.s.products[v.ProductID]
+	if !ok {
+		return domain.ErrProductNotFound
+	}
 	for _, e := range p.Variants {
 		if e.SKU == v.SKU {
 			return domain.ErrSKUTaken
@@ -145,9 +148,4 @@ func (f fakeVariants) Update(_ context.Context, v *domain.Variant) error {
 		}
 	}
 	return nil
-}
-func (f fakeVariants) CountActive(_ context.Context, productID uuid.UUID) (int, error) {
-	f.s.mu.Lock()
-	defer f.s.mu.Unlock()
-	return f.s.products[productID].ActiveVariantCount(), nil
 }

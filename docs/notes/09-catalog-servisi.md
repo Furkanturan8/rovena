@@ -34,10 +34,22 @@ erDiagram
 
 - **Fiyat `price_cents` (int64):** Para kuruş cinsinden tamsayı tutulur (`459900` = 4.599,00 TL). Ondalıklı sayı (float) yuvarlama hataları yapar; para için asla kullanılmaz.
 - **Silme yok, arşivleme var:** Ürün/varyant silinirse, onlara referans veren eski siparişler ve stok kayıtları anlamsızlaşır. `DELETE /admin/products/:id` ürünü arşivler. Varyant da silinmez, `active: false` yapılır.
-- **Aktif ürünün en az bir aktif varyantı olmalı:** Satılamayan ürün vitrinde olamaz. Servis, son aktif varyantın kapatılmasını ve varyantsız ürünün yayınlanmasını reddeder (409).
+- **Aktif ürünün en az bir aktif varyantı olmalı:** Satılamayan ürün vitrinde olamaz. Son aktif varyantın kapatılması ve varyantsız ürünün yayınlanması reddedilir (409). Bu kural aşağıdaki "Eşzamanlılık" bölümünde anlatıldığı gibi **veritabanı transaction'ında** uygulanır.
 - **Slug:** URL'de kullanılan okunur ad (`deri-ceket`). Addan üretilir, Türkçe harfler sadeleşir (ç→c, ş→s...), çakışırsa `-2`, `-3` eklenir. Ürün yeniden adlandırılsa da slug **değişmez** (bağlantılar kırılmasın).
 - **SKU:** Büyük harfe çevrilir, yalnızca harf/rakam/`-`/`_` kabul edilir, tüm sistemde tekil.
 - **Veritabanı kısıtları son savunmadır:** Servis kontrol etse de iki eşzamanlı istek aynı slug/SKU'yu almaya çalışabilir. Bu yüzden tabloda `UNIQUE` kısıtları vardır; ihlal olursa repository bunu `ErrSlugTaken`/`ErrSKUTaken` gibi domain hatalarına çevirir (409). Aynı ürüne aynı beden+renk ikinci kez eklenemez (`variants_product_options_key` indeksi).
+
+## Eşzamanlılık: iki admin aynı anda
+
+Kural "aktif ürünün aktif varyantı olmalı" ilk yazımda serviste şöyle kontrol ediliyordu: aktif varyant sayısını oku, birden fazlaysa kapat. İki admin **aynı anda iki farklı varyantı** kapatırsa ikisi de "2 aktif var" görür, ikisi de kapatır ve ürün vitrinde varyantsız kalır. Bu klasik **check-then-act** (kontrol et, sonra işlem yap) yarış durumudur; tek kullanıcıyla test ederken asla görünmez.
+
+Bunu gerçek Postgres'e karşı yazılmış bir entegrasyon testi yakaladı (iki goroutine'in aynı anda kapatması; düzeltmeden önce 2. turda 0 aktif varyant kaldı). Çözüm:
+
+1. Kural repository'ye taşındı: varyant güncellemesi bir **transaction** içinde, önce ürün satırı `SELECT ... FOR UPDATE` ile **kilitlenir**, sonra "başka aktif varyant var mı" sayılır, sonra güncellenir.
+2. Aynı ürüne dokunan iki işlem satır kilidi yüzünden **sırayla** çalışır; ikincisi birincinin sonucunu görür ve reddedilir.
+3. Ürün durumunun `active` yapılması da aynı kilidi alır ve aktif varyant sayısını transaction içinde yeniden kontrol eder.
+
+Ders: bir kuralın doğruluğu "iki işlemin araya girmesi"ne bağlıysa, kural uygulama kodunda değil **kilidin tutulduğu yerde** (veritabanı transaction'ı) uygulanmalıdır. Servis katmanı yalnızca hızlı ön kontrolleri yapar. (Inventory'de stok düşürürken aynı düşünce, `UPDATE ... WHERE stock >= n` gibi koşullu güncellemelerle karşımıza çıkacak.)
 
 ## Arama ve filtreleme
 
@@ -116,11 +128,29 @@ Identity'den farklar:
 - `errors.go` (postgres): PostgreSQL hata kodlarını (`23505` benzersizlik, `23503` yabancı anahtar) ve kısıt adlarını domain hatalarına çevirir.
 - `cmd/seed`: Demo veri (5 kategori, 3 aktif + 1 taslak ürün). Servis katmanını kullanır, böylece slug üretimi gibi kurallar seed'de de çalışır.
 
+## Performans: ölçerek karar verildi
+
+Bu kod bir incelemeden geçti; bazı "yavaş olur" iddiaları **20 bin ürün / 84 bin varyantlık sentetik veriyle ölçülerek** denendi (veri bir transaction içinde üretilip `ROLLBACK` edildi, `EXPLAIN ANALYZE` ile):
+
+| Sorgu | Sonuç | Karar |
+| --- | --- | --- |
+| Fiyata göre sıralama (her ürün için `MIN(fiyat)` alt sorgusu) | 235 ms | Kısmi indeks eklendi: **36 ms**. `00003` migration'ı |
+| Aynı sorgu, `min_price` kolonu ürün tablosunda tutulsaydı | 5 ms | Şimdilik yapılmadı (aşağıya bak) |
+| Yalnızca renk filtresi (`EXISTS`) | Plan `product_id = p.id AND lower(color) = ...` ile mevcut indeksi **kullanıyor** | Değişiklik gerekmedi |
+| Kategori ağacı `WITH RECURSIVE` (200 kategori) | CTE 0,15 ms | Önbelleğe gerek yok |
+| Sayfalama `COUNT(*)` | 2,8 ms | Şimdilik sorun yok |
+
+Eklenen indeks: `variants (product_id, price_cents) WHERE active`. Alt sorgu her ürün için tek bir **index-only scan** yapar; eskiden her ürünün tüm varyant satırlarını okuyordu.
+
+**Neden `min_price` kolonu yok?** 5 ms'ye karşılık her varyant değişikliğinde (fiyat, aktif/pasif, ekleme) ürün tablosundaki kopyanın da güncellenmesi gerekir; bir yerde unutulursa vitrinde yanlış fiyat gösterilir. 20 bin üründe 36 ms kabul edilebilir. Katalog yüz binlere çıkarsa tekrar ölçüp bu denormalizasyon yapılabilir (varyant değişiklikleri zaten tek bir transaction yolundan geçtiği için bakım yeri belli).
+
+**Genel ders:** "Bu yavaş olur" tahmini, `EXPLAIN ANALYZE` çıktısı olmadan güvenilir değildir. Planlayıcı sandığımızdan farklı davranabilir (renk filtresi örneği). Önce ölç, sonra optimize et.
+
 ## Test
 
 `internal/application/service_test.go` (sahte repository'lerle): slug çakışması, taslak varsayılanı ve SKU normalizasyonu, yayın kuralları, son aktif varyantın kapatılamaması, başka ürüne ait varyantın güncellenememesi, taslak/arşiv ürünlerin herkese açık uçlarda görünmemesi. `domain/slug_test.go`: Türkçe slug ve arama normalizasyonu.
 
-Arama SQL'i (dinamik `EXISTS`, `WITH RECURSIVE`) şu an yalnızca elle uçtan uca denendi; otomatik **entegrasyon testi henüz yok**.
+**Entegrasyon testleri** (`repository/postgres/integration_test.go`, `integration` build etiketiyle; `make test-integration`, çalışan Postgres gerekir): eşzamanlı varyant kapatma yarışı (25 tur), kalan aktif varyantı olmayan ürünün yayınlanamaması, olmayan ürüne varyant eklenememesi. Arama/filtre SQL'i hâlâ yalnızca elle denendi, otomatik testi yok.
 
 ## Sonraki adımlarla bağlantı
 

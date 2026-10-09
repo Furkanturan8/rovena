@@ -88,24 +88,6 @@ func TestPublish_RequiresActiveVariant(t *testing.T) {
 	}
 }
 
-func TestDeactivateLastVariant_BlockedOnActiveProduct(t *testing.T) {
-	svc := newProductService()
-	ctx := context.Background()
-	in := tee(VariantInput{SKU: "TEE-1", PriceCents: 1000}, VariantInput{SKU: "TEE-2", Size: "L", PriceCents: 1000})
-	in.Status = domain.StatusActive
-	p, err := svc.Create(ctx, in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	off := false
-	if _, err := svc.UpdateVariant(ctx, p.ID, p.Variants[0].ID, UpdateVariantInput{Active: &off}); err != nil {
-		t.Fatalf("deactivating first variant: %v", err)
-	}
-	if _, err := svc.UpdateVariant(ctx, p.ID, p.Variants[1].ID, UpdateVariantInput{Active: &off}); !errors.Is(err, domain.ErrNoActiveVariant) {
-		t.Fatalf("deactivating last variant err = %v", err)
-	}
-}
-
 func TestUpdateVariant_WrongProduct(t *testing.T) {
 	svc := newProductService()
 	ctx := context.Background()

@@ -208,7 +208,20 @@ func (r *ProductRepository) thumbnails(ctx context.Context, ids []uuid.UUID) (ma
 func (r *ProductRepository) Update(ctx context.Context, p *domain.Product, replaceImages bool) error {
 	p.UpdatedAt = time.Now()
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		res, err := tx.NewUpdate().Model((*productRow)(nil)).
+		if _, err := lockProduct(ctx, tx, p.ID); err != nil {
+			return err
+		}
+		if p.Status == domain.StatusActive {
+			active, err := tx.NewSelect().Model((*variantRow)(nil)).
+				Where("v.product_id = ?", p.ID).Where("v.active").Count(ctx)
+			if err != nil {
+				return err
+			}
+			if active == 0 {
+				return domain.ErrNoActiveVariant
+			}
+		}
+		if _, err := tx.NewUpdate().Model((*productRow)(nil)).
 			Set("category_id = ?", p.CategoryID).
 			Set("name = ?", p.Name).
 			Set("description = ?", p.Description).
@@ -217,12 +230,8 @@ func (r *ProductRepository) Update(ctx context.Context, p *domain.Product, repla
 			Set("search_text = ?", domain.SearchText(p.Name, p.Brand)).
 			Set("updated_at = ?", p.UpdatedAt).
 			Where("id = ?", p.ID).
-			Exec(ctx)
-		if err != nil {
+			Exec(ctx); err != nil {
 			return err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return domain.ErrProductNotFound
 		}
 		if !replaceImages {
 			return nil
@@ -232,7 +241,7 @@ func (r *ProductRepository) Update(ctx context.Context, p *domain.Product, repla
 		}
 		return insertImages(ctx, tx, p.ID, p.Images)
 	})
-	if errors.Is(err, domain.ErrProductNotFound) {
+	if errors.Is(err, domain.ErrProductNotFound) || errors.Is(err, domain.ErrNoActiveVariant) {
 		return err
 	}
 	if err != nil {

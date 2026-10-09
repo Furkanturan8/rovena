@@ -66,7 +66,8 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ## Testler
 
 ```bash
-make test    # shared + identity
+make test               # shared + identity + catalog (veritabanı gerekmez)
+make test-integration   # gerçek Postgres'e karşı Catalog testleri (önce make up)
 make vet     # statik analiz
 ```
 
@@ -79,6 +80,7 @@ make vet     # statik analiz
 | `identity/internal/application/user_service_test.go` | Son admin düşürülemez, başka admin varsa düşürülebilir, geçersiz rol |
 | `catalog/internal/application/service_test.go` | Slug çakışması, taslak varsayılanı, yayın ve son aktif varyant kuralları, taslak/arşivin herkese açık görünmemesi |
 | `catalog/internal/domain/slug_test.go` | Türkçe slug ve arama metni normalizasyonu |
+| `catalog/.../postgres/integration_test.go` | (Gerçek Postgres) aynı anda iki varyantın kapatılması, yayın kuralı, olmayan ürüne varyant |
 
 ### Testler nasıl veritabansız çalışıyor?
 
@@ -86,7 +88,7 @@ make vet     # statik analiz
 
 ### Henüz olmayanlar
 
-- Gerçek Postgres'e karşı **entegrasyon testleri** (Identity: unique kısıtı, eşzamanlı refresh; Catalog: arama/filtre SQL'i, kategori ağacı, transaction). Testcontainers ile eklenebilir.
+- Gerçek Postgres'e karşı **entegrasyon testleri**: Catalog'da eşzamanlılık testleri var (`make test-integration`); eksikler Identity (unique kısıtı, eşzamanlı refresh) ve Catalog arama/filtre SQL'i, kategori ağacı. Testcontainers ile eklenebilir.
 - HTTP katmanı (handler/route) testleri.
 - Uçtan uca testler (birden fazla servis olunca).
 

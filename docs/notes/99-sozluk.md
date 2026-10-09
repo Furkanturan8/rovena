@@ -38,6 +38,12 @@
 | **Minor unit (kuruş)** | Paranın en küçük birimi; fiyat tamsayı olarak bunla saklanır |
 | **Trigram (`pg_trgm`)** | Metni 3 harflik parçalara bölerek `LIKE '%x%'` aramasını indekslenebilir kılan PostgreSQL eklentisi |
 | **Soft delete / arşivleme** | Kaydı silmek yerine görünmez duruma getirme |
+| **Race condition (yarış durumu)** | Sonucun, iki işlemin hangi sırayla araya girdiğine bağlı olması |
+| **Check-then-act** | "Kontrol et, sonra işlem yap" kalıbı; kontrol ile işlem arasında durum değişebildiği için kilitsiz güvensizdir |
+| **Row lock (`FOR UPDATE`)** | Bir satırı transaction bitene kadar diğer işlemlere karşı kilitler; işlemler sırayla çalışır |
+| **Partial index (kısmi indeks)** | Yalnızca bir koşulu sağlayan satırları kapsayan indeks (`WHERE active`) |
+| **EXPLAIN ANALYZE** | PostgreSQL'in bir sorguyu nasıl çalıştırdığını ve ne kadar sürdüğünü gösteren komut |
+| **Entegrasyon testi** | Sahte bağımlılık yerine gerçek veritabanı gibi gerçek parçalarla yapılan test |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
 | **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |

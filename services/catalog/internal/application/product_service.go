@@ -134,9 +134,6 @@ func (s *ProductService) Archive(ctx context.Context, id uuid.UUID) error {
 }
 
 func (s *ProductService) AddVariant(ctx context.Context, productID uuid.UUID, in VariantInput) (*domain.Variant, error) {
-	if _, err := s.products.GetByID(ctx, productID); err != nil {
-		return nil, err
-	}
 	v, err := s.newVariant(productID, in, s.now())
 	if err != nil {
 		return nil, err
@@ -154,6 +151,8 @@ type UpdateVariantInput struct {
 	Active     *bool
 }
 
+// UpdateVariant applies the changes. The repository guarantees an active product keeps
+// at least one active variant, even when admins change variants concurrently.
 func (s *ProductService) UpdateVariant(ctx context.Context, productID, variantID uuid.UUID, in UpdateVariantInput) (*domain.Variant, error) {
 	v, err := s.variants.GetByID(ctx, variantID)
 	if err != nil {
@@ -172,36 +171,12 @@ func (s *ProductService) UpdateVariant(ctx context.Context, productID, variantID
 		v.PriceCents = *in.PriceCents
 	}
 	if in.Active != nil {
-		if v.Active && !*in.Active {
-			if err := s.ensureNotLastActive(ctx, productID); err != nil {
-				return nil, err
-			}
-		}
 		v.Active = *in.Active
 	}
 	if err := s.variants.Update(ctx, v); err != nil {
 		return nil, err
 	}
 	return v, nil
-}
-
-// ensureNotLastActive blocks deactivating the only active variant of a published product.
-func (s *ProductService) ensureNotLastActive(ctx context.Context, productID uuid.UUID) error {
-	p, err := s.products.GetByID(ctx, productID)
-	if err != nil {
-		return err
-	}
-	if p.Status != domain.StatusActive {
-		return nil
-	}
-	n, err := s.variants.CountActive(ctx, productID)
-	if err != nil {
-		return err
-	}
-	if n <= 1 {
-		return domain.ErrNoActiveVariant
-	}
-	return nil
 }
 
 // GetPublic returns an active product by UUID or slug, with only its active variants.
