@@ -141,4 +141,5 @@ Bu eksikler bilerek not edilmiştir; ilerleyen adımlarda eklenecek.
 | `port is already allocated` | Başka bir program aynı portu kullanıyor. Postgres için host portu bu yüzden 5433. |
 | Compose "set in .env" hatası | `.env` eksik ya da bir değişken boş. |
 | Parolayı değiştirdim ama Postgres eski parolayı kullanıyor | Init betiği sadece ilk kurulumda çalışır. `docker compose down -v` ile volume'u sil. |
+| Compose "variable is not set" / "required variable ... is missing" uyarıları | `docker compose` komutunu proje kökü dışındaki bir klasörde (ör. `services/inventory`) çalıştırdın. Compose `docker-compose.yml`'i üst klasörde bulur ama **`.env`'i çalışma dizininden okur**, bu yüzden değişkenler boş gelir. Komutları proje kökünden çalıştır (`make up` zaten öyle yapar), ya da `docker compose --project-directory <kök> ...` kullan. |
 | `identity` sürekli yeniden başlıyor | `docker compose logs identity`: genelde `JWT_SECRET` 32 karakterden kısa veya veritabanına erişilemiyor. |

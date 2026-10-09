@@ -1,0 +1,667 @@
+openapi: 3.0.3
+info:
+  title: Rovena Inventory API
+  version: 1.0.0
+  description: |
+    Stock per catalog variant, and stock reservations for orders.
+
+    Three groups of endpoints with three different kinds of access:
+
+    | Group | Path | Who calls it | Access |
+    | --- | --- | --- | --- |
+    | Storefront | `/api/v1/stock` | product pages | public |
+    | Warehouse | `/api/v1/admin/stock/...` | admins | `Authorization: Bearer <access_token>` of an admin |
+    | Reservations | `/api/v1/internal/...` | the Order service | `X-Internal-Key` header (value of `INTERNAL_API_KEY` in `.env`) |
+
+    Storefront and warehouse endpoints go through the gateway on port 8080. The **internal
+    endpoints are not routed by the gateway**: call them on the service port, `http://localhost:8083`.
+
+    **Numbers.** `on_hand` is what is physically in the warehouse. `reserved` is the part already
+    promised to open orders. `available = on_hand - reserved` is what a new order may still take.
+
+    **Reservation lifecycle.** `pending` holds stock and expires after the configured time
+    (default 15 minutes) -> `committed` (paid: stock left the warehouse) or `released` (order cancelled)
+    or `expired` (released automatically because nobody committed it in time). Creating, committing
+    and releasing are idempotent, so the Order service can safely retry.
+
+    **Inventory does not verify** that a `variant_id` or `sku` exists in the catalog; it stores the copies
+    it is given. Use the variant ids and SKUs returned by the Catalog API.
+
+    **Response envelope.** Success: `{"success": true, "data": ...}`.
+    Error: `{"success": false, "message": "...", "fields": {...}}`. `fields` carries validation messages on 422
+    and details such as `variant_id`, `requested`, `available` on a failed reservation (409/404).
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 503 with an HTML page, not the JSON envelope.
+tags:
+  - name: Storefront
+    description: Public
+  - name: Stock (admin)
+    description: Warehouse management; requires the `admin` role
+  - name: Reservations (internal)
+    description: Service-to-service; requires the internal key; not available through the gateway
+  - name: Health
+    description: Only on the service port, not through the gateway
+paths:
+  /api/v1/stock:
+    get:
+      tags: [Storefront]
+      summary: Can these variants be bought?
+      description: |
+        Returns one entry per requested variant, in the requested order (duplicates are returned once).
+        A variant that Inventory does not track is reported as `available: 0`, `in_stock: false`
+        rather than omitted. Never cached (`Cache-Control: no-store`).
+      operationId: getAvailability
+      parameters:
+        - name: variant_ids
+          in: query
+          required: true
+          description: Comma-separated variant UUIDs, at most 100.
+          schema: {type: string}
+          example: 0199f3a0-0000-7000-8000-000000000001,0199f3a0-0000-7000-8000-000000000002
+      responses:
+        '200':
+          description: Availability per variant
+          headers:
+            Cache-Control: {$ref: '#/components/headers/NoStore'}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AvailabilityListEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+  /api/v1/admin/stock:
+    get:
+      tags: [Stock (admin)]
+      summary: List stock items
+      operationId: adminListStock
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: sku
+          in: query
+          description: Case-insensitive SKU prefix (at most 64 characters).
+          schema: {type: string, maxLength: 64}
+          example: TEE
+        - name: below
+          in: query
+          description: Only items whose `available` is **less than** this positive number (low-stock report).
+          schema: {type: integer, minimum: 1}
+        - name: sort
+          in: query
+          schema: {type: string, enum: [newest, sku, available_asc], default: newest}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of stock items
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      tags: [Stock (admin)]
+      summary: Start tracking stock for a catalog variant
+      description: |
+        `variant_id` and `sku` are copies of catalog data (the SKU is upper-cased). A non-zero `on_hand`
+        is booked as a `receipt` movement. A variant can be tracked only once.
+      operationId: adminCreateStock
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateStockRequest'}
+            example:
+              variant_id: 0199f3a0-0000-7000-8000-000000000001
+              sku: TEE-BSC-WHT-M
+              on_hand: 50
+              reason: opening stock
+      responses:
+        '201':
+          description: Tracking started
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409':
+          description: This variant is already tracked, or the SKU belongs to another variant
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Stock is already tracked for this variant}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/stock/{variantId}:
+    get:
+      tags: [Stock (admin)]
+      summary: Get the stock of one variant
+      operationId: adminGetStock
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+      responses:
+        '200':
+          description: The stock item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/StockNotFound'}
+  /api/v1/admin/stock/{variantId}/receipts:
+    post:
+      tags: [Stock (admin)]
+      summary: Book stock that arrived at the warehouse
+      description: Increases `on_hand` and appends a `receipt` movement.
+      operationId: adminReceiveStock
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReceiveStockRequest'}
+            example: {quantity: 25, reason: supplier delivery 2026-10-09}
+      responses:
+        '200':
+          description: Updated stock item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/StockNotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/stock/{variantId}/adjustments:
+    post:
+      tags: [Stock (admin)]
+      summary: Correct on-hand stock (count, breakage...)
+      description: |
+        `delta` may be negative. A reason is mandatory so every correction can be explained from the
+        movement history. Units already reserved for an order cannot be adjusted away: if the result
+        would drop `on_hand` below `reserved`, the request is rejected with 409.
+      operationId: adminAdjustStock
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdjustStockRequest'}
+            example: {delta: -2, reason: damaged in transit}
+      responses:
+        '200':
+          description: Updated stock item
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/StockNotFound'}
+        '409':
+          description: On-hand stock cannot drop below the reserved quantity
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: On-hand stock cannot drop below the reserved quantity}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/admin/stock/{variantId}/movements:
+    get:
+      tags: [Stock (admin)]
+      summary: Stock movement history of a variant (newest first)
+      description: |
+        Append-only ledger of changes to `on_hand`: `receipt`, `adjustment` and `sale`
+        (written when a reservation is committed). Reserving and releasing do not appear here
+        because they do not move stock in or out of the warehouse.
+      operationId: adminListMovements
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of movements
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MovementPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/StockNotFound'}
+  /api/v1/internal/reservations:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    post:
+      tags: [Reservations (internal)]
+      summary: Reserve stock for an order
+      description: |
+        All-or-nothing: either every line is reserved or none is. The hold lasts for the configured time
+        (default 15 minutes) and `expires_at` says when. **Idempotent per `order_id`**: if the order already
+        has a reservation, that reservation is returned with **200** and nothing is reserved a second time
+        (a new one answers **201**). Retrying a timed-out call is therefore safe.
+      operationId: createReservation
+      security: [{internalKey: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateReservationRequest'}
+            example:
+              order_id: 0199f3a0-0000-7000-8000-0000000000a1
+              items:
+                - {variant_id: 0199f3a0-0000-7000-8000-000000000001, quantity: 2}
+      responses:
+        '200':
+          description: The order already had a reservation; returned unchanged
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '201':
+          description: Stock reserved
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404':
+          description: Stock is not tracked for one of the variants (`fields.variant_id` names it)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example:
+                success: false
+                message: Stock is not tracked for one of the variants
+                fields: {variant_id: 0199f3a0-0000-7000-8000-000000000009}
+        '409':
+          description: |
+            Not enough stock for one of the lines. `fields` names the variant and says how much was
+            `requested` and how much is `available`. Nothing was reserved.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example:
+                success: false
+                message: Insufficient stock
+                fields: {variant_id: 0199f3a0-0000-7000-8000-000000000001, requested: '5', available: '2'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/internal/reservations/{id}:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    get:
+      tags: [Reservations (internal)]
+      summary: Get a reservation
+      operationId: getReservation
+      security: [{internalKey: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReservationId'}
+      responses:
+        '200':
+          description: The reservation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404': {$ref: '#/components/responses/ReservationNotFound'}
+  /api/v1/internal/reservations/by-order/{orderId}:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    get:
+      tags: [Reservations (internal)]
+      summary: Get the reservation of an order
+      operationId: getReservationByOrder
+      security: [{internalKey: []}]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The reservation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404': {$ref: '#/components/responses/ReservationNotFound'}
+  /api/v1/internal/reservations/{id}/commit:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    post:
+      tags: [Reservations (internal)]
+      summary: Turn a reservation into a sale (the order was paid)
+      description: |
+        Both `on_hand` and `reserved` drop by the reserved quantities and a `sale` movement is booked per line.
+        **Idempotent**: committing an already committed reservation returns it with 200 and moves no stock.
+        A released or expired reservation cannot be committed (409).
+      operationId: commitReservation
+      security: [{internalKey: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReservationId'}
+      responses:
+        '200':
+          description: Committed (now or earlier)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404': {$ref: '#/components/responses/ReservationNotFound'}
+        '409':
+          description: The reservation was released or expired and can no longer be committed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Reservation is no longer pending}
+  /api/v1/internal/reservations/{id}/release:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    post:
+      tags: [Reservations (internal)]
+      summary: Give the held stock back (the order failed or was cancelled)
+      description: |
+        The compensating action of the checkout saga. **Idempotent**: releasing an already released or
+        expired reservation returns it with 200 and changes nothing. A committed reservation cannot be
+        released (409): the stock has already left the warehouse.
+      operationId: releaseReservation
+      security: [{internalKey: []}]
+      parameters:
+        - {$ref: '#/components/parameters/ReservationId'}
+      responses:
+        '200':
+          description: Released (now or earlier)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ReservationEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404': {$ref: '#/components/responses/ReservationNotFound'}
+        '409':
+          description: The reservation is already committed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Reservation is already committed}
+  /healthz:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+  /readyz:
+    servers: [{url: 'http://localhost:8083', description: Inventory service port}]
+    get:
+      tags: [Health]
+      summary: Readiness (database reachable)
+      operationId: readyz
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+        '503':
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token of an admin, issued by the Identity API.
+    internalKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Key
+      description: Shared service-to-service key; the value of `INTERNAL_API_KEY` in `.env`. Never expose it to browsers.
+  headers:
+    NoStore:
+      description: Stock changes by the second, so the answer must not be cached.
+      schema: {type: string, example: no-store}
+  parameters:
+    VariantId:
+      name: variantId
+      in: path
+      required: true
+      description: Catalog variant id.
+      schema: {type: string, format: uuid}
+    ReservationId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+      description: Values below 1 are treated as 1.
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: Values above 100 are clamped to 100.
+  responses:
+    BadRequest:
+      description: Malformed JSON, wrong field type, invalid id or invalid query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: variant_ids is required}
+    Unauthorized:
+      description: Missing, malformed, expired or invalidly signed access token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid or expired access token}
+    InternalUnauthorized:
+      description: The `X-Internal-Key` header is missing or wrong
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Missing or invalid internal API key}
+    Forbidden:
+      description: The token is valid but the user is not an admin
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Forbidden}
+    StockNotFound:
+      description: Stock is not tracked for this variant
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Stock item not found}
+    ReservationNotFound:
+      description: No such reservation
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Reservation not found}
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example:
+            success: false
+            message: Validation failed
+            fields: {quantity: is required, reason: is required}
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string}
+        fields:
+          type: object
+          additionalProperties: {type: string}
+          description: |
+            On 422: field path to message. On a failed reservation (404/409): `variant_id`, and for 409
+            also `requested` and `available` (numbers as strings).
+    Readiness:
+      type: object
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, enum: [ok, unavailable]}
+    CreateStockRequest:
+      type: object
+      required: [variant_id, sku]
+      properties:
+        variant_id: {type: string, format: uuid}
+        sku:
+          type: string
+          minLength: 2
+          maxLength: 64
+          description: Upper-cased by the server; letters, digits, `-` and `_` only.
+        on_hand: {type: integer, minimum: 0, maximum: 1000000, default: 0}
+        reason: {type: string, maxLength: 200, description: Reason of the opening receipt; defaults to "opening stock"}
+    ReceiveStockRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: {type: integer, minimum: 1, maximum: 1000000}
+        reason: {type: string, maxLength: 200}
+    AdjustStockRequest:
+      type: object
+      required: [delta, reason]
+      properties:
+        delta: {type: integer, minimum: -1000000, maximum: 1000000, description: Must not be 0}
+        reason: {type: string, minLength: 1, maxLength: 200}
+    ReservationItemRequest:
+      type: object
+      required: [variant_id, quantity]
+      properties:
+        variant_id: {type: string, format: uuid}
+        quantity: {type: integer, minimum: 1, maximum: 10000}
+    CreateReservationRequest:
+      type: object
+      required: [order_id, items]
+      properties:
+        order_id: {type: string, format: uuid}
+        items:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Each variant may appear only once.
+          items: {$ref: '#/components/schemas/ReservationItemRequest'}
+    Stock:
+      type: object
+      required: [variant_id, sku, on_hand, reserved, available, created_at, updated_at]
+      properties:
+        variant_id: {type: string, format: uuid}
+        sku: {type: string}
+        on_hand: {type: integer, description: Physically in the warehouse}
+        reserved: {type: integer, description: Promised to open orders}
+        available: {type: integer, description: on_hand - reserved}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    Availability:
+      type: object
+      required: [variant_id, available, in_stock]
+      properties:
+        variant_id: {type: string, format: uuid}
+        available: {type: integer, minimum: 0}
+        in_stock: {type: boolean, description: available > 0}
+    Movement:
+      type: object
+      required: [id, variant_id, type, quantity_delta, reason, reservation_id, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        variant_id: {type: string, format: uuid}
+        type: {type: string, enum: [receipt, adjustment, sale]}
+        quantity_delta: {type: integer, description: Change of on_hand; negative for sales and negative adjustments}
+        reason: {type: string}
+        reservation_id: {type: string, format: uuid, nullable: true, description: Set on `sale` movements}
+        created_at: {type: string, format: date-time}
+    ReservationStatus:
+      type: string
+      enum: [pending, committed, released, expired]
+    ReservationItem:
+      type: object
+      required: [variant_id, quantity]
+      properties:
+        variant_id: {type: string, format: uuid}
+        quantity: {type: integer}
+    Reservation:
+      type: object
+      required: [id, order_id, status, items, expires_at, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        order_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/ReservationStatus'}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/ReservationItem'}
+        expires_at: {type: string, format: date-time, description: When a pending reservation is released automatically}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    StockEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Stock'}
+    AvailabilityListEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Availability'}
+    ReservationEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Reservation'}
+    StockPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Stock'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    StockPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/StockPage'}
+    MovementPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Movement'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    MovementPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/MovementPage'}

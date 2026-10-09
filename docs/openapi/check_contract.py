@@ -2,19 +2,22 @@
 
 For every call it verifies that the status code is documented, the JSON body matches the
 documented schema, and no undocumented fields appear. It creates rows whose names start with
-"speccheck" and removes them at the end (psql inside the postgres container).
+"speccheck" (Inventory: SKUs starting with "SPC-") and removes them at the end (psql inside the postgres container).
 
     python3 -m venv .venv && .venv/bin/pip install openapi-spec-validator jsonschema pyyaml requests
     .venv/bin/python docs/openapi/check_contract.py
 
+Uses INTERNAL_API_KEY (environment variable, else .env) for the Inventory /internal endpoints (service port 8083).
+It must be the key the running inventory container was started with.
 Uses ~12 of the 20 requests/minute that /auth/* allows per IP, so do not run it twice within a minute.
 """
-import json, os, sys, time, subprocess, uuid, yaml, requests
+import atexit, json, os, sys, time, subprocess, uuid, yaml, requests
 from openapi_schema_validator import OAS30Validator
 
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2])
 G = "http://localhost:8080"
-specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog")}
+INTERNAL = "http://localhost:8083"  # inventory /internal/* is not routed by the gateway
+specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory")}
 problems, seen = [], set()
 
 def resolve(doc, node):
@@ -67,16 +70,32 @@ def check(api, method, template, resp, note=""):
         if want and resp.headers.get(h) != want:
             problems.append(f"{label}: header {h} = {resp.headers.get(h)!r}, spec says {want!r}")
 
-def call(api, method, template, path=None, token=None, json_body=None, raw=None, note=""):
+def call(api, method, template, path=None, token=None, json_body=None, raw=None, note="", base=G, key=None):
     headers = {}
     if token: headers["Authorization"] = f"Bearer {token}"
+    if key: headers["X-Internal-Key"] = key
     if raw is not None:
         headers["Content-Type"] = "application/json"
     time.sleep(0.06)  # stay under the gateway's 30 req/s limit
-    resp = requests.request(method, G + (path or template), headers=headers,
+    resp = requests.request(method, base + (path or template), headers=headers,
                             json=json_body, data=raw)
     check(api, method, template, resp, note)
     return resp
+
+# ---- cleanup of everything this script creates; runs even when the script crashes
+def psql(db, sql):
+    subprocess.run(["docker", "compose", "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", db, "-q", "-c", sql],
+                   cwd=ROOT, check=True, capture_output=True)
+
+def cleanup():
+    psql("catalog", "DELETE FROM products WHERE name LIKE 'speccheck%'; DELETE FROM categories WHERE name LIKE 'speccheck%' AND parent_id IS NOT NULL; DELETE FROM categories WHERE name LIKE 'speccheck%';")
+    psql("identity", "DELETE FROM users WHERE email LIKE 'speccheck-%'")
+    psql("inventory", """
+        DELETE FROM stock_movements WHERE variant_id IN (SELECT variant_id FROM stock_items WHERE sku LIKE 'SPC-%');
+        DELETE FROM reservations WHERE id IN (SELECT reservation_id FROM reservation_items WHERE variant_id IN (SELECT variant_id FROM stock_items WHERE sku LIKE 'SPC-%'));
+        DELETE FROM stock_items WHERE sku LIKE 'SPC-%';""")
+
+atexit.register(cleanup)
 
 # ---- static: every example in the spec must satisfy its own schema
 for api, doc in specs.items():
@@ -216,6 +235,78 @@ for hp in ("healthz", "readyz"):
     resp = requests.get(f"http://localhost:8082/{hp}"); check(C, "GET", f"/{hp}", resp)
 
 
+# ================================================================= inventory
+N = "inventory"
+KEY = os.environ.get("INTERNAL_API_KEY") or env["INTERNAL_API_KEY"]  # env var wins: the running container may use another key than .env
+vA, vB, vGhost = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
+skuA, skuB = f"SPC-{tag.upper()}-A", f"SPC-{tag.upper()}-B"
+S = "/api/v1/admin/stock"
+
+call(N, "POST", S, token=me_tok, json_body={"variant_id": vA, "sku": skuA})                                         # 403
+call(N, "POST", S, token=admin, json_body={"variant_id": vA, "sku": skuA, "on_hand": 5, "reason": "speccheck"})    # 201
+call(N, "POST", S, token=admin, json_body={"variant_id": vA, "sku": skuA, "on_hand": 5})                           # 409 variant tracked
+call(N, "POST", S, token=admin, json_body={"variant_id": str(uuid.uuid4()), "sku": skuA})                          # 409 sku taken
+call(N, "POST", S, token=admin, json_body={"variant_id": vB, "sku": skuB})                                         # 201, on_hand 0
+call(N, "POST", S, token=admin, json_body={"variant_id": "x", "sku": "a", "on_hand": -1})                          # 422
+call(N, "POST", S, token=admin, raw="{")                                                                           # 400
+call(N, "GET", S + "/{variantId}", path=f"{S}/{vA}", token=admin)                                                  # 200
+call(N, "GET", S + "/{variantId}", path=f"{S}/{uuid.uuid4()}", token=admin)                                        # 404
+call(N, "GET", S + "/{variantId}", path=f"{S}/nope", token=admin)                                                  # 400
+call(N, "POST", S + "/{variantId}/receipts", path=f"{S}/{vA}/receipts", token=admin, json_body={"quantity": 25, "reason": "speccheck delivery"})  # 200
+call(N, "POST", S + "/{variantId}/receipts", path=f"{S}/{vA}/receipts", token=admin, json_body={"quantity": 0})    # 422
+call(N, "POST", S + "/{variantId}/receipts", path=f"{S}/{uuid.uuid4()}/receipts", token=admin, json_body={"quantity": 1})  # 404
+call(N, "POST", S + "/{variantId}/receipts", path=f"{S}/nope/receipts", token=admin, json_body={"quantity": 1})    # 400
+call(N, "POST", S + "/{variantId}/adjustments", path=f"{S}/{vA}/adjustments", token=admin, json_body={"delta": -2, "reason": "damaged"})  # 200
+call(N, "POST", S + "/{variantId}/adjustments", path=f"{S}/{vA}/adjustments", token=admin, json_body={"delta": -2})  # 422 reason
+call(N, "POST", S + "/{variantId}/adjustments", path=f"{S}/{vA}/adjustments", token=admin, json_body={"delta": 0, "reason": "x"})  # 422
+call(N, "POST", S + "/{variantId}/adjustments", path=f"{S}/{uuid.uuid4()}/adjustments", token=admin, json_body={"delta": 1, "reason": "x"})  # 404
+for q in (f"?sku={skuA.lower()}", "?below=10&sort=available_asc", "?sort=sku&page_size=1", "?page=999"):
+    call(N, "GET", S, path=S + q, token=admin, note=q)
+call(N, "GET", S, path=S + "?sort=evil", token=admin)                                                              # 400
+call(N, "GET", S, path=S + "?below=0", token=admin)                                                                # 400
+call(N, "GET", S + "/{variantId}/movements", path=f"{S}/{vA}/movements", token=admin)                              # 200
+call(N, "GET", S + "/{variantId}/movements", path=f"{S}/{vA}/movements?page_size=1", token=admin)
+call(N, "GET", S + "/{variantId}/movements", path=f"{S}/{uuid.uuid4()}/movements", token=admin)                    # 404
+call(N, "GET", "/api/v1/stock", path=f"/api/v1/stock?variant_ids={vA},{vB},{vGhost},{vA}")                         # 200, unknown -> 0
+call(N, "GET", "/api/v1/stock", path="/api/v1/stock")                                                              # 400
+call(N, "GET", "/api/v1/stock", path="/api/v1/stock?variant_ids=nope")                                             # 400
+
+R = "/api/v1/internal/reservations"
+order1, order2, order3, order4 = (str(uuid.uuid4()) for _ in range(4))
+body = {"order_id": order1, "items": [{"variant_id": vA, "quantity": 3}]}
+call(N, "POST", R, base=INTERNAL, json_body=body, note="(no key)")                                                 # 401
+call(N, "POST", R, base=INTERNAL, json_body=body, key="wrong-key", note="(wrong key)")                             # 401
+r1 = call(N, "POST", R, base=INTERNAL, json_body=body, key=KEY)                                                    # 201
+res1 = r1.json()["data"]["id"]
+call(N, "POST", R, base=INTERNAL, json_body=body, key=KEY, note="(retry, idempotent)")                             # 200
+call(N, "POST", R, base=INTERNAL, key=KEY, json_body={"order_id": order2, "items": [{"variant_id": vA, "quantity": 1000}]})   # 409
+call(N, "POST", R, base=INTERNAL, key=KEY, json_body={"order_id": order3, "items": [{"variant_id": vGhost, "quantity": 1}]})  # 404
+call(N, "POST", R, base=INTERNAL, key=KEY, json_body={"order_id": order3, "items": [{"variant_id": vA, "quantity": 1}, {"variant_id": vA, "quantity": 1}]})  # 422 duplicate
+call(N, "POST", R, base=INTERNAL, key=KEY, json_body={"order_id": order3, "items": []})                            # 422
+call(N, "POST", R, base=INTERNAL, key=KEY, raw="{")                                                                # 400
+call(N, "GET", R + "/{id}", path=f"{R}/{res1}", base=INTERNAL, key=KEY)                                            # 200
+call(N, "GET", R + "/{id}", path=f"{R}/{uuid.uuid4()}", base=INTERNAL, key=KEY)                                    # 404
+call(N, "GET", R + "/{id}", path=f"{R}/nope", base=INTERNAL, key=KEY)                                              # 400
+call(N, "GET", R + "/by-order/{orderId}", path=f"{R}/by-order/{order1}", base=INTERNAL, key=KEY)                   # 200
+call(N, "GET", R + "/by-order/{orderId}", path=f"{R}/by-order/{uuid.uuid4()}", base=INTERNAL, key=KEY)             # 404
+call(N, "GET", R + "/by-order/{orderId}", path=f"{R}/by-order/nope", base=INTERNAL, key=KEY)                       # 400
+# on_hand 28, reserved 3: removing 26 units would leave 2 on hand, below the 3 reserved
+call(N, "POST", S + "/{variantId}/adjustments", path=f"{S}/{vA}/adjustments", token=admin, json_body={"delta": -26, "reason": "too much"})  # 409
+call(N, "POST", R + "/{id}/commit", path=f"{R}/{res1}/commit", base=INTERNAL, key=KEY)                             # 200
+call(N, "POST", R + "/{id}/commit", path=f"{R}/{res1}/commit", base=INTERNAL, key=KEY, note="(again)")             # 200
+call(N, "POST", R + "/{id}/commit", path=f"{R}/{uuid.uuid4()}/commit", base=INTERNAL, key=KEY)                     # 404
+call(N, "POST", R + "/{id}/commit", path=f"{R}/nope/commit", base=INTERNAL, key=KEY)                               # 400
+call(N, "POST", R + "/{id}/release", path=f"{R}/{res1}/release", base=INTERNAL, key=KEY, note="(committed)")       # 409
+r4 = call(N, "POST", R, base=INTERNAL, key=KEY, json_body={"order_id": order4, "items": [{"variant_id": vA, "quantity": 2}]})
+res4 = r4.json()["data"]["id"]
+call(N, "POST", R + "/{id}/release", path=f"{R}/{res4}/release", base=INTERNAL, key=KEY)                           # 200
+call(N, "POST", R + "/{id}/release", path=f"{R}/{res4}/release", base=INTERNAL, key=KEY, note="(again)")           # 200
+call(N, "POST", R + "/{id}/commit", path=f"{R}/{res4}/commit", base=INTERNAL, key=KEY, note="(released)")          # 409
+call(N, "POST", R + "/{id}/release", path=f"{R}/{uuid.uuid4()}/release", base=INTERNAL, key=KEY)                   # 404
+call(N, "POST", R + "/{id}/release", path=f"{R}/nope/release", base=INTERNAL, key=KEY)                             # 400
+for hp in ("healthz", "readyz"):
+    resp = requests.get(f"{INTERNAL}/{hp}"); check(N, "GET", f"/{hp}", resp)
+
 # ---- every protected operation: no token -> 401, customer token -> 403 (where documented)
 for api, doc in specs.items():
     for tpl, ops in doc["paths"].items():
@@ -223,18 +314,14 @@ for api, doc in specs.items():
             if m not in ("get", "post", "patch", "delete") or not op.get("security"):
                 continue
             path = tpl
-            for name in ("id", "variantId"):
+            for name in ("id", "variantId", "orderId"):
                 path = path.replace("{" + name + "}", str(uuid.uuid4()))
+            if op["security"] == [{"internalKey": []}]:
+                call(api, m.upper(), tpl, path=path, base=INTERNAL, json_body={} if m != "get" else None, note="(no key)")
+                continue
             call(api, m.upper(), tpl, path=path, json_body={} if m != "get" else None, note="(no token)")
             if "403" in op["responses"]:
                 call(api, m.upper(), tpl, path=path, token=me_tok, json_body={} if m != "get" else None, note="(customer)")
-
-# ---- cleanup of everything this script created
-def psql(db, sql):
-    subprocess.run(["docker", "compose", "exec", "-T", "postgres", "psql", "-U", "postgres", "-d", db, "-q", "-c", sql],
-                   cwd=ROOT, check=True, capture_output=True)
-psql("catalog", "DELETE FROM products WHERE name LIKE 'speccheck%'; DELETE FROM categories WHERE name LIKE 'speccheck%' AND parent_id IS NOT NULL; DELETE FROM categories WHERE name LIKE 'speccheck%';")
-psql("identity", "DELETE FROM users WHERE email LIKE 'speccheck-%'")
 
 # ---- coverage: documented responses never exercised
 print("== Problems ==")
