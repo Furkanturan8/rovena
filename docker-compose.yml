@@ -120,6 +120,50 @@ services:
       catalog-migrate:
         condition: service_completed_successfully
 
+  inventory-migrate:
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    entrypoint: ["/app/migrate", "-action", "up"]
+    environment:
+      DATABASE_URL: postgres://inventory:${INVENTORY_DB_PASSWORD}@postgres:5432/inventory?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  inventory:
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    environment:
+      APP_ENV: development
+      HTTP_PORT: "8083"
+      DATABASE_URL: postgres://inventory:${INVENTORY_DB_PASSWORD}@postgres:5432/inventory?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set in .env}
+      RESERVATION_TTL: 15m
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+    depends_on:
+      inventory-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8083:8083"
+
+  inventory-seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    entrypoint: ["/app/seed"]
+    environment:
+      DATABASE_URL: postgres://inventory:${INVENTORY_DB_PASSWORD}@postgres:5432/inventory?sslmode=disable
+      CATALOG_BASE_URL: http://catalog:8082
+    depends_on:
+      inventory-migrate:
+        condition: service_completed_successfully
+      catalog:
+        condition: service_started
+
   gateway:
     image: nginx:1.27-alpine
     volumes:
@@ -130,6 +174,7 @@ services:
     depends_on:
       - identity
       - catalog
+      - inventory
 
 volumes:
   postgres-data:
