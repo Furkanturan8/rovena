@@ -1,0 +1,410 @@
+# Rovena — System Architecture
+
+## 1. Overview
+
+Rovena is a fashion and accessories e-commerce marketplace built using Go, React, TypeScript, PostgreSQL, and RabbitMQ.
+
+The system follows a domain-oriented microservices architecture. Each service owns a distinct business capability and its associated data. Services communicate synchronously through REST APIs and asynchronously through domain events.
+
+The initial architecture prioritizes clear service boundaries, reliability, testability, and operational simplicity. Kubernetes, service meshes, and other advanced infrastructure are intentionally excluded from the initial implementation.
+
+## 2. High-Level Architecture
+
+```mermaid
+flowchart TD
+    Client[React Storefront and Admin]
+    Gateway[API Gateway / Nginx]
+
+    Identity[Identity Service]
+    Catalog[Catalog Service]
+    Inventory[Inventory Service]
+    Order[Order Service]
+    Payment[Payment Service]
+
+    RabbitMQ[RabbitMQ]
+    PostgreSQL[(PostgreSQL)]
+    Observability[OpenTelemetry]
+
+    Client --> Gateway
+
+    Gateway --> Identity
+    Gateway --> Catalog
+    Gateway --> Inventory
+    Gateway --> Order
+    Gateway --> Payment
+
+    Identity --> PostgreSQL
+    Catalog --> PostgreSQL
+    Inventory --> PostgreSQL
+    Order --> PostgreSQL
+    Payment --> PostgreSQL
+
+    Order <--> RabbitMQ
+    Inventory <--> RabbitMQ
+    Payment <--> RabbitMQ
+
+    Identity -. telemetry .-> Observability
+    Catalog -. telemetry .-> Observability
+    Inventory -. telemetry .-> Observability
+    Order -. telemetry .-> Observability
+    Payment -. telemetry .-> Observability
+```
+
+Each service uses its own database and credentials, even when services share a PostgreSQL server in the development environment. Services must not directly query or modify another service's tables.
+
+The API Gateway provides a single entry point for routing and basic request protections. Business authorization remains the responsibility of the relevant backend service.
+
+## 3. Service Responsibilities
+
+### 3.1 Identity Service
+
+Responsibilities:
+
+* User registration and authentication
+* Credential management
+* User profiles
+* Roles and authorization-related identity data
+* Issuing or validating authentication tokens
+
+Owns:
+
+* Users
+* Credentials
+* Roles and identity-related records
+
+Security requirements:
+
+* Secure password hashing
+* Explicit authorization checks
+* Rate limiting for sensitive authentication endpoints
+* No plaintext credentials or tokens in logs
+
+### 3.2 Catalog Service
+
+Responsibilities:
+
+* Product management
+* Categories and product attributes
+* Product variants, such as size and color
+* Product descriptions and image references
+* Product search, filtering, and pagination
+
+Owns:
+
+* Products
+* Categories
+* Product variants
+* Catalog metadata
+
+The Catalog Service owns product descriptions and commercial catalog information. Inventory quantities are owned exclusively by the Inventory Service.
+
+### 3.3 Inventory Service
+
+Responsibilities:
+
+* Stock availability
+* Stock reservations
+* Stock release and adjustment
+* Inventory movement records
+* Prevention of overselling
+
+Owns:
+
+* Stock records
+* Reservations
+* Inventory movements
+
+Stock-changing operations must be concurrency-safe. Database transactions and conditional updates or appropriate row locking are used to preserve inventory invariants.
+
+Reservations have explicit states and expiration or recovery rules.
+
+### 3.4 Order Service
+
+Responsibilities:
+
+* Shopping cart management
+* Checkout initiation
+* Order creation and lifecycle management
+* Order item snapshots
+* Checkout workflow coordination
+* Handling inventory and payment outcomes
+
+Owns:
+
+* Carts and cart items
+* Orders
+* Order item snapshots
+* Order status history
+* Checkout workflow state
+* Outbox records for order-related events
+
+Order items preserve the product name, variant, quantity, and purchase price at the time of the order. Historical orders must not change when catalog information changes.
+
+The Order Service coordinates the checkout Saga and does not directly modify inventory or payment data.
+
+### 3.5 Payment Service
+
+Responsibilities:
+
+* Payment initiation and status tracking
+* Payment attempt records
+* Provider abstraction
+* Simulated payment success and failure
+* Idempotency and duplicate request protection
+* Publishing payment result events
+
+Owns:
+
+* Payment attempts
+* Payment state
+* Payment-related idempotency records
+
+The initial implementation uses a mock payment provider. No real payments are processed.
+
+The payment abstraction must allow a future provider adapter without coupling order business logic to a specific payment vendor.
+
+## 4. Service-Level Project Structure
+
+Each Go service follows a consistent internal structure, adapted to its actual responsibilities.
+
+```text
+services/
+└── catalog/
+    ├── cmd/
+    │   └── api/
+    │       └── main.go
+    ├── internal/
+    │   ├── domain/
+    │   ├── application/
+    │   ├── transport/
+    │   │   └── http/
+    │   ├── repository/
+    │   └── infrastructure/
+    ├── migrations/
+    ├── tests/
+    ├── Dockerfile
+    ├── go.mod
+    └── go.sum
+```
+
+Layer responsibilities:
+
+* **Domain:** Business entities, invariants, domain errors, and core business rules.
+* **Application:** Use cases, orchestration, and transaction boundaries.
+* **Transport:** HTTP handlers, request validation, DTOs, and response mapping.
+* **Repository:** Data access contracts and persistence implementations where appropriate.
+* **Infrastructure:** Database connections, message broker integration, logging, and external adapters.
+
+Dependencies should point toward business rules rather than framework details. Domain logic must not depend on HTTP handlers, PostgreSQL implementations, or RabbitMQ clients.
+
+Avoid unnecessary abstractions. Interfaces should be introduced where they define a meaningful boundary or enable testing and alternative implementations.
+
+## 5. Frontend Structure
+
+```text
+frontend/
+├── src/
+│   ├── app/
+│   ├── components/
+│   ├── features/
+│   │   ├── catalog/
+│   │   ├── cart/
+│   │   ├── checkout/
+│   │   ├── orders/
+│   │   ├── account/
+│   │   └── admin/
+│   ├── lib/
+│   ├── services/
+│   └── types/
+├── public/
+├── package.json
+└── vite.config.ts
+```
+
+The frontend is organized by feature. API clients, shared components, and common types should be separated from feature-specific implementation details.
+
+The frontend is not trusted to enforce business rules. Prices, discounts, permissions, stock availability, and order totals must be validated or calculated by the backend.
+
+## 6. Communication
+
+### Synchronous communication
+
+REST/HTTP is the default for request-response operations, such as:
+
+* Retrieving product details
+* Loading a user's cart
+* Retrieving order history
+* Administrative product management
+
+Service-to-service calls must have explicit timeouts, error handling, and bounded retries where appropriate.
+
+Retries must not blindly repeat non-idempotent operations.
+
+### Asynchronous communication
+
+RabbitMQ carries domain events and commands used in workflows that do not require an immediate response.
+
+Initial event examples:
+
+* `OrderCreated`
+* `StockReserved`
+* `StockReservationFailed`
+* `PaymentSucceeded`
+* `PaymentFailed`
+* `OrderConfirmed`
+* `OrderCancelled`
+
+Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
+
+Events represent facts that have occurred. Commands request that a service perform an action. These concepts must remain distinct.
+
+Consumers must tolerate duplicate message delivery. Message handling should be idempotent, and poison messages should eventually be routed to a dead-letter queue for investigation.
+
+## 7. Checkout and Saga
+
+Checkout spans multiple independently committed service transactions. A single PostgreSQL transaction cannot atomically cover the entire workflow.
+
+The Order Service coordinates a Saga.
+
+```mermaid
+sequenceDiagram
+    participant UI as React
+    participant O as Order Service
+    participant Q as RabbitMQ
+    participant I as Inventory Service
+    participant P as Payment Service
+
+    UI->>O: Submit checkout with idempotency key
+    O->>O: Create pending order and outbox record
+    O-->>UI: Return pending order
+    O->>Q: Publish OrderCreated
+
+    Q->>I: Reserve stock
+    I->>I: Commit reservation transaction
+    I->>Q: Publish StockReserved or StockReservationFailed
+
+    Q->>O: Deliver inventory outcome
+    O->>Q: Request payment after stock reservation
+
+    Q->>P: Process mock payment
+    P->>P: Record payment outcome
+    P->>Q: Publish payment result
+
+    Q->>O: Deliver payment outcome
+    O->>O: Confirm or cancel order
+
+    Note over O,I: Failed payment triggers stock release
+```
+
+Workflow rules:
+
+1. Create an order in a pending state and persist the event in the same local database transaction.
+2. Reserve inventory before proceeding to payment.
+3. Process payment through the Payment Service.
+4. Confirm the order only after the required successful outcomes are recorded.
+5. On payment failure, cancel the order and release the inventory reservation.
+6. Make compensation operations idempotent and recover incomplete workflows after service restarts.
+
+The implementation should explicitly define timeout, reservation expiration, retry, and recovery behavior. An order must not remain pending indefinitely without a recovery mechanism.
+
+## 8. Reliability Patterns
+
+### Transactional Outbox
+
+When a service changes its database state and needs to publish an event, the business update and outbox record are written in the same local transaction.
+
+A separate publisher sends pending events to RabbitMQ and marks them as published. Since a publisher may crash after sending an event but before marking it as published, consumers must be idempotent.
+
+### Idempotency
+
+Checkout requests and payment operations must support stable idempotency keys.
+
+Message consumers should record processed event IDs or use equivalent transactional deduplication techniques. Database constraints should enforce important uniqueness guarantees.
+
+### Retries and Dead-Letter Queues
+
+Retry transient failures with bounded attempts and backoff. Permanent validation failures should not be retried indefinitely.
+
+Messages that exhaust their retry policy should be moved to a dead-letter queue and made observable for operational investigation.
+
+### Data Consistency
+
+Each service owns its database writes. Cross-service workflows use events and compensating actions rather than distributed database transactions.
+
+Read models may temporarily lag behind source-of-truth services. APIs and the user interface must handle pending states and eventual consistency explicitly.
+
+## 9. Data and Infrastructure
+
+### PostgreSQL
+
+A PostgreSQL server may host multiple service databases locally. Each service has separate credentials and migrations.
+
+Production deployments may use separate database instances where isolation, scaling, security, or availability requirements justify the additional infrastructure.
+
+### Redis
+
+Redis is optional and should be introduced only when a measurable use case exists, such as caching or distributed rate limiting.
+
+PostgreSQL remains the source of truth for orders, inventory, and payment state.
+
+### Docker Compose
+
+Docker Compose runs the local development environment, including the Go services, frontend, PostgreSQL, RabbitMQ, and gateway.
+
+Services should expose health and readiness endpoints. Startup order alone must not be treated as proof that a dependency is ready.
+
+### Observability
+
+Use structured logs and OpenTelemetry traces and metrics.
+
+Propagate correlation and trace context across HTTP requests and message headers. Monitor API latency, error rates, consumer backlog, retry counts, checkout failures, and reservation expiration.
+
+Do not log passwords, authentication tokens, or sensitive payment data.
+
+## 10. Security
+
+* Validate and authorize every protected backend operation.
+* Enforce role-based permissions in the relevant service.
+* Use parameterized database queries.
+* Validate incoming requests and apply request size limits.
+* Configure CORS, cookies, and transport security deliberately.
+* Store secrets outside source control.
+* Apply rate limiting to sensitive and resource-intensive endpoints.
+* Verify event origin and access to broker credentials.
+* Never trust client-supplied prices or payment success indicators.
+* Use least-privilege database and infrastructure credentials.
+
+## 11. Testing Strategy
+
+Each service should include:
+
+* Unit tests for business rules
+* Integration tests for persistence and transaction behavior
+* API tests for request validation and authorization
+* Consumer tests for event processing and idempotency
+* Failure-path tests for retries and compensation
+
+End-to-end tests should cover the complete checkout lifecycle, including insufficient stock, failed payment, duplicate requests, repeated events, and service interruptions.
+
+## 12. Deployment and Evolution
+
+The initial deployment model uses Docker Compose and a CI pipeline that builds services and runs tests.
+
+Kubernetes, service meshes, Kafka, and other advanced infrastructure are not part of the initial scope.
+
+New infrastructure should be introduced only when a clear requirement justifies it.
+
+Service boundaries may evolve as domain knowledge grows. Splitting a service further requires a concrete business, scaling, ownership, or reliability benefit.
+
+## 13. Architecture Decisions
+
+* **Microservices over a single monolith:** Chosen to learn independent service boundaries, distributed communication, and failure handling.
+* **Go for backend services:** Provides a consistent implementation language across the system.
+* **REST for synchronous APIs:** Keeps contracts straightforward and accessible.
+* **RabbitMQ for asynchronous workflows:** Supports event-driven integration without requiring a Kafka cluster.
+* **PostgreSQL per service:** Establishes clear data ownership while allowing a shared local database server.
+* **Mock payment provider:** Enables realistic payment workflow development without processing real payments.
+* **Saga and Transactional Outbox:** Address cross-service consistency and reliable event publication.
+* **Docker Compose first:** Keeps local development reproducible without premature orchestration complexity.
+
+The guiding principle is to keep the system distributed where independent business ownership is valuable, while avoiding infrastructure and abstractions that do not serve a concrete purpose.

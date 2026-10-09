@@ -1,0 +1,11 @@
+.env
+*.local
+.DS_Store
+.idea/
+.vscode/
+bin/
+coverage.out
+node_modules/
+dist/
+.claude/
+claude.md

@@ -1,0 +1,96 @@
+name: rovena
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?set in .env}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?set in .env}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?set in .env}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?set in .env}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set in .env}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  identity-migrate:
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+    entrypoint: ["/app/migrate", "-action", "up"]
+    environment:
+      DATABASE_URL: postgres://identity:${IDENTITY_DB_PASSWORD}@postgres:5432/identity?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  identity:
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+    environment:
+      APP_ENV: development
+      HTTP_PORT: "8081"
+      DATABASE_URL: postgres://identity:${IDENTITY_DB_PASSWORD}@postgres:5432/identity?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 720h
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:8081:8081"
+
+  identity-seed:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+    entrypoint: ["/app/seed"]
+    environment:
+      DATABASE_URL: postgres://identity:${IDENTITY_DB_PASSWORD}@postgres:5432/identity?sslmode=disable
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set in .env}
+    depends_on:
+      identity-migrate:
+        condition: service_completed_successfully
+
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/proxy_params.conf:/etc/nginx/proxy_params.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - identity
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
