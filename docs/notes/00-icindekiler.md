@@ -23,6 +23,8 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 
 Sırayla 01'den başla. Kod örneklerini görmek için ilgili dosyayı yanında aç. Dosya yolları proje köküne göre yazılmıştır.
 
+Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
+
 ## İlerleme günlüğü
 
 | Aşama | Durum | Not |
