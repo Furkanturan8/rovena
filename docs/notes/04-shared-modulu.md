@@ -34,8 +34,9 @@ Hatalar da `{"success": false, "message": "...", "fields": {...}}` biçimindedir
 ### `httpx/`: HTTP yardımcıları
 
 - **`errors.go` → `NewErrorHandler`**: Fiber'ın "merkezi hata yakalayıcısı". Handler'lar hata olunca kendi cevaplarını yazmaz, sadece `return err` yapar; bu fonksiyon hatayı JSON'a çevirir. Servis kendi **domain hatalarını** (`ErrEmailTaken` gibi) `AppError`'a çeviren bir "mapper" verebilir. 5xx hatalar loglanır.
-- **`validate.go` → `BindAndValidate`**: JSON gövdesini struct'a okur ve `validate:"required,email"` gibi etiketleri kontrol eder. Hata mesajlarını alan adlarıyla döner.
+- **`validate.go` → `BindAndValidate`**: JSON gövdesini struct'a okur ve `validate:"required,email"` gibi etiketleri kontrol eder. Hata mesajlarını alan yoluyla döner (iç içe alanlar için `images[1].url` gibi).
 - **`middleware.go`**: `RequestIDMiddleware` (her isteğe kimlik numarası verir/iletir) ve `AccessLog` (her istek için tek satır JSON log: yol, durum, süre, IP, request id; gövde ve Authorization başlığı **asla** loglanmaz).
+- **`pagination.go` → `Pagination`**: `?page` ve `?page_size` değerlerini sınırlar içinde okur (en az 1, en çok servis belirler).
 - **`health.go` → `RegisterHealth`**: `/healthz` ("süreç ayakta mı", her zaman 200) ve `/readyz` ("bağımlılıklar hazır mı", örn. Postgres'e ping atar, değilse 503). Orkestrasyon araçları ve Compose bunu kullanır.
 
 ### `auth/`: Token doğrulama ve yetkilendirme

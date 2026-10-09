@@ -17,6 +17,9 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
 | `identity` | Identity API sunucusu | 127.0.0.1:8081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
+| `catalog-migrate` | Catalog tablolarını kurar, işi bitince kapanır | yok |
+| `catalog` | Catalog API sunucusu | 127.0.0.1:8082 |
+| `catalog-seed` | Demo kategori ve ürünleri yükler (`tools` profili) | yok |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:
@@ -46,8 +49,15 @@ Betik yalnızca **boş volume'da** çalışır. Sonradan değiştirirsen `docker
 
 Veritabanı tablolarının şeması kodla birlikte sürümlenir. `services/identity/migrations/` altındaki SQL dosyaları sırayla uygulanır:
 
+Identity:
 - `00001_create_users.sql` → `users` tablosu
 - `00002_create_refresh_tokens.sql` → `refresh_tokens` tablosu
+
+Catalog:
+- `00001_create_catalog.sql` → kategoriler, ürünler, görseller, varyantlar (+ `pg_trgm` eklentisi)
+- `00002_add_search_text.sql` → aksan duyarsız arama sütunu
+
+`00002` dosyası, **uygulanmış bir migration'ın düzenlenmediği**, değişikliğin yeni dosyayla eklendiği örnektir.
 
 Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vardır. Hangilerinin uygulandığını [goose](https://github.com/pressly/goose) kütüphanesi veritabanındaki bir tabloda tutar. Yeni bir değişiklik her zaman **yeni bir dosya** olarak eklenir; eski migration düzenlenmez. `identity-migrate` konteyneri bunu `up` ile çalıştırır.
 
@@ -55,7 +65,7 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 `infrastructure/nginx/nginx.conf`:
 
-- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
+- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
 - `limit_req`: IP başına saniyede 30 istek sınırı (kaba saldırı koruması).
 - `X-Request-ID` başlığı yoksa üretir ve servise iletir. Bir isteği tüm servislerin loglarında izlemek için kullanılır.
 - `resolver 127.0.0.11` + `set $identity ...`: Nginx, servis henüz ayakta değilken de başlayabilsin diye adresi istek anında çözer.

@@ -25,7 +25,7 @@ Bu projede mikroservis seçilmesinin sebebi, bu zorlukları öğrenmektir. Gerç
 | Servis | Sorumluluğu | Durum |
 | --- | --- | --- |
 | Identity | Kullanıcı kaydı, giriş, roller | Yazıldı |
-| Catalog | Ürünler, kategoriler, varyantlar | Sırada |
+| Catalog | Ürünler, kategoriler, varyantlar | Yazıldı |
 | Inventory | Stok, rezervasyon | Planlı |
 | Order | Sepet, sipariş, checkout akışı | Planlı |
 | Payment | Ödeme (sahte sağlayıcı) | Planlı |

@@ -32,6 +32,12 @@
 | **Idempotent** | Aynı işlemin birden fazla uygulanmasının sonucu değiştirmemesi |
 | **Graceful shutdown** | Kapanırken süren işleri bitirip düzgünce çıkma |
 | **Liveness / Readiness** | "Süreç ayakta mı" / "bağımlılıklar hazır, trafik alabilir mi" kontrolleri |
+| **SKU** | Stok kodu; bir varyantı tekil olarak tanımlar (`TEE-BLK-M`) |
+| **Varyant** | Bir ürünün satın alınabilir somut hali (beden + renk + fiyat) |
+| **Slug** | URL'de kullanılan okunur ad (`deri-ceket`) |
+| **Minor unit (kuruş)** | Paranın en küçük birimi; fiyat tamsayı olarak bunla saklanır |
+| **Trigram (`pg_trgm`)** | Metni 3 harflik parçalara bölerek `LIKE '%x%'` aramasını indekslenebilir kılan PostgreSQL eklentisi |
+| **Soft delete / arşivleme** | Kaydı silmek yerine görünmez duruma getirme |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
 | **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |

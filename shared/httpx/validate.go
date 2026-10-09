@@ -42,7 +42,7 @@ func Validate(req any) error {
 	}
 	fields := make(map[string]string, len(verrs))
 	for _, fe := range verrs {
-		fields[fe.Field()] = message(fe)
+		fields[fieldPath(fe)] = message(fe)
 	}
 	return errorx.WithFields(errorx.ErrValidation, fields)
 }
@@ -64,4 +64,13 @@ func message(fe validator.FieldError) string {
 	default:
 		return "is invalid"
 	}
+}
+
+// fieldPath drops the leading struct name: "CreateProductRequest.images[0].url" -> "images[0].url".
+func fieldPath(fe validator.FieldError) string {
+	ns := fe.Namespace()
+	if _, rest, ok := strings.Cut(ns, "."); ok {
+		return rest
+	}
+	return ns
 }

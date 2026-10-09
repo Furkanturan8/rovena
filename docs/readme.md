@@ -61,12 +61,15 @@ The development environment runs locally with Docker Compose.
 
 ```bash
 cp .env.example .env      # fill in every value; JWT_SECRET: openssl rand -base64 48
-make up                   # postgres, rabbitmq, identity (+ migrations), nginx gateway
+make up                   # postgres, rabbitmq, identity and catalog (+ migrations), nginx gateway
 make seed-admin           # creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD
+make seed-catalog         # loads demo categories and products
 make test
 ```
 
-The gateway listens on `http://localhost:8080`. Current API surface (Identity service):
+The gateway listens on `http://localhost:8080`. Current API surface:
+
+**Identity**
 
 | Method | Path | Access |
 | --- | --- | --- |
@@ -75,7 +78,16 @@ The gateway listens on `http://localhost:8080`. Current API surface (Identity se
 | GET | `/api/v1/users`, `/api/v1/users/:id` | admin |
 | PATCH | `/api/v1/users/:id/role` | admin |
 
-Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`).
+**Catalog**
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/api/v1/categories`, `/categories/:slug` | public |
+| GET | `/api/v1/products` (`q`, `category`, `size`, `color`, `min_price`, `max_price`, `sort`, `page`) | public |
+| GET | `/api/v1/products/:idOrSlug` | public |
+| GET, POST, PATCH, DELETE | `/api/v1/admin/products[/:id]`, `/admin/products/:id/variants[/:variantId]`, `/admin/categories[/:id]` | admin |
+
+Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`).
 
 ## Project Goals
 

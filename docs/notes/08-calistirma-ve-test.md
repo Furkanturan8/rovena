@@ -6,6 +6,7 @@
 cp .env.example .env     # değerleri doldur; JWT_SECRET için: openssl rand -base64 48
 make up                  # tüm konteynerleri derler ve başlatır
 make seed-admin          # ilk admin kullanıcıyı oluşturur
+make seed-catalog        # demo kategori ve ürünleri yükler
 docker compose ps        # durumları gör
 make logs                # logları izle
 make down                # durdur (veri kalır)
@@ -39,7 +40,20 @@ curl -s -X POST localhost:8080/api/v1/auth/refresh \
 
 Beklenen hata durumları: aynı e-posta ile ikinci kayıt 409, yanlış parola 401, tokensız `/users/me` 401, customer ile `/users` listesi 403, kısa parola 422 (alan bazlı mesajla).
 
-Sağlık: `curl localhost:8081/readyz` → `{"checks":{"postgres":"ok"},"ready":true}`.
+Catalog'u deneme (önce `make seed-catalog`):
+
+```bash
+curl -s 'localhost:8080/api/v1/products?q=canta'
+curl -s 'localhost:8080/api/v1/products?category=giyim&color=siyah&sort=price_asc'
+curl -s localhost:8080/api/v1/products/deri-ceket
+
+# Admin işlemleri için admin hesabıyla giriş yapıp token al
+curl -s -X POST localhost:8080/api/v1/admin/products \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"name":"Yeni Ürün","category_id":"<kategori-uuid>","variants":[{"sku":"NEW-1","size":"M","price_cents":10000}]}'
+```
+
+Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
 Veritabanına bakmak için (parolayı `.env` içinden al):
 
@@ -63,6 +77,8 @@ make vet     # statik analiz
 | `shared/auth/verifier_test.go` | Token doğrulama: geçerli, yanlış secret, süresi geçmiş, yanlış yayıncı, `alg: none` vb. |
 | `identity/internal/application/auth_service_test.go` | Kayıt (e-posta normalizasyonu, rol), çift kayıt, çok uzun parola, giriş hataları, refresh rotasyonu, **refresh yeniden kullanımında tüm oturumların iptali**, süresi dolmuş token, logout idempotentliği |
 | `identity/internal/application/user_service_test.go` | Son admin düşürülemez, başka admin varsa düşürülebilir, geçersiz rol |
+| `catalog/internal/application/service_test.go` | Slug çakışması, taslak varsayılanı, yayın ve son aktif varyant kuralları, taslak/arşivin herkese açık görünmemesi |
+| `catalog/internal/domain/slug_test.go` | Türkçe slug ve arama metni normalizasyonu |
 
 ### Testler nasıl veritabansız çalışıyor?
 
@@ -70,7 +86,7 @@ make vet     # statik analiz
 
 ### Henüz olmayanlar
 
-- Gerçek Postgres'e karşı **entegrasyon testleri** (SQL sorguları, unique kısıtı, eşzamanlı refresh). Testcontainers ile eklenebilir.
+- Gerçek Postgres'e karşı **entegrasyon testleri** (Identity: unique kısıtı, eşzamanlı refresh; Catalog: arama/filtre SQL'i, kategori ağacı, transaction). Testcontainers ile eklenebilir.
 - HTTP katmanı (handler/route) testleri.
 - Uçtan uca testler (birden fazla servis olunca).
 

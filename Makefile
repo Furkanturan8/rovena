@@ -1,6 +1,6 @@
-SERVICES := identity
+SERVICES := identity catalog
 
-.PHONY: up down logs test vet seed-admin
+.PHONY: up down logs test vet seed-admin seed-catalog
 
 up:
 	docker compose up -d --build
@@ -22,3 +22,7 @@ vet:
 # Needs ADMIN_EMAIL / ADMIN_PASSWORD in .env
 seed-admin:
 	docker compose --profile tools run --rm identity-seed
+
+# Demo categories and products
+seed-catalog:
+	docker compose --profile tools run --rm catalog-seed
