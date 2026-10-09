@@ -80,22 +80,42 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, u *domain.User) erro
 	return err
 }
 
-func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role domain.Role) error {
-	res, err := r.db.NewUpdate().Model((*userRow)(nil)).
-		Set("role = ?", string(role)).
-		Set("updated_at = ?", time.Now()).
-		Where("id = ?", id).
-		Exec(ctx)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return domain.ErrUserNotFound
-	}
-	return nil
-}
+// roleChangeLockKey identifies the advisory lock that serializes role changes.
+const roleChangeLockKey = 7301001
 
-func (r *UserRepository) CountByRole(ctx context.Context, role domain.Role) (int, error) {
-	n, err := r.db.NewSelect().Model((*userRow)(nil)).Where("role = ?", string(role)).Count(ctx)
-	return int(n), err
+func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role domain.Role) error {
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// "At least one admin" is a rule about the whole table, so row locks on the target
+		// are not enough. Role changes are rare, so serializing all of them is the simplest
+		// correct option; the lock is released automatically when the transaction ends.
+		if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(?)", roleChangeLockKey); err != nil {
+			return err
+		}
+
+		var current string
+		err := tx.NewSelect().Model((*userRow)(nil)).ColumnExpr("role").Where("id = ?", id).Scan(ctx, &current)
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.ErrUserNotFound
+		}
+		if err != nil {
+			return err
+		}
+
+		if domain.Role(current) == domain.RoleAdmin && role != domain.RoleAdmin {
+			admins, err := tx.NewSelect().Model((*userRow)(nil)).Where("role = ?", string(domain.RoleAdmin)).Count(ctx)
+			if err != nil {
+				return err
+			}
+			if admins <= 1 {
+				return domain.ErrLastAdmin
+			}
+		}
+
+		_, err = tx.NewUpdate().Model((*userRow)(nil)).
+			Set("role = ?", string(role)).
+			Set("updated_at = ?", time.Now()).
+			Where("id = ?", id).
+			Exec(ctx)
+		return err
+	})
 }

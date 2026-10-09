@@ -67,7 +67,7 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 
 ```bash
 make test               # shared + identity + catalog, HTTP testleri dahil (veritabanı gerekmez)
-make test-integration   # gerçek Postgres'e karşı Catalog testleri (önce make up)
+make test-integration   # gerçek Postgres'e karşı Catalog ve Identity testleri (önce make up)
 make vet     # statik analiz
 ```
 
@@ -80,9 +80,23 @@ make vet     # statik analiz
 | `identity/internal/application/user_service_test.go` | Son admin düşürülemez, başka admin varsa düşürülebilir, geçersiz rol |
 | `catalog/internal/application/service_test.go` | Slug çakışması, taslak varsayılanı, yayın ve son aktif varyant kuralları, taslak/arşivin herkese açık görünmemesi |
 | `catalog/internal/domain/slug_test.go` | Türkçe slug ve arama metni normalizasyonu |
+| `identity/.../transport/http/http_test.go` | HTTP katmanı: kayıt/giriş/refresh/logout akışları, doğrulama tabloları, enumeration, mass assignment, rate limit, yetki matrisi (`alg: none` dahil), admin uçları, log hijyeni |
+| `identity/.../postgres/integration_test.go` | (Gerçek Postgres, her test kendi şemasında) kullanıcı ve refresh token repository'leri, eşzamanlı kayıt/refresh, son admin yarışı |
 | `catalog/.../transport/http/http_test.go` | HTTP katmanı: yetki matrisi, girdi doğrulama, hata eşleme, cache/CORS/request id, body limiti, sağlık uçları |
 | `catalog/.../postgres/integration_test.go` | (Gerçek Postgres) aynı anda iki varyantın kapatılması, yayın kuralı, olmayan ürüne varyant |
 | `catalog/.../postgres/search_integration_test.go` | (Gerçek Postgres) arama, filtre, sıralama, sayfalama SQL'i |
+
+### Testlerin üç katmanı
+
+1. **Birim:** `application` iş kuralları, sahte repository'lerle, milisaniyeler.
+2. **HTTP:** Gerçek Fiber uygulaması + gerçek servisler + bellek içi repository'ler. Router, middleware sırası, JWT, doğrulama, hata eşleme birlikte test edilir. Veritabanı gerekmez.
+3. **Entegrasyon:** Gerçek PostgreSQL (`-tags integration`). SQL'in, kısıtların, kilitlerin ve transaction'ların doğru çalıştığını gösterir.
+
+Identity entegrasyon testleri her test için **geçici bir PostgreSQL şeması** (`itest_<rastgele>`) açar, migration'ları oraya uygular ve test bitince `DROP SCHEMA ... CASCADE` yapar. Böylece testler birbirinden ve geliştirme verisinden izoledir; "sistemde en az bir admin" gibi **global** kurallar, gerçek admin hesabına dokunmadan test edilebilir.
+
+### Yarış testi yazarken dikkat
+
+İlk yazdığımız "iki admin birbirini düşürür" testi (her turda yeni şema, yeni bağlantılar) kusurlu kodda **geçti**: yeni açılan bağlantılar yavaş olduğu için zamanlama yarışı gizledi. Bağlantı havuzu ısıtılıp aynı şemada 300 tur çalıştırılınca yarış ilk turda yakalandı. Ders: bir yarış testinin geçmesi yarışın olmadığını göstermez; testin **kusurlu kodda kırmızıya döndüğünü** görmeden güvenme.
 
 ### Testler nasıl veritabansız çalışıyor?
 
@@ -90,7 +104,8 @@ make vet     # statik analiz
 
 ### Henüz olmayanlar
 
-- **Identity** için gerçek Postgres entegrasyon testleri (unique kısıtı, eşzamanlı refresh) ve HTTP katmanı testleri. Catalog'da ikisi de var. Entegrasyon testleri şu an çalışan Compose Postgres'ine bağlanıyor; CI'da Testcontainers ile kendi kendine yeten hale getirilebilir.
+- Entegrasyon testleri şu an çalışan Compose Postgres'ine bağlanıyor; CI'da Testcontainers ile kendi kendine yeten hale getirilebilir.
+- Ortak kod (`shared/httpx`, `shared/auth` middleware) yalnızca servislerin HTTP testleri üzerinden dolaylı test ediliyor; kendi birim testleri yok (yalnızca `auth.Verifier`'ın var).
 - Uçtan uca testler (birden fazla servis olunca).
 
 Bu eksikler bilerek not edilmiştir; ilerleyen adımlarda eklenecek.

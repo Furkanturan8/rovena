@@ -58,7 +58,7 @@ services/identity/
 
 **`repository.go`**: Yalnızca arayüzler.
 
-- `UserRepository`: `Create`, `GetByID`, `GetByEmail`, `List`, `UpdateProfile`, `UpdateRole`, `CountByRole`.
+- `UserRepository`: `Create`, `GetByID`, `GetByEmail`, `List`, `UpdateProfile`, `UpdateRole`.
 - `RefreshTokenRepository`: `Create`, `GetByHash`, `Revoke`, `RevokeAllForUser`.
 
 **`postgres/`** bunların gerçeklemesidir:
@@ -82,7 +82,15 @@ services/identity/
 **`user_service.go`**: `UserService`
 
 - `Get`, `UpdateProfile` (yalnızca ad/soyad; e-posta ve rol bu uçtan değişmez), `List`.
-- `ChangeRole`: Rol geçerli mi bakar; **sistemdeki son admin düşürülemez** kuralını uygular.
+- `ChangeRole`: Rol geçerli mi bakar, kullanıcıyı bulur ve repository'ye yazdırır. **Sistemdeki son admin düşürülemez** kuralı repository'nin `UpdateRole` transaction'ında uygulanır (aşağıdaki "Eşzamanlılık" kutusu).
+
+### Eşzamanlılık: "son admin" kuralı ve advisory lock
+
+Kural ilk yazımda serviste şöyleydi: admin sayısını oku, birden fazlaysa rolü değiştir. İki admin **aynı anda birbirini** düşürürse ikisi de "2 admin var" görür, ikisi de düşürür ve sistemde **hiç admin kalmaz**. Bu, Catalog'daki varyant yarışıyla aynı kalıptır ([09](09-catalog-servisi.md)): kontrol et, sonra işlem yap (check-then-act).
+
+Catalog'da korunan şey tek bir satırdı (ürün), satır kilidi yetiyordu. Burada kural **tüm tabloyla** ilgili ("toplamda en az bir admin"), yani hedef kullanıcının satırını kilitlemek yetmez: iki işlem farklı satırlara dokunuyor. Çözüm olarak `UpdateRole` transaction'ının başında bir **advisory lock** alınır (`pg_advisory_xact_lock`). Bu, belirli bir sayıya bağlı, uygulamanın tanımladığı bir kilittir ve transaction bitince otomatik bırakılır. Tüm rol değişiklikleri sıraya girer; ikincisi birincinin sonucunu görüp reddedilir. Rol değiştirme nadir bir admin işlemi olduğu için bu serileştirmenin maliyeti yoktur.
+
+Test: iki admin 300 tur boyunca aynı anda birbirini düşürür; her turda tam olarak bir admin kalmalı ve tam olarak bir istek reddedilmelidir.
 
 ## transport/http/
 

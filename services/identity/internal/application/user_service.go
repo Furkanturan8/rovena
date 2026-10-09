@@ -47,6 +47,8 @@ func (s *UserService) List(ctx context.Context, p repository.ListUsersParams) ([
 	return s.users.List(ctx, p)
 }
 
+// ChangeRole sets a user's role. The repository guarantees the last admin cannot be
+// demoted, even when several admins change roles at the same time.
 func (s *UserService) ChangeRole(ctx context.Context, id uuid.UUID, role domain.Role) (*domain.User, error) {
 	if !role.Valid() {
 		return nil, domain.ErrInvalidRole
@@ -54,15 +56,6 @@ func (s *UserService) ChangeRole(ctx context.Context, id uuid.UUID, role domain.
 	user, err := s.users.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if user.Role == domain.RoleAdmin && role != domain.RoleAdmin {
-		admins, err := s.users.CountByRole(ctx, domain.RoleAdmin)
-		if err != nil {
-			return nil, err
-		}
-		if admins <= 1 {
-			return nil, domain.ErrLastAdmin
-		}
 	}
 	if err := s.users.UpdateRole(ctx, id, role); err != nil {
 		return nil, err

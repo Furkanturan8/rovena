@@ -48,6 +48,9 @@
 | **Test double (sahte)** | Gerçek bir bağımlılığın yerine geçen test nesnesi (bellek içi repository gibi) |
 | **Build tag** | Bir dosyanın yalnızca belirli bir bayrakla (`-tags integration`) derlenmesini sağlayan Go işareti |
 | **Fixture** | Bir testin ihtiyaç duyduğu, önceden kurulan örnek veri |
+| **Advisory lock** | Bir satıra değil, uygulamanın seçtiği bir sayıya bağlı PostgreSQL kilidi; tabloyu ilgilendiren kuralları serileştirmek için kullanılır |
+| **Mass assignment** | İstemcinin göndermemesi gereken alanları (`role`, `id`) gönderip sunucunun bunları körü körüne kaydetmesi |
+| **User enumeration** | Giriş/kayıt cevaplarının farkından hangi e-postaların kayıtlı olduğunun anlaşılması |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
 | **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |

@@ -88,6 +88,12 @@ admin := router.Group("/admin", auth.Middleware(verifier), auth.RequireRole(auth
 
 Identity'ye istek atmaz. Kullanıcı id'sine `claims.UserID()` ile ulaşır. Bunun bir bedeli var: secret tüm servislerde paylaşılıyor. Daha güvenli çözüm asimetrik imza (RS256/EdDSA): Identity özel anahtarla imzalar, diğerleri sadece genel anahtarla doğrular. İleride yapılabilecek bir iyileştirmedir.
 
+## Bu davranışlar nasıl doğrulanıyor?
+
+Yukarıdaki güvenlik iddiaları otomatik testlerle denir ([08](08-calistirma-ve-test.md)): rotasyon ve yeniden kullanım tespiti (hem servis hem HTTP düzeyinde), aynı refresh token ile eşzamanlı sekiz isteğin en fazla birinin başarılı olması, yanlış parola ile bilinmeyen e-postanın **bayt bayt aynı** cevabı vermesi, `alg: none`, yanlış imzalı ve süresi dolmuş token'ların reddi, kayıt sırasında istemcinin `role: admin` göndererek yetki yükseltememesi ve profil güncellemede e-posta/rolün değiştirilememesi (mass assignment), 21. kimlik isteğinin 429 alması, ve **logların parola, token ve parola hash'i içermemesi**.
+
+Bilinen bir ödünleşim: aynı refresh token iki sekmeden aynı anda gönderilirse biri başarılı olur, diğeri "yeniden kullanım" sayılır ve kullanıcının tüm oturumları kapanır. Güvenli tarafta kalan bir davranıştır; kullanıcı deneyimi için kısa bir "grace period" (eşzamanlı yenilemeye kısa süre tolerans) eklenebilir.
+
 ## Güvenlik önlemleri özeti
 
 | Tehdit | Önlem |

@@ -27,8 +27,8 @@ Sırayla 01'den başla. Kod örneklerini görmek için ilgili dosyayı yanında 
 | --- | --- | --- |
 | Altyapı (Compose, Postgres, RabbitMQ, Nginx) | Tamamlandı | RabbitMQ henüz hiçbir servis tarafından kullanılmıyor |
 | Shared modülü | Tamamlandı | errorx, response, httpx, auth, logging |
-| Identity servisi | Tamamlandı | Kayıt, giriş, refresh, profil, admin rol yönetimi |
-| Catalog servisi | Tamamlandı | Kategori, ürün, varyant, görsel; arama/filtre; admin yönetimi |
+| Identity servisi | Tamamlandı | Kayıt, giriş, refresh, profil, admin rol yönetimi; birim, HTTP ve Postgres entegrasyon testleri |
+| Catalog servisi | Tamamlandı | Kategori, ürün, varyant, görsel; arama/filtre; admin yönetimi; aynı test seti |
 | Inventory servisi | Sırada | Varyant bazlı stok, rezervasyon |
 | Order servisi (Saga, Outbox) | Planlı | |
 | Payment servisi | Planlı | |

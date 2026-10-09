@@ -66,6 +66,7 @@ func (f *fakeUsers) UpdateProfile(_ context.Context, u *domain.User) error {
 	return nil
 }
 
+// UpdateRole mirrors the repository contract, including the last-admin rule.
 func (f *fakeUsers) UpdateRole(_ context.Context, id uuid.UUID, role domain.Role) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -73,20 +74,19 @@ func (f *fakeUsers) UpdateRole(_ context.Context, id uuid.UUID, role domain.Role
 	if !ok {
 		return domain.ErrUserNotFound
 	}
-	u.Role = role
-	return nil
-}
-
-func (f *fakeUsers) CountByRole(_ context.Context, role domain.Role) (int, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	n := 0
-	for _, u := range f.byID {
-		if u.Role == role {
-			n++
+	if u.Role == domain.RoleAdmin && role != domain.RoleAdmin {
+		admins := 0
+		for _, o := range f.byID {
+			if o.Role == domain.RoleAdmin {
+				admins++
+			}
+		}
+		if admins <= 1 {
+			return domain.ErrLastAdmin
 		}
 	}
-	return n, nil
+	u.Role = role
+	return nil
 }
 
 type fakeTokens struct {

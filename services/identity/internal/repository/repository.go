@@ -20,8 +20,10 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	List(ctx context.Context, p ListUsersParams) ([]domain.User, int, error)
 	UpdateProfile(ctx context.Context, u *domain.User) error
+	// UpdateRole returns ErrUserNotFound for an unknown id and ErrLastAdmin when it would
+	// remove the last admin. The check and the write happen atomically, even across
+	// concurrent callers.
 	UpdateRole(ctx context.Context, id uuid.UUID, role domain.Role) error
-	CountByRole(ctx context.Context, role domain.Role) (int, error)
 }
 
 type RefreshTokenRepository interface {

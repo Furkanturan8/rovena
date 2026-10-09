@@ -15,11 +15,13 @@ test:
 	cd shared && go test ./...
 	@for s in $(SERVICES); do (cd services/$$s && go test ./...) || exit 1; done
 
-# Needs the stack running (make up) and CATALOG_DB_PASSWORD in .env
+# Needs the stack running (make up) and the DB passwords in .env
 test-integration:
-	@set -a; . ./.env; set +a; cd services/catalog && \
-	CATALOG_TEST_DATABASE_URL="postgres://catalog:$$CATALOG_DB_PASSWORD@localhost:5433/catalog?sslmode=disable" \
-	go test -tags integration -count=1 ./internal/repository/postgres
+	@set -a; . ./.env; set +a; \
+	(cd services/catalog && CATALOG_TEST_DATABASE_URL="postgres://catalog:$$CATALOG_DB_PASSWORD@localhost:5433/catalog?sslmode=disable" \
+		go test -tags integration -count=1 ./internal/repository/postgres) && \
+	(cd services/identity && IDENTITY_TEST_DATABASE_URL="postgres://identity:$$IDENTITY_DB_PASSWORD@localhost:5433/identity?sslmode=disable" \
+		go test -tags integration -count=1 ./internal/repository/postgres)
 
 vet:
 	cd shared && go vet ./...
