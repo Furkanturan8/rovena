@@ -18,6 +18,9 @@ test:
 # Needs the stack running (make up) and the DB passwords in .env
 test-integration:
 	@set -a; . ./.env; set +a; \
+	(cd shared && ROVENA_TEST_DATABASE_URL="postgres://postgres:$$POSTGRES_PASSWORD@localhost:5433/postgres?sslmode=disable" \
+		ROVENA_TEST_AMQP_URL="amqp://$$RABBITMQ_USER:$$RABBITMQ_PASSWORD@localhost:5672/" \
+		go test -tags integration -count=1 ./messaging ./outbox) && \
 	(cd services/catalog && CATALOG_TEST_DATABASE_URL="postgres://catalog:$$CATALOG_DB_PASSWORD@localhost:5433/catalog?sslmode=disable" \
 		go test -tags integration -count=1 ./internal/repository/postgres) && \
 	(cd services/identity && IDENTITY_TEST_DATABASE_URL="postgres://identity:$$IDENTITY_DB_PASSWORD@localhost:5433/identity?sslmode=disable" \
