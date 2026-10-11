@@ -195,6 +195,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set in .env}
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set in .env}
       PAYMENT_MAX_ATTEMPTS: "3"
+      OUTBOX_RETENTION: 168h
       PAYMENT_CHARGE_TIMEOUT: 10s
       PAYMENT_RETRY_DELAY: 5s
       FAKE_PROVIDER_LATENCY: 300ms
@@ -235,6 +236,7 @@ services:
       CATALOG_URL: http://catalog:8082
       INVENTORY_URL: http://inventory:8083
       ORDER_RECOVERY_INTERVAL: 15s
+      OUTBOX_RETENTION: 168h
       ORDER_STUCK_AFTER: 30s
       ORDER_PAYMENT_TIMEOUT: 2m
       ORDER_MAX_PAYMENT_REQUESTS: "3"
@@ -262,10 +264,28 @@ services:
     image: prom/prometheus:v3.5.0
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
     ports:
       - "127.0.0.1:9090:9090"
     depends_on:
       - rabbitmq
+
+  # Dashboards: http://localhost:3000 (no login in this development setup). The "Rovena overview"
+  # dashboard is provisioned from infrastructure/grafana; edit the JSON file, not the UI.
+  grafana:
+    image: grafana/grafana:11.6.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
 
   gateway:
     image: nginx:1.27-alpine

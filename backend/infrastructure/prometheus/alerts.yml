@@ -1,0 +1,89 @@
+# Alert rules. There is no Alertmanager in this setup: firing alerts show on the Alerts page of
+# Prometheus (http://localhost:9090/alerts) and in the Grafana dashboard. Add an Alertmanager
+# (or Grafana contact points) to get notified.
+groups:
+  - name: availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }} is not answering its /metrics endpoint"
+
+      - alert: HighServerErrorRate
+        expr: |
+          sum by (job) (rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+            / sum by (job) (rate(http_server_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: "More than 5% of {{ $labels.job }} requests fail with a 5xx"
+
+      - alert: SlowRequests
+        expr: |
+          histogram_quantile(0.95, sum by (job, le) (rate(http_server_request_duration_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The 95th percentile latency of {{ $labels.job }} is above one second"
+
+  - name: messaging
+    rules:
+      - alert: OutboxBacklog
+        expr: outbox_pending_events > 20
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }} has {{ $value }} events waiting in its outbox (broker unreachable or relay stuck)"
+
+      - alert: OutboxEventStuck
+        expr: outbox_oldest_pending_age_seconds > 120
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "The oldest event in the {{ $labels.job }} outbox has waited {{ $value | humanizeDuration }}"
+
+      - alert: DeadLetterQueueNotEmpty
+        expr: rabbitmq_detailed_queue_messages_ready{queue=~".*\\.dlq"} > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Queue {{ $labels.queue }} holds {{ $value }} messages nobody could process; a person must look"
+
+      - alert: QueueBacklog
+        expr: rabbitmq_detailed_queue_messages_ready{queue!~".*\\.dlq"} > 100
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Queue {{ $labels.queue }} has {{ $value }} messages waiting; its consumer is slow or down"
+
+      - alert: HandlerRetriesRising
+        expr: sum by (queue) (rate(messaging_events_consumed_total{result="retried"}[5m])) > 0.1
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Handlers of {{ $labels.queue }} keep failing and being retried"
+
+  - name: checkout
+    rules:
+      - alert: SagaRecoveryIsBusy
+        expr: sum(increase(saga_recovery_actions_total[15m])) > 5
+        labels: {severity: warning}
+        annotations:
+          summary: "The order recovery job repaired more than 5 stuck orders in 15 minutes; a dependency is unhealthy"
+
+      - alert: RefundNotAnswered
+        expr: increase(saga_recovery_actions_total{action="refund_requested_again"}[15m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "Payment is not answering refund requests; customers are waiting for their money"
+
+      - alert: ManyOrdersCancelled
+        expr: |
+          sum(increase(orders_finished_total{status="cancelled"}[15m]))
+            / clamp_min(sum(increase(orders_finished_total[15m])), 1) > 0.5
+          and sum(increase(orders_finished_total[15m])) >= 10
+        labels: {severity: warning}
+        annotations:
+          summary: "More than half of the orders of the last 15 minutes ended cancelled"

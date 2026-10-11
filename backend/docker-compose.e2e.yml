@@ -8,3 +8,6 @@ services:
       ORDER_STUCK_AFTER: 5s
       ORDER_PAYMENT_TIMEOUT: 15s
       ORDER_MAX_PAYMENT_REQUESTS: "3"
+      # Published outbox rows older than 5 s are removed every 3 s, so a scenario can watch it happen.
+      OUTBOX_RETENTION: 5s
+      OUTBOX_CLEAN_INTERVAL: 3s
