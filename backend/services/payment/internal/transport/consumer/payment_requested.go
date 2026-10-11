@@ -30,7 +30,7 @@ func NewPaymentRequestedHandler(payments *application.PaymentService) *PaymentRe
 func Subscription(providerAttempts int, retryDelay time.Duration) messaging.Subscription {
 	return messaging.Subscription{
 		Queue:      Queue,
-		Types:      []string{events.PaymentRequested},
+		Types:      []string{events.PaymentRequested, events.RefundRequested},
 		MaxRetries: providerAttempts + 2,
 		RetryDelay: retryDelay,
 	}
@@ -40,6 +40,16 @@ func Subscription(providerAttempts int, retryDelay time.Duration) messaging.Subs
 // payment's idempotency key), so the handler does not use an Inbox: the effect it guards
 // is a call to an external provider, which a database transaction cannot cover.
 func (h *PaymentRequestedHandler) Handle(ctx context.Context, env messaging.Envelope) error {
+	switch env.Type {
+	case events.PaymentRequested:
+		return h.handlePaymentRequested(ctx, env)
+	case events.RefundRequested:
+		return h.handleRefundRequested(ctx, env)
+	}
+	return messaging.Permanent(fmt.Errorf("unexpected event type %q", env.Type))
+}
+
+func (h *PaymentRequestedHandler) handlePaymentRequested(ctx context.Context, env messaging.Envelope) error {
 	if env.Version != events.PaymentRequestedVersion {
 		return messaging.Permanent(fmt.Errorf("unsupported %s version %d", env.Type, env.Version))
 	}
@@ -56,6 +66,23 @@ func (h *PaymentRequestedHandler) Handle(ctx context.Context, env messaging.Enve
 	if errors.Is(err, domain.ErrInvalidRequest) ||
 		errors.Is(err, domain.ErrIdempotencyKeyReused) ||
 		errors.Is(err, domain.ErrOrderAlreadyPaid) {
+		return messaging.Permanent(err)
+	}
+	return err
+}
+
+// handleRefundRequested gives the money of an order back. A provider that does not answer is
+// worth a retry; an order without a paid payment is not (the request is wrong, a person must look).
+func (h *PaymentRequestedHandler) handleRefundRequested(ctx context.Context, env messaging.Envelope) error {
+	if env.Version != events.RefundRequestedVersion {
+		return messaging.Permanent(fmt.Errorf("unsupported %s version %d", env.Type, env.Version))
+	}
+	var p events.RefundRequestedPayload
+	if err := env.DecodePayload(&p); err != nil {
+		return messaging.Permanent(err)
+	}
+	err := h.payments.Refund(ctx, application.RefundInput{OrderID: p.OrderID, Reason: p.Reason})
+	if errors.Is(err, domain.ErrInvalidRequest) || errors.Is(err, domain.ErrNothingToRefund) {
 		return messaging.Permanent(err)
 	}
 	return err

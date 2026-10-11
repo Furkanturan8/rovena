@@ -85,6 +85,12 @@ func (*readRepo) Complete(context.Context, uuid.UUID, domain.Outcome, messaging.
 func (*readRepo) Enqueue(context.Context, messaging.Envelope) error {
 	panic("the HTTP API must not write payments")
 }
+func (*readRepo) PaidByOrder(context.Context, uuid.UUID) (*domain.Payment, error) {
+	panic("the HTTP API never refunds")
+}
+func (*readRepo) Refund(context.Context, uuid.UUID, string, messaging.Envelope) (*domain.Payment, bool, error) {
+	panic("the HTTP API never refunds")
+}
 func (*readRepo) HasSucceeded(context.Context, uuid.UUID) (bool, error) {
 	panic("the HTTP API must not write payments")
 }
@@ -308,7 +314,7 @@ func TestAdminListFiltersAndPaginates(t *testing.T) {
 		t.Errorf("pagination: %v", page.data())
 	}
 
-	for _, q := range []string{"?status=refunded", "?order_id=nope"} {
+	for _, q := range []string{"?status=bogus", "?order_id=nope"} {
 		if res := e.get("/api/v1/admin/payments"+q, admin, ""); res.status != 400 {
 			t.Errorf("%s = %d, want 400", q, res.status)
 		}

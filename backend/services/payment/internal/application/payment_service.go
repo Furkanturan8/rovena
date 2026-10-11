@@ -17,6 +17,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+var paymentsRefunded = telemetry.Counter("payments.refunded", "Payments given back, by the reason Order named")
+
 var paymentsCompleted = telemetry.Counter("payments.completed", "Payments that reached a final status, by status and failure code")
 
 // Provider is the payment gateway behind the service (a bank or PSP in production, a
@@ -26,6 +28,9 @@ type Provider interface {
 	// Charge returns a definite answer (approved or declined) or an error when the
 	// provider could not answer at all. The IdempotencyKey makes repeated calls safe.
 	Charge(ctx context.Context, req domain.ChargeRequest) (domain.ChargeResult, error)
+	// Refund gives a charge back. It returns an error when the provider could not answer;
+	// the IdempotencyKey makes repeated calls safe.
+	Refund(ctx context.Context, req domain.RefundRequest) (domain.RefundResult, error)
 }
 
 type Config struct {
@@ -153,10 +158,7 @@ func (s *PaymentService) complete(ctx context.Context, p *domain.Payment, o doma
 	_, applied, err := s.repo.Complete(ctx, p.ID, o, ev)
 	if err != nil {
 		if errors.Is(err, domain.ErrOrderAlreadyPaid) {
-			// The provider already took the money for a second payment of the same order.
-			// The database refused to record it; this needs a human and a refund.
-			s.log.ErrorContext(ctx, "DOUBLE CHARGE: order paid twice, refund required",
-				"payment_id", p.ID, "order_id", p.OrderID, "provider_ref", o.ProviderRef)
+			return s.refundDuplicate(ctx, p, o)
 		}
 		return err
 	}
@@ -169,12 +171,107 @@ func (s *PaymentService) complete(ctx context.Context, p *domain.Payment, o doma
 	return nil
 }
 
+// refundDuplicate handles the one case where the provider took money for a second payment of
+// an order that is already paid (two requests with different keys raced past the pre-check).
+// The database refused to record the second success, so the money is given back at once and the
+// payment ends as failed with order_already_paid. If even the refund fails, the error is returned:
+// the message is retried, and the log line names what a person would need.
+func (s *PaymentService) refundDuplicate(ctx context.Context, p *domain.Payment, charged domain.Outcome) error {
+	ref, err := s.provider.Refund(ctx, domain.RefundRequest{
+		IdempotencyKey: "duplicate:" + p.ID.String(), ChargeRef: charged.ProviderRef,
+		AmountCents: p.AmountCents, Currency: p.Currency,
+	})
+	if err != nil {
+		s.log.ErrorContext(ctx, "DOUBLE CHARGE: order paid twice and the refund failed, will retry",
+			"payment_id", p.ID, "order_id", p.OrderID, "provider_ref", charged.ProviderRef, "error", err)
+		return fmt.Errorf("refund duplicate charge of payment %s: %w", p.ID, err)
+	}
+	s.log.WarnContext(ctx, "order was paid twice; the duplicate charge was refunded",
+		"payment_id", p.ID, "order_id", p.OrderID, "provider_ref", charged.ProviderRef, "refund_ref", ref.Reference)
+	return s.complete(ctx, p, domain.Failed(domain.CodeOrderAlreadyPaid, "This order has already been paid; the duplicate charge was refunded"))
+}
+
+// RefundInput asks to give back the money of an order.
+type RefundInput struct {
+	OrderID uuid.UUID
+	Reason  string
+}
+
+// Refund gives the money of an order's succeeded payment back and announces it with
+// PaymentRefunded. It is safe to call any number of times: a refunded payment is not refunded
+// again, the stored result is published again (which repairs a PaymentRefunded Order never got).
+// A non-nil error that is not ErrNothingToRefund means "try again later".
+func (s *PaymentService) Refund(ctx context.Context, in RefundInput) error {
+	if in.OrderID == uuid.Nil {
+		return invalid("order_id is required")
+	}
+	p, err := s.repo.PaidByOrder(ctx, in.OrderID)
+	if errors.Is(err, domain.ErrPaymentNotFound) {
+		return fmt.Errorf("%w: order %s", domain.ErrNothingToRefund, in.OrderID)
+	}
+	if err != nil {
+		return err
+	}
+	if p.Status == domain.StatusRefunded {
+		ev, err := newRefundedEvent(ctx, p)
+		if err != nil {
+			return err
+		}
+		s.log.InfoContext(ctx, "duplicate refund request, result sent again", "payment_id", p.ID, "order_id", p.OrderID)
+		return s.repo.Enqueue(ctx, ev)
+	}
+
+	cctx, cancel := context.WithTimeout(ctx, s.cfg.ChargeTimeout)
+	defer cancel()
+	res, err := s.provider.Refund(cctx, domain.RefundRequest{
+		IdempotencyKey: "refund:" + p.ID.String(), ChargeRef: p.ProviderRef,
+		AmountCents: p.AmountCents, Currency: p.Currency,
+	})
+	if err != nil {
+		s.log.WarnContext(ctx, "refund: payment provider did not answer",
+			"payment_id", p.ID, "order_id", p.OrderID, "error", err)
+		return fmt.Errorf("refund payment %s: %w", p.ID, err)
+	}
+	done := *p
+	done.RefundRef = res.Reference
+	ev, err := newRefundedEvent(ctx, &done)
+	if err != nil {
+		return err
+	}
+	_, applied, err := s.repo.Refund(ctx, p.ID, res.Reference, ev)
+	if err != nil {
+		return err
+	}
+	if applied {
+		paymentsRefunded.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", in.Reason)))
+		s.log.InfoContext(ctx, "payment refunded", "payment_id", p.ID, "order_id", p.OrderID,
+			"reason", in.Reason, "refund_ref", res.Reference)
+	}
+	return nil
+}
+
+func newRefundedEvent(ctx context.Context, p *domain.Payment) (messaging.Envelope, error) {
+	return messaging.NewEnvelope(ctx, events.PaymentRefunded, events.PaymentRefundedVersion,
+		events.PaymentRefundedPayload{
+			PaymentID: p.ID, OrderID: p.OrderID, AmountCents: p.AmountCents,
+			Currency: p.Currency, RefundRef: p.RefundRef,
+		})
+}
+
 // republish sends the stored result of a finished payment again.
 func (s *PaymentService) republish(ctx context.Context, p *domain.Payment) error {
-	ev, err := newEvent(ctx, p, domain.Outcome{
-		Status: p.Status, ProviderRef: p.ProviderRef,
-		FailureCode: p.FailureCode, FailureMessage: p.FailureMessage,
-	})
+	var ev messaging.Envelope
+	var err error
+	if p.Status == domain.StatusRefunded {
+		// Order asked for this payment again after it was refunded (its cancel and refund raced
+		// with a retry): the answer is the refund, not a success.
+		ev, err = newRefundedEvent(ctx, p)
+	} else {
+		ev, err = newEvent(ctx, p, domain.Outcome{
+			Status: p.Status, ProviderRef: p.ProviderRef,
+			FailureCode: p.FailureCode, FailureMessage: p.FailureMessage,
+		})
+	}
 	if err != nil {
 		return err
 	}

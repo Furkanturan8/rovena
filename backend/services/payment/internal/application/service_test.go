@@ -259,6 +259,11 @@ func (blockingProvider) Charge(ctx context.Context, _ domain.ChargeRequest) (dom
 	return domain.ChargeResult{}, ctx.Err()
 }
 
+func (blockingProvider) Refund(ctx context.Context, _ domain.RefundRequest) (domain.RefundResult, error) {
+	<-ctx.Done()
+	return domain.RefundResult{}, ctx.Err()
+}
+
 func TestPendingPaymentLeftByACrashIsContinued(t *testing.T) {
 	repo, prov := newMemRepo(), newProvider(approve)
 	in := request("key-1")
@@ -370,5 +375,186 @@ func TestQueryServiceHidesOtherCustomersPayments(t *testing.T) {
 	_, err := q.LatestByOrderForCustomer(context.Background(), in.OrderID, uuid.New())
 	if !errors.Is(err, domain.ErrPaymentNotFound) {
 		t.Fatalf("a stranger must get not-found, got %v", err)
+	}
+}
+
+// ---------------------------------------------------------------- refunds
+
+func paidOrder(t *testing.T, repo *memRepo, prov *scriptedProvider) (*application.PaymentService, application.ProcessInput) {
+	t.Helper()
+	svc := newService(repo, prov, 3)
+	in := request("key-1")
+	mustSucceed(t, svc.Process(context.Background(), in))
+	return svc, in
+}
+
+func refundEvents(repo *memRepo) []events.PaymentRefundedPayload {
+	var out []events.PaymentRefundedPayload
+	for _, e := range repo.events() {
+		if e.Type == events.PaymentRefunded {
+			var p events.PaymentRefundedPayload
+			_ = e.DecodePayload(&p)
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func TestRefundGivesTheMoneyBackAndAnnouncesIt(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc, in := paidOrder(t, repo, prov)
+
+	mustSucceed(t, svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID, Reason: "payment_timeout"}))
+
+	p := repo.only()
+	if p.Status != domain.StatusRefunded || p.RefundRef != "rf_ref_key-1" || p.RefundedAt == nil || p.ProviderRef == "" {
+		t.Fatalf("payment = %+v", p)
+	}
+	got := refundEvents(repo)
+	if len(got) != 1 || got[0].PaymentID != p.ID || got[0].OrderID != in.OrderID || got[0].AmountCents != in.AmountCents || got[0].RefundRef != "rf_ref_key-1" {
+		t.Fatalf("events = %+v", got)
+	}
+}
+
+func TestRepeatedRefundRequestsRefundOnceAndAnswerEachTime(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc, in := paidOrder(t, repo, prov)
+	for i := 0; i < 3; i++ {
+		mustSucceed(t, svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID}))
+	}
+	if prov.refundCalls != 1 || len(prov.refunded) != 1 {
+		t.Fatalf("the provider was asked to refund %d times", prov.refundCalls)
+	}
+	// Order may never have received the first answer, so each request gets one.
+	if got := refundEvents(repo); len(got) != 3 {
+		t.Fatalf("expected an answer per request, got %d", len(got))
+	}
+}
+
+func TestRefundWithoutAPaidPaymentIsRefused(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(func(int, domain.ChargeRequest) (domain.ChargeResult, error) {
+		return domain.ChargeResult{DeclineCode: domain.CodeCardDeclined}, nil
+	})
+	svc := newService(repo, prov, 3)
+	in := request("key-1")
+	mustSucceed(t, svc.Process(context.Background(), in)) // declined
+
+	err := svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID})
+	if !errors.Is(err, domain.ErrNothingToRefund) {
+		t.Fatalf("a declined payment has nothing to refund, err = %v", err)
+	}
+	if err := svc.Refund(context.Background(), application.RefundInput{OrderID: uuid.New()}); !errors.Is(err, domain.ErrNothingToRefund) {
+		t.Fatalf("unknown order: %v", err)
+	}
+	if err := svc.Refund(context.Background(), application.RefundInput{}); !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("no order id: %v", err)
+	}
+	if prov.refundCalls != 0 {
+		t.Fatal("the provider must not be asked to refund money that was never taken")
+	}
+}
+
+func TestProviderOutageDuringRefundLeavesThePaymentSucceededForARetry(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc, in := paidOrder(t, repo, prov)
+
+	prov.refundErr = errOutage
+	if err := svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID}); !errors.Is(err, errOutage) {
+		t.Fatalf("the error must reach the consumer so the message is retried, got %v", err)
+	}
+	if p := repo.only(); p.Status != domain.StatusSucceeded || len(refundEvents(repo)) != 0 {
+		t.Fatalf("nothing may change while the provider is down: %+v", p)
+	}
+
+	prov.refundErr = nil
+	mustSucceed(t, svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID}))
+	if repo.only().Status != domain.StatusRefunded {
+		t.Fatal("the retry must refund")
+	}
+}
+
+func TestPaymentRequestedForARefundedPaymentAnswersWithTheRefund(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc, in := paidOrder(t, repo, prov)
+	mustSucceed(t, svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID}))
+	before := len(repo.events())
+
+	mustSucceed(t, svc.Process(context.Background(), in)) // Order's recovery asks again, same key
+	evs := repo.events()
+	if len(evs) != before+1 || evs[len(evs)-1].Type != events.PaymentRefunded {
+		t.Fatalf("expected PaymentRefunded to be sent again, got %v", evs[before:])
+	}
+	if prov.callCount() != 1 {
+		t.Fatal("no new charge")
+	}
+}
+
+func TestAnOrderWhosePaymentWasRefundedCanNotBeChargedAgain(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc, in := paidOrder(t, repo, prov)
+	mustSucceed(t, svc.Refund(context.Background(), application.RefundInput{OrderID: in.OrderID}))
+
+	again := in
+	again.IdempotencyKey = "key-2"
+	mustSucceed(t, svc.Process(context.Background(), again))
+	if prov.callCount() != 1 {
+		t.Fatalf("the provider was called %d times", prov.callCount())
+	}
+	if latest, _ := repo.LatestByOrder(context.Background(), in.OrderID); latest.FailureCode != domain.CodeOrderAlreadyPaid {
+		t.Fatalf("second attempt = %+v", latest)
+	}
+}
+
+// blindPreCheck lets a second payment through the "already paid?" check, as happens when two
+// requests with different keys for one order are checked before either has completed.
+type blindPreCheck struct{ *memRepo }
+
+func (blindPreCheck) HasSucceeded(context.Context, uuid.UUID) (bool, error) { return false, nil }
+
+func racingService(repo *memRepo, prov *scriptedProvider) *application.PaymentService {
+	return application.NewPaymentService(blindPreCheck{repo}, prov, quietLog(), application.Config{MaxAttempts: 3, ChargeTimeout: time.Second})
+}
+
+// The provider charges both; the database accepts only the first success. The second charge must
+// be refunded on the spot instead of waiting for a person.
+func TestDuplicateChargeThatRacedPastThePreCheckIsRefunded(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc := racingService(repo, prov)
+	first := request("key-1")
+	mustSucceed(t, svc.Process(context.Background(), first))
+
+	second := first
+	second.IdempotencyKey = "key-2"
+	mustSucceed(t, svc.Process(context.Background(), second))
+
+	if prov.refundCalls != 1 || !prov.refunded["duplicate:"+repo.byKeyID("key-2").String()] {
+		t.Fatalf("the duplicate charge must be refunded, refund calls = %d", prov.refundCalls)
+	}
+	if len(prov.charged) != 2 {
+		t.Fatal("setup: the provider should have charged twice")
+	}
+	dup := repo.byKeyCopy("key-2")
+	if dup.Status != domain.StatusFailed || dup.FailureCode != domain.CodeOrderAlreadyPaid {
+		t.Fatalf("the duplicate must end as failed/order_already_paid: %+v", dup)
+	}
+	if repo.byKeyCopy("key-1").Status != domain.StatusSucceeded {
+		t.Fatal("the first payment must stay succeeded")
+	}
+}
+
+func TestDuplicateChargeWhoseRefundFailsIsRetriedNotForgotten(t *testing.T) {
+	repo, prov := newMemRepo(), newProvider(approve)
+	svc := racingService(repo, prov)
+	first := request("key-1")
+	mustSucceed(t, svc.Process(context.Background(), first))
+	second := first
+	second.IdempotencyKey = "key-2"
+
+	prov.refundErr = errOutage
+	if err := svc.Process(context.Background(), second); !errors.Is(err, errOutage) {
+		t.Fatalf("the message must be retried, err = %v", err)
+	}
+	if repo.byKeyCopy("key-2").Status != domain.StatusPending {
+		t.Fatal("the duplicate stays pending until the refund went through")
 	}
 }

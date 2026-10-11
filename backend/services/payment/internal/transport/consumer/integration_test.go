@@ -88,15 +88,18 @@ func newStack(t *testing.T) *stack {
 		MaxAttempts: maxAttempts, ChargeTimeout: 2 * time.Second,
 	})
 	sub := consumer.Subscription(maxAttempts, 150*time.Millisecond)
-	sub.Queue, sub.Types = s.queue, []string{s.cmd}
+	// The test runs on its own vhost, so the real RefundRequested type is safe to use as well.
+	sub.Queue, sub.Types = s.queue, []string{s.cmd, events.RefundRequested}
 	resultsSub := messaging.Subscription{
-		Queue: "test.payment.results." + id, Types: []string{events.PaymentSucceeded, events.PaymentFailed},
+		Queue: "test.payment.results." + id, Types: []string{events.PaymentSucceeded, events.PaymentFailed, events.PaymentRefunded},
 	}
 
 	runCtx, stop := context.WithCancel(ctx)
 	var wg sync.WaitGroup
 	for _, run := range []func(){
-		func() { broker.Consume(runCtx, sub, consumer.NewPaymentRequestedHandler(svc).Handle) },
+		func() {
+			broker.Consume(runCtx, sub, s.asPaymentRequested(consumer.NewPaymentRequestedHandler(svc).Handle))
+		},
 		func() { broker.Consume(runCtx, resultsSub, s.collect) },
 		func() { outbox.NewRelay(db, broker, nil).WithInterval(50 * time.Millisecond).Run(runCtx) },
 	} {
@@ -123,6 +126,18 @@ func newStack(t *testing.T) *stack {
 	s.waitQueue(s.queue)
 	s.waitQueue(resultsSub.Queue)
 	return s
+}
+
+// asPaymentRequested lets the handler see the test's private command type as the real
+// PaymentRequested: the handler chooses what to do by event type, and a unique routing key per test
+// is what keeps these messages away from a Payment service that runs on the same broker.
+func (s *stack) asPaymentRequested(h messaging.Handler) messaging.Handler {
+	return func(ctx context.Context, env messaging.Envelope) error {
+		if env.Type == s.cmd {
+			env.Type = events.PaymentRequested
+		}
+		return h(ctx, env)
+	}
 }
 
 func (s *stack) waitQueue(name string) {
@@ -426,5 +441,67 @@ func TestSecondPaymentForAPaidOrderFailsWithoutCharging(t *testing.T) {
 	}
 	if p := s.payment(o); p.Attempts != 0 {
 		t.Fatalf("the provider must not be called for an already paid order, attempts=%d", p.Attempts)
+	}
+}
+
+func (s *stack) sendRefund(o *order, orderID uuid.UUID) {
+	s.t.Helper()
+	ctx := messaging.WithCorrelationID(s.ctx, o.correlated)
+	env, err := messaging.NewEnvelope(ctx, events.RefundRequested, events.RefundRequestedVersion,
+		events.RefundRequestedPayload{OrderID: orderID, CustomerID: o.customer, Reason: "payment_timeout"})
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	if err := s.broker.Publish(s.ctx, env); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+func TestRefundRequestGivesTheMoneyBackAndAnnouncesIt(t *testing.T) {
+	s := newStack(t)
+	o := s.newOrder(provider.MethodApproved)
+	s.send(o, o.request)
+	s.expect(o, events.PaymentSucceeded)
+
+	s.sendRefund(o, o.id)
+
+	env := s.expect(o, events.PaymentRefunded)
+	var got events.PaymentRefundedPayload
+	if err := env.DecodePayload(&got); err != nil {
+		t.Fatal(err)
+	}
+	p := s.payment(o)
+	if got.PaymentID != p.ID || got.OrderID != o.id || got.AmountCents != 459900 || got.RefundRef == "" || got.RefundRef != p.RefundRef {
+		t.Fatalf("event %+v does not match payment %+v", got, p)
+	}
+	if p.Status != domain.StatusRefunded || p.RefundedAt == nil {
+		t.Fatalf("payment = %+v", p)
+	}
+
+	// The same request again, as a retry or a duplicate would: answered again, refunded once.
+	s.sendRefund(o, o.id)
+	again := s.expect(o, events.PaymentRefunded)
+	var second events.PaymentRefundedPayload
+	_ = again.DecodePayload(&second)
+	if second.RefundRef != got.RefundRef || s.count(o) != 1 {
+		t.Fatalf("a repeated refund request changed the result: %+v vs %+v, %d payments", second, got, s.count(o))
+	}
+}
+
+func TestRefundRequestForAnOrderThatWasNeverPaidGoesToTheDeadLetterQueue(t *testing.T) {
+	s := newStack(t)
+	o := s.newOrder(provider.MethodDeclined)
+	s.send(o, o.request)
+	s.expect(o, events.PaymentFailed)
+
+	s.sendRefund(o, o.id)
+
+	d := s.waitDLQ()
+	if msg, _ := d.Headers["x-error"].(string); msg == "" {
+		t.Fatal("the DLQ message should say why it failed")
+	}
+	s.expectNothing(o, 300*time.Millisecond)
+	if p := s.payment(o); p.Status != domain.StatusFailed {
+		t.Fatalf("payment = %+v", p)
 	}
 }

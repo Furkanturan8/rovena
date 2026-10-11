@@ -23,7 +23,14 @@ type PaymentRepository interface {
 	Complete(ctx context.Context, id uuid.UUID, o domain.Outcome, event messaging.Envelope) (current *domain.Payment, applied bool, err error)
 	// Enqueue stores event in the outbox on its own.
 	Enqueue(ctx context.Context, event messaging.Envelope) error
-	// HasSucceeded reports whether the order already has a succeeded payment.
+	// PaidByOrder returns the payment of the order whose money was taken (succeeded, or refunded
+	// afterwards), or ErrPaymentNotFound.
+	PaidByOrder(ctx context.Context, orderID uuid.UUID) (*domain.Payment, error)
+	// Refund moves a succeeded payment to refunded and stores event in the outbox, in one
+	// transaction. Only a succeeded payment can be refunded: otherwise nothing is written,
+	// applied is false and the current row is returned.
+	Refund(ctx context.Context, id uuid.UUID, refundRef string, event messaging.Envelope) (current *domain.Payment, applied bool, err error)
+	// HasSucceeded reports whether the order already has a payment whose money was taken.
 	HasSucceeded(ctx context.Context, orderID uuid.UUID) (bool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error)
 	// LatestByOrder returns the newest attempt for the order.

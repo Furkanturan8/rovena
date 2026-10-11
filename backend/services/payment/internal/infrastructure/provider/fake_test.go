@@ -146,3 +146,29 @@ func TestConcurrentCallsAreSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestRefundIsIdempotentPerKey(t *testing.T) {
+	f := provider.NewFake(0)
+	req := domain.RefundRequest{IdempotencyKey: "refund:1", ChargeRef: "fake_k", AmountCents: 1000, Currency: "TRY"}
+	first, err := f.Refund(context.Background(), req)
+	if err != nil || first.Reference == "" {
+		t.Fatalf("%+v, %v", first, err)
+	}
+	again, _ := f.Refund(context.Background(), req)
+	if again != first {
+		t.Fatalf("a repeated key must return the first answer: %+v vs %+v", again, first)
+	}
+	other, _ := f.Refund(context.Background(), domain.RefundRequest{IdempotencyKey: "refund:2", ChargeRef: "fake_other"})
+	if other.Reference == first.Reference {
+		t.Fatal("refunds of different charges need different references")
+	}
+}
+
+func TestRefundHonoursTheCallersDeadline(t *testing.T) {
+	f := provider.NewFake(time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := f.Refund(ctx, domain.RefundRequest{IdempotencyKey: "k"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v", err)
+	}
+}

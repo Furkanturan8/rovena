@@ -51,7 +51,7 @@ func (h *PaymentHandler) AdminList(c *fiber.Ctx) error {
 	page, size := httpx.Pagination(c, defaultPageSize, maxPageSize)
 	f := domain.Filter{Status: domain.Status(c.Query("status")), Page: page, PageSize: size}
 	if f.Status != "" && !f.Status.Valid() {
-		return errorx.WithMessage(errorx.ErrInvalidRequest, "status must be one of: pending, succeeded, failed")
+		return errorx.WithMessage(errorx.ErrInvalidRequest, "status must be one of: pending, succeeded, failed, refunded")
 	}
 	if v := c.Query("order_id"); v != "" {
 		id, err := uuid.Parse(v)

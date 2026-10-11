@@ -32,12 +32,14 @@ func ToPaymentResponse(p *domain.Payment) PaymentResponse {
 // need: who paid, which provider reference to look up, how many attempts it took.
 type AdminPaymentResponse struct {
 	PaymentResponse
-	CustomerID     string    `json:"customer_id"`
-	IdempotencyKey string    `json:"idempotency_key"`
-	PaymentMethod  string    `json:"payment_method"`
-	Attempts       int       `json:"attempts"`
-	ProviderRef    string    `json:"provider_ref"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	CustomerID     string     `json:"customer_id"`
+	IdempotencyKey string     `json:"idempotency_key"`
+	PaymentMethod  string     `json:"payment_method"`
+	Attempts       int        `json:"attempts"`
+	ProviderRef    string     `json:"provider_ref"`
+	RefundRef      string     `json:"refund_ref"`
+	RefundedAt     *time.Time `json:"refunded_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 func ToAdminPaymentResponse(p *domain.Payment) AdminPaymentResponse {
@@ -48,6 +50,8 @@ func ToAdminPaymentResponse(p *domain.Payment) AdminPaymentResponse {
 		PaymentMethod:   p.PaymentMethod,
 		Attempts:        p.Attempts,
 		ProviderRef:     p.ProviderRef,
+		RefundRef:       p.RefundRef,
+		RefundedAt:      p.RefundedAt,
 		UpdatedAt:       p.UpdatedAt,
 	}
 }

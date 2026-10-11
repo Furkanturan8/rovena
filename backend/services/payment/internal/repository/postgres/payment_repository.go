@@ -106,6 +106,60 @@ func (r *PaymentRepository) Complete(ctx context.Context, id uuid.UUID, o domain
 	return current, applied, nil
 }
 
+func (r *PaymentRepository) PaidByOrder(ctx context.Context, orderID uuid.UUID) (*domain.Payment, error) {
+	row := new(paymentRow)
+	err := r.db.NewSelect().Model(row).
+		Where("order_id = ?", orderID).
+		Where("status IN (?)", bun.List([]string{string(domain.StatusSucceeded), string(domain.StatusRefunded)})).
+		Limit(1).
+		Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, domain.ErrPaymentNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row.toDomain(), nil
+}
+
+func (r *PaymentRepository) Refund(ctx context.Context, id uuid.UUID, refundRef string, event messaging.Envelope) (*domain.Payment, bool, error) {
+	var current *domain.Payment
+	applied := false
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		row := new(paymentRow)
+		err := tx.NewUpdate().Model(row).
+			Set("status = ?", string(domain.StatusRefunded)).
+			Set("refund_ref = ?", refundRef).
+			Set("refunded_at = now()").
+			Set("updated_at = now()").
+			Where("id = ?", id).
+			Where("status = ?", string(domain.StatusSucceeded)).
+			Returning("*").
+			Scan(ctx)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil // refunded by someone else, who stored the event
+		}
+		if err != nil {
+			return err
+		}
+		if err := outbox.Add(ctx, tx, event); err != nil {
+			return err
+		}
+		current, applied = row.toDomain(), true
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	if !applied {
+		var err error
+		if current, err = r.GetByID(ctx, id); err != nil {
+			return nil, false, err
+		}
+	}
+	return current, applied, nil
+}
+
 func (r *PaymentRepository) Enqueue(ctx context.Context, event messaging.Envelope) error {
 	return outbox.Add(ctx, r.db, event)
 }
@@ -113,7 +167,7 @@ func (r *PaymentRepository) Enqueue(ctx context.Context, event messaging.Envelop
 func (r *PaymentRepository) HasSucceeded(ctx context.Context, orderID uuid.UUID) (bool, error) {
 	return r.db.NewSelect().Model((*paymentRow)(nil)).
 		Where("order_id = ?", orderID).
-		Where("status = ?", string(domain.StatusSucceeded)).
+		Where("status IN (?)", bun.List([]string{string(domain.StatusSucceeded), string(domain.StatusRefunded)})).
 		Exists(ctx)
 }
 

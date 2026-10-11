@@ -73,7 +73,7 @@ func (r *memRepo) Complete(_ context.Context, id uuid.UUID, o domain.Outcome, ev
 	}
 	if o.Status == domain.StatusSucceeded {
 		for _, other := range r.payments {
-			if other.OrderID == p.OrderID && other.Status == domain.StatusSucceeded {
+			if other.OrderID == p.OrderID && (other.Status == domain.StatusSucceeded || other.Status == domain.StatusRefunded) {
 				return nil, false, domain.ErrOrderAlreadyPaid
 			}
 		}
@@ -97,11 +97,41 @@ func (r *memRepo) HasSucceeded(_ context.Context, orderID uuid.UUID) (bool, erro
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, p := range r.payments {
-		if p.OrderID == orderID && p.Status == domain.StatusSucceeded {
+		if p.OrderID == orderID && (p.Status == domain.StatusSucceeded || p.Status == domain.StatusRefunded) {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+func (r *memRepo) PaidByOrder(_ context.Context, orderID uuid.UUID) (*domain.Payment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, p := range r.payments {
+		if p.OrderID == orderID && (p.Status == domain.StatusSucceeded || p.Status == domain.StatusRefunded) {
+			c := *p
+			return &c, nil
+		}
+	}
+	return nil, domain.ErrPaymentNotFound
+}
+
+func (r *memRepo) Refund(_ context.Context, id uuid.UUID, refundRef string, ev messaging.Envelope) (*domain.Payment, bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.payments[id]
+	if !ok {
+		return nil, false, domain.ErrPaymentNotFound
+	}
+	if p.Status != domain.StatusSucceeded {
+		c := *p
+		return &c, false, nil
+	}
+	now := time.Now()
+	p.Status, p.RefundRef, p.RefundedAt, p.UpdatedAt = domain.StatusRefunded, refundRef, &now, now
+	r.outbox = append(r.outbox, ev)
+	c := *p
+	return &c, true, nil
 }
 
 func (r *memRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.Payment, error) {
@@ -151,6 +181,15 @@ func (r *memRepo) List(_ context.Context, f domain.Filter) ([]domain.Payment, in
 	return all[start:end], total, nil
 }
 
+func (r *memRepo) byKeyCopy(key string) *domain.Payment {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := *r.byKey(key)
+	return &c
+}
+
+func (r *memRepo) byKeyID(key string) uuid.UUID { return r.byKeyCopy(key).ID }
+
 func (r *memRepo) events() []messaging.Envelope {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -178,11 +217,15 @@ type scriptedProvider struct {
 	mu      sync.Mutex
 	calls   int
 	charged map[string]bool // idempotency keys that were really charged
-	answer  func(call int, req domain.ChargeRequest) (domain.ChargeResult, error)
+
+	refundCalls int
+	refundErr   error
+	refunded    map[string]bool // idempotency keys that were really refunded
+	answer      func(call int, req domain.ChargeRequest) (domain.ChargeResult, error)
 }
 
 func newProvider(answer func(call int, req domain.ChargeRequest) (domain.ChargeResult, error)) *scriptedProvider {
-	return &scriptedProvider{charged: map[string]bool{}, answer: answer}
+	return &scriptedProvider{charged: map[string]bool{}, refunded: map[string]bool{}, answer: answer}
 }
 
 func approve(call int, req domain.ChargeRequest) (domain.ChargeResult, error) {
@@ -201,6 +244,18 @@ func (p *scriptedProvider) Charge(ctx context.Context, req domain.ChargeRequest)
 		p.mu.Unlock()
 	}
 	return res, err
+}
+
+// Refund answers like a provider that remembers keys, unless refundErr says it is down.
+func (p *scriptedProvider) Refund(_ context.Context, req domain.RefundRequest) (domain.RefundResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.refundCalls++
+	if p.refundErr != nil {
+		return domain.RefundResult{}, p.refundErr
+	}
+	p.refunded[req.IdempotencyKey] = true
+	return domain.RefundResult{Reference: "rf_" + req.ChargeRef}, nil
 }
 
 func (p *scriptedProvider) callCount() int {

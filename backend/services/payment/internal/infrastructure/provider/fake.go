@@ -38,6 +38,7 @@ type Fake struct {
 	mu      sync.Mutex
 	results map[string]domain.ChargeResult // by idempotency key
 	calls   map[string]int                 // provider calls per key, for flaky
+	refunds map[string]domain.RefundResult // by idempotency key
 }
 
 // NewFake creates a fake provider that waits latency before every answer.
@@ -46,6 +47,7 @@ func NewFake(latency time.Duration) *Fake {
 		latency: latency,
 		results: make(map[string]domain.ChargeResult),
 		calls:   make(map[string]int),
+		refunds: make(map[string]domain.RefundResult),
 	}
 }
 
@@ -77,6 +79,22 @@ func (f *Fake) Charge(ctx context.Context, req domain.ChargeRequest) (domain.Cha
 
 	res := decide(req)
 	f.results[req.IdempotencyKey] = res
+	return res, nil
+}
+
+// Refund gives a charge back. Like a real provider it recognises a repeated idempotency key
+// and answers with the first result instead of refunding twice.
+func (f *Fake) Refund(ctx context.Context, req domain.RefundRequest) (domain.RefundResult, error) {
+	if err := sleep(ctx, f.latency); err != nil {
+		return domain.RefundResult{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if res, ok := f.refunds[req.IdempotencyKey]; ok {
+		return res, nil
+	}
+	res := domain.RefundResult{Reference: "refund_" + req.ChargeRef}
+	f.refunds[req.IdempotencyKey] = res
 	return res, nil
 }
 

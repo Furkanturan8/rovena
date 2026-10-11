@@ -26,6 +26,8 @@ type paymentRow struct {
 	CreatedAt      time.Time  `bun:",notnull"`
 	UpdatedAt      time.Time  `bun:",notnull"`
 	CompletedAt    *time.Time `bun:","`
+	RefundRef      string     `bun:",notnull"`
+	RefundedAt     *time.Time `bun:","`
 }
 
 func rowFrom(p *domain.Payment) *paymentRow {
@@ -35,6 +37,7 @@ func rowFrom(p *domain.Payment) *paymentRow {
 		Status: string(p.Status), Attempts: p.Attempts, ProviderRef: p.ProviderRef,
 		FailureCode: p.FailureCode, FailureMessage: p.FailureMessage,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, CompletedAt: p.CompletedAt,
+		RefundRef: p.RefundRef, RefundedAt: p.RefundedAt,
 	}
 }
 
@@ -45,5 +48,6 @@ func (r *paymentRow) toDomain() *domain.Payment {
 		Status: domain.Status(r.Status), Attempts: r.Attempts, ProviderRef: r.ProviderRef,
 		FailureCode: r.FailureCode, FailureMessage: r.FailureMessage,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, CompletedAt: r.CompletedAt,
+		RefundRef: r.RefundRef, RefundedAt: r.RefundedAt,
 	}
 }

@@ -48,6 +48,22 @@ func TestUnreadableOrUnsupportedMessagesAreNotRetried(t *testing.T) {
 			return e
 		}(),
 		"invalid request": envelope(t, 1, events.PaymentRequestedPayload{IdempotencyKey: "k"}),
+		"refund without an order": func() messaging.Envelope {
+			e, _ := messaging.NewEnvelope(context.Background(), events.RefundRequested, 1, events.RefundRequestedPayload{})
+			return e
+		}(),
+		"refund of a future version": func() messaging.Envelope {
+			e, _ := messaging.NewEnvelope(context.Background(), events.RefundRequested, 9, events.RefundRequestedPayload{OrderID: uuid.New()})
+			return e
+		}(),
+		"refund with an unreadable payload": func() messaging.Envelope {
+			e, _ := messaging.NewEnvelope(context.Background(), events.RefundRequested, 1, "text")
+			return e
+		}(),
+		"an event type this queue does not handle": func() messaging.Envelope {
+			e, _ := messaging.NewEnvelope(context.Background(), "SomethingElse", 1, valid)
+			return e
+		}(),
 		"bad currency": envelope(t, 1, events.PaymentRequestedPayload{
 			OrderID: uuid.New(), CustomerID: uuid.New(), IdempotencyKey: "k",
 			AmountCents: 1000, Currency: "USD", PaymentMethod: "tok_visa",
@@ -68,7 +84,7 @@ func TestUnreadableOrUnsupportedMessagesAreNotRetried(t *testing.T) {
 
 func TestSubscriptionLeavesRoomForInfrastructureRetries(t *testing.T) {
 	sub := consumer.Subscription(3, 5*time.Second)
-	if sub.Queue != "payment.requests" || len(sub.Types) != 1 || sub.Types[0] != events.PaymentRequested {
+	if sub.Queue != "payment.requests" || len(sub.Types) != 2 || sub.Types[0] != events.PaymentRequested || sub.Types[1] != events.RefundRequested {
 		t.Fatalf("unexpected subscription: %+v", sub)
 	}
 	if sub.MaxRetries <= 3 || sub.RetryDelay != 5*time.Second {

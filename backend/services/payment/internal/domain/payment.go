@@ -16,11 +16,13 @@ const (
 	StatusSucceeded Status = "succeeded"
 	// StatusFailed means no money was taken and none will be for this attempt.
 	StatusFailed Status = "failed"
+	// StatusRefunded means the money was taken and then given back. It is final.
+	StatusRefunded Status = "refunded"
 )
 
 func (s Status) Valid() bool {
 	switch s {
-	case StatusPending, StatusSucceeded, StatusFailed:
+	case StatusPending, StatusSucceeded, StatusFailed, StatusRefunded:
 		return true
 	}
 	return false
@@ -58,6 +60,8 @@ type Payment struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CompletedAt    *time.Time
+	RefundRef      string
+	RefundedAt     *time.Time
 }
 
 // SameRequest reports whether p was created for the same charge as other. A reused
@@ -105,6 +109,19 @@ type ChargeResult struct {
 	DeclineMessage string
 }
 
+// RefundRequest asks the provider to give a charge back. The idempotency key makes repeated
+// calls safe, as for charges.
+type RefundRequest struct {
+	IdempotencyKey string
+	ChargeRef      string
+	AmountCents    int64
+	Currency       string
+}
+
+type RefundResult struct {
+	Reference string
+}
+
 type Filter struct {
 	Status   Status // empty: all
 	OrderID  *uuid.UUID
@@ -120,4 +137,6 @@ var (
 	// order tries to succeed.
 	ErrOrderAlreadyPaid = errors.New("order is already paid")
 	ErrInvalidRequest   = errors.New("invalid payment request")
+	// ErrNothingToRefund means the order has no payment whose money was taken.
+	ErrNothingToRefund = errors.New("order has no paid payment to refund")
 )

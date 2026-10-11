@@ -60,6 +60,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	db = telemetry.InstrumentBun(db) // one span per query, inside the trace of the request that caused it
 	defer func() { _ = db.Close() }()
 
 	broker, err := messaging.Dial(ctx, cfg.RabbitMQURL, log)
@@ -94,6 +95,12 @@ func run() error {
 	go func() {
 		defer wg.Done()
 		outbox.NewRelay(db, broker, log).Run(ctx)
+	}()
+	// Removes published events and old inbox markers once they are past their retention.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		outbox.NewCleaner(db, log, cfg.OutboxRetention).WithInterval(cfg.OutboxCleanInterval).Run(ctx)
 	}()
 	// Receives PaymentRequested.
 	wg.Add(1)

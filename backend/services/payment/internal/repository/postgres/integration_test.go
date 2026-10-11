@@ -406,3 +406,150 @@ func TestLatestByOrderAndList(t *testing.T) {
 		t.Fatalf("pagination: total=%d %+v", total, page)
 	}
 }
+
+// ---------------------------------------------------------------- refunds
+
+func (h *harness) paid(t *testing.T) *domain.Payment {
+	t.Helper()
+	p := h.begin(t, h.newPayment(uuid.New(), "k-"+uuid.NewString()))
+	o := domain.Succeeded("ref_" + p.ID.String()[:8])
+	if _, applied, err := h.repo.Complete(h.ctx, p.ID, o, h.event(t, p, o)); err != nil || !applied {
+		t.Fatalf("complete: applied=%v err=%v", applied, err)
+	}
+	return p
+}
+
+func (h *harness) refundEvent(t *testing.T, p *domain.Payment) messaging.Envelope {
+	t.Helper()
+	env, err := messaging.NewEnvelope(h.ctx, events.PaymentRefunded, 1, events.PaymentRefundedPayload{
+		PaymentID: p.ID, OrderID: p.OrderID, AmountCents: p.AmountCents, Currency: p.Currency, RefundRef: "rf_1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return env
+}
+
+func TestRefundChangesStatusAndQueuesEventTogether(t *testing.T) {
+	h := setup(t)
+	p := h.paid(t)
+
+	cur, applied, err := h.repo.Refund(h.ctx, p.ID, "rf_1", h.refundEvent(t, p))
+	if err != nil || !applied {
+		t.Fatalf("applied=%v err=%v", applied, err)
+	}
+	if cur.Status != domain.StatusRefunded || cur.RefundRef != "rf_1" || cur.RefundedAt == nil || cur.ProviderRef == "" {
+		t.Fatalf("payment = %+v", cur)
+	}
+	if h.outboxCount(t, p.OrderID) != 2 { // PaymentSucceeded + PaymentRefunded
+		t.Fatal("the refund event was not queued")
+	}
+
+	again, applied, err := h.repo.Refund(h.ctx, p.ID, "rf_2", h.refundEvent(t, p))
+	if err != nil || applied || again.RefundRef != "rf_1" {
+		t.Fatalf("a second refund must change nothing: applied=%v err=%v ref=%s", applied, err, again.RefundRef)
+	}
+	if h.outboxCount(t, p.OrderID) != 2 {
+		t.Fatal("a refund that did not apply must not queue an event")
+	}
+}
+
+func TestOnlyASucceededPaymentCanBeRefunded(t *testing.T) {
+	h := setup(t)
+	pending := h.begin(t, h.newPayment(uuid.New(), "k-"+uuid.NewString()))
+	failed := h.begin(t, h.newPayment(uuid.New(), "k-"+uuid.NewString()))
+	f := domain.Failed(domain.CodeCardDeclined, "no")
+	if _, _, err := h.repo.Complete(h.ctx, failed.ID, f, h.event(t, failed, f)); err != nil {
+		t.Fatal(err)
+	}
+	for name, p := range map[string]*domain.Payment{"pending": pending, "failed": failed} {
+		if _, applied, err := h.repo.Refund(h.ctx, p.ID, "rf", h.refundEvent(t, p)); err != nil || applied {
+			t.Errorf("%s payment: applied=%v err=%v", name, applied, err)
+		}
+	}
+	if _, _, err := h.repo.Refund(h.ctx, uuid.New(), "rf", h.refundEvent(t, pending)); !errors.Is(err, domain.ErrPaymentNotFound) {
+		t.Errorf("unknown payment: %v", err)
+	}
+}
+
+func TestConcurrentRefundsHaveExactlyOneWinner(t *testing.T) {
+	h := setup(t)
+	p := h.paid(t)
+	var applied atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, ok, err := h.repo.Refund(h.ctx, p.ID, "rf_1", h.refundEvent(t, p))
+			if err != nil {
+				t.Error(err)
+			}
+			if ok {
+				applied.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if applied.Load() != 1 || h.outboxCount(t, p.OrderID) != 2 {
+		t.Fatalf("%d refunds applied, %d events for the order", applied.Load(), h.outboxCount(t, p.OrderID))
+	}
+}
+
+func TestPaidByOrderFindsSucceededAndRefundedOnly(t *testing.T) {
+	h := setup(t)
+	p := h.paid(t)
+	got, err := h.repo.PaidByOrder(h.ctx, p.OrderID)
+	if err != nil || got.ID != p.ID || got.Status != domain.StatusSucceeded {
+		t.Fatalf("succeeded: %+v, %v", got, err)
+	}
+	if _, _, err := h.repo.Refund(h.ctx, p.ID, "rf_1", h.refundEvent(t, p)); err != nil {
+		t.Fatal(err)
+	}
+	got, err = h.repo.PaidByOrder(h.ctx, p.OrderID)
+	if err != nil || got.Status != domain.StatusRefunded {
+		t.Fatalf("refunded: %+v, %v", got, err)
+	}
+
+	failedOnly := h.begin(t, h.newPayment(uuid.New(), "k-"+uuid.NewString()))
+	if _, err := h.repo.PaidByOrder(h.ctx, failedOnly.OrderID); !errors.Is(err, domain.ErrPaymentNotFound) {
+		t.Fatalf("a pending payment is not paid: %v", err)
+	}
+}
+
+// Refunding frees nothing: the money was taken once, so the order can not be paid again under
+// another key, which would charge a customer whose order was cancelled.
+func TestARefundedOrderCanNotSucceedAgain(t *testing.T) {
+	h := setup(t)
+	p := h.paid(t)
+	if _, _, err := h.repo.Refund(h.ctx, p.ID, "rf_1", h.refundEvent(t, p)); err != nil {
+		t.Fatal(err)
+	}
+	if paid, _ := h.repo.HasSucceeded(h.ctx, p.OrderID); !paid {
+		t.Fatal("HasSucceeded must still be true for a refunded payment")
+	}
+	second := h.begin(t, h.newPayment(p.OrderID, "k-"+uuid.NewString()))
+	o := domain.Succeeded("ref_again")
+	if _, applied, err := h.repo.Complete(h.ctx, second.ID, o, h.event(t, second, o)); !errors.Is(err, domain.ErrOrderAlreadyPaid) || applied {
+		t.Fatalf("applied=%v err=%v", applied, err)
+	}
+}
+
+func TestDatabaseRejectsInconsistentRefunds(t *testing.T) {
+	h := setup(t)
+	p := h.paid(t)
+	pending := h.begin(t, h.newPayment(uuid.New(), "k-"+uuid.NewString()))
+	for name, sql := range map[string]struct {
+		q  string
+		id uuid.UUID
+	}{
+		"refunded without a refund reference": {"UPDATE payments SET status = 'refunded', refunded_at = now() WHERE id = ?", p.ID},
+		"refunded without a time":             {"UPDATE payments SET status = 'refunded', refund_ref = 'x' WHERE id = ?", p.ID},
+		"a refund reference on a pending one": {"UPDATE payments SET refund_ref = 'x' WHERE id = ?", pending.ID},
+		"refunded straight from pending":      {"UPDATE payments SET status = 'refunded', refund_ref = 'x', refunded_at = now() WHERE id = ?", pending.ID},
+	} {
+		if _, err := h.db.ExecContext(h.ctx, sql.q, sql.id); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
