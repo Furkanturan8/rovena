@@ -23,6 +23,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 15 | [Uçtan uca testler](15-uctan-uca-testler.md) | `make e2e`: gerçek siparişler, konteyner durdurma/yeniden başlatma, RabbitMQ kesintisi, kayıp mesaj, beklenen sonuçlar |
 | 16 | [Gözlemlenebilirlik ve CI](16-gozlemlenebilirlik-ve-ci.md) | Trace (servisler ve mesajlar arası), metrikler, Jaeger/Prometheus, CI iş akışı, linter, bağımlılık denetimi |
 | 17 | [İade, iptal ve temizlik](17-iade-iptal-ve-temizlik.md) | Para iadesi akışı, müşteri iptali, sepetin geri gelmesi, outbox temizliği, iki sekmede oturum, gateway hata gövdeleri; erteleme/karar gerekçeleri |
+| 18 | [Gözlemlenebilirlik laboratuvarı](18-gozlemlenebilirlik-laboratuvari.md) | Prometheus, Grafana, Jaeger ve RabbitMQ'yu kullanmayı öğreten interaktif laboratuvar; senaryolar ve dersler |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -47,4 +48,5 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 | Uçtan uca dayanıklılık (Faz 4) | Tamamlandı | `make e2e`: 13 senaryo (başarılı sipariş, yetersiz stok, ret, sağlayıcı kesintisi, çift istek, tekrar olay, servis yeniden başlatma, RabbitMQ/Inventory/Payment kesintisi, kayıp mesaj, sessiz ödeme) |
 | Gözlemlenebilirlik ve CI (Faz 5) | Tamamlandı | OpenTelemetry (HTTP + mesaj izi, outbox üzerinden), Prometheus metrikleri, Jaeger; GitHub Actions (build, vet, lint, govulncheck, test, entegrasyon, e2e); `golangci-lint`, `go mod tidy` denetimi |
 | Cilalama ve borçlar (Faz 6) | Tamamlandı | İade akışı (Payment + Order), müşteri iptali, sepet geri yükleme, outbox/inbox temizliği, refresh token hoşgörü süresi, gateway JSON hataları, `httpx`/`auth` testleri, DB span'ları, Grafana, uyarı kuralları; iki karar belgelendi |
-| Frontend | Planlı | Önce backend |
+| Gözlemlenebilirlik laboratuvarı | Tamamlandı | `frontend/observability-lab/`: animasyonlu akış, 5 tanı senaryosu, araç rehberi; simüle veri, gerçek metrik adları |
+| Frontend (mağaza) | Planlı | Önce backend |

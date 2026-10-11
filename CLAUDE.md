@@ -19,6 +19,8 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - Servisler birbirinin tablosuna dokunmaz. Servisler arası: REST + RabbitMQ eventleri.
 - Access token HS256 JWT (`JWT_SECRET` tüm servislerde aynı), refresh token opak + DB'de hash'li.
 
+- `frontend/observability-lab/` → Prometheus/Grafana/Jaeger/RabbitMQ'yu öğreten bağımsız, derlemesiz interaktif laboratuvar (`python3 -m http.server`). Metrik/kuyruk adlarını değiştirirsen `js/scenarios*.js`, `js/guide.js` ve `js/architecture.js`'i güncelle. Detay: `docs/notes/18`.
+
 ## Yol haritası
 
 `docs/todo.md` backend planını fazlara böler (mesajlaşma altyapısı, Payment, Order/Saga, uçtan uca testler, gözlemlenebilirlik/CI). Bir faz bitince kutuları işaretle.
