@@ -160,3 +160,28 @@ func ToSummaryResponse(s domain.ProductSummary) ProductSummaryResponse {
 		Currency: s.Currency, ThumbnailURL: s.ThumbnailURL,
 	}
 }
+
+type LookupVariantsRequest struct {
+	VariantIDs []string `json:"variant_ids" validate:"required,min=1,max=100,dive,uuid"`
+}
+
+// VariantSnapshotResponse is what the Order service stores in a cart view or an order line.
+type VariantSnapshotResponse struct {
+	VariantID   string `json:"variant_id"`
+	ProductID   string `json:"product_id"`
+	ProductName string `json:"product_name"`
+	SKU         string `json:"sku"`
+	Size        string `json:"size"`
+	Color       string `json:"color"`
+	PriceCents  int64  `json:"price_cents"`
+	Currency    string `json:"currency"`
+	Sellable    bool   `json:"sellable"`
+}
+
+func ToVariantSnapshotResponse(s domain.VariantSnapshot) VariantSnapshotResponse {
+	return VariantSnapshotResponse{
+		VariantID: s.ID.String(), ProductID: s.ProductID.String(), ProductName: s.ProductName,
+		SKU: s.SKU, Size: s.Size, Color: s.Color, PriceCents: s.PriceCents,
+		Currency: s.Currency, Sellable: s.Sellable(),
+	}
+}

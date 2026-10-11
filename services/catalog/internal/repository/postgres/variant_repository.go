@@ -40,6 +40,37 @@ func (r *VariantRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return row.toDomain(), nil
 }
 
+func (r *VariantRepository) Snapshots(ctx context.Context, ids []uuid.UUID) ([]domain.VariantSnapshot, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var rows []struct {
+		bun.BaseModel `bun:"table:variants,alias:v"`
+
+		variantRow
+		ProductName   string `bun:"product_name,scanonly"`
+		ProductStatus string `bun:"product_status,scanonly"`
+	}
+	err := r.db.NewSelect().Model(&rows).
+		ColumnExpr("v.*").
+		ColumnExpr("p.name AS product_name, p.status AS product_status").
+		Join("JOIN products AS p ON p.id = v.product_id").
+		Where("v.id IN (?)", bun.In(ids)).
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.VariantSnapshot, len(rows))
+	for i := range rows {
+		out[i] = domain.VariantSnapshot{
+			Variant:       *rows[i].variantRow.toDomain(),
+			ProductName:   rows[i].ProductName,
+			ProductStatus: domain.ProductStatus(rows[i].ProductStatus),
+		}
+	}
+	return out, nil
+}
+
 func (r *VariantRepository) Update(ctx context.Context, v *domain.Variant) error {
 	v.UpdatedAt = time.Now()
 	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {

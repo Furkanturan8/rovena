@@ -65,7 +65,7 @@ Aynı anahtarla ikinci bir istek geldiğinde olabilecekler:
 | `pending` (önceki işçi çökmüş) | Kaldığı yerden devam eder; sağlayıcı aynı anahtarı görünce ikinci kez çekmez |
 | Farklı sipariş / müşteri / tutar | `ErrIdempotencyKeyReused`: istemci hatası, mesaj DLQ'ya gider, ilk ödemeye dokunulmaz |
 
-Neden sonucu yeniden yayınlıyoruz? Order bir isteği tekrar gönderdiyse büyük ihtimalle ilk cevabı hiç almadı. Sessizce yok saymak onu sonsuza dek bekletirdi. Bedeli: Order, sonuç olaylarını idempotent işlemelidir (Faz 3).
+Neden sonucu yeniden yayınlıyoruz? Order bir isteği tekrar gönderdiyse büyük ihtimalle ilk cevabı hiç almadı. Sessizce yok saymak onu sonsuza dek bekletirdi. Bedeli: Order, sonuç olaylarını idempotent işlemelidir; işler ([14](14-order-servisi-ve-saga.md)).
 
 Bir sipariş yalnızca **bir kez** başarıyla ödenebilir. Farklı anahtarla (yeni niyet) aynı siparişe ikinci bir ödeme gelirse:
 
@@ -186,18 +186,17 @@ Veritabanı ayrıca tutarsız durumları reddeder (`payments_outcome_consistent`
 - `Begin` çakışmayı ele almıyor
 - müşteriler birbirinin ödemesini görüyor
 
-OpenAPI şeması `docs/openapi/payment.yaml`; çalışan yığına karşı sözleşme testi (`check_contract.py`) ödemeleri gerçek bir `PaymentRequested` yayınlayarak oluşturur.
+OpenAPI şeması `docs/openapi/payment.yaml`; çalışan yığına karşı sözleşme testi (`check_contract.py`) ödemeleri Order'dan gerçek checkout'larla (tüm saga'dan geçen siparişler) üretir.
 
 ## Bilinen eksikler
 
 - **İade (refund) akışı yok.** Aynı siparişe farklı anahtarla **eşzamanlı** iki istek gelirse ikisi de sağlayıcıdan geçebilir; veritabanı ikinci başarıyı kaydetmeyi reddeder, servis `DOUBLE CHARGE` hatası loglar ve mesaj DLQ'ya gider, ama parayı geri vermek elle yapılır. Gerçek sağlayıcıyla iade eklenmeli.
 - Sahte sağlayıcının anahtar hafızası bellekte; servis yeniden başlayınca unutulur. Gerçek sağlayıcı bunu kendi tarafında tutar.
-- `pending` kalıp hiç ilerlemeyen ödemeleri tarayan bir kurtarma işi yok (mesaj DLQ'ya düşerse). Order'ın kurtarma işi (Faz 3) internal uçla durumu sorgulayacak.
-- Servis çalışırken `PaymentRequested` yayınlayan henüz kimse yok: Order gelene kadar mesajı elle yayınlayabilirsin (aşağıda).
+- `pending` kalıp hiç ilerlemeyen ödemeleri tarayan bir kurtarma işi yok (mesaj DLQ'ya düşerse). Order'ın kurtarma işi ([14](14-order-servisi-ve-saga.md)) ödeme isteğini aynı anahtarla tekrar göndererek bunu telafi eder.
 
 ## Elle denemek
 
-Order henüz olmadığı için olayı RabbitMQ yönetim API'siyle yayınlayabilirsin (`make up` sonrası; kullanıcı/parola `.env` içinde):
+Normalde `PaymentRequested`'i Order yayınlar. Payment'ı tek başına denemek için olayı RabbitMQ yönetim API'siyle de yayınlayabilirsin (`make up` sonrası; kullanıcı/parola `.env` içinde):
 
 ```bash
 ORDER=$(uuidgen | tr A-Z a-z); CUSTOMER=$(uuidgen | tr A-Z a-z)

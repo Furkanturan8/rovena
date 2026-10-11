@@ -52,6 +52,19 @@ type Variant struct {
 	UpdatedAt  time.Time
 }
 
+// VariantSnapshot is what a buyer's order needs to remember about a variant: the
+// variant itself plus the product facts that decide whether it can be sold.
+type VariantSnapshot struct {
+	Variant
+	ProductName   string
+	ProductStatus ProductStatus
+}
+
+// Sellable reports whether a new order may contain the variant.
+func (s VariantSnapshot) Sellable() bool {
+	return s.Active && s.ProductStatus == StatusActive
+}
+
 type Product struct {
 	ID          uuid.UUID
 	CategoryID  uuid.UUID
@@ -124,6 +137,7 @@ var (
 	ErrCategoryInUse    = errors.New("category has products or subcategories")
 	ErrProductNotFound  = errors.New("product not found")
 	ErrVariantNotFound  = errors.New("variant not found")
+	ErrTooManyVariants  = errors.New("too many variants in one lookup")
 	ErrSlugTaken        = errors.New("slug already in use")
 	ErrSKUTaken         = errors.New("sku already in use")
 	ErrVariantExists    = errors.New("variant with this size and color already exists")

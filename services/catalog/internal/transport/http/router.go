@@ -20,6 +20,7 @@ type Options struct {
 	AllowedOrigins string
 	TrustedProxies []string
 	Verifier       *auth.Verifier
+	InternalAPIKey string
 	Readiness      map[string]httpx.ReadinessCheck
 }
 
@@ -65,6 +66,10 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	v1.Get("/categories/:slug", categories.GetBySlug)
 	v1.Get("/products", products.List)
 	v1.Get("/products/:idOrSlug", products.Get)
+
+	// Service-to-service. Not routed by the gateway, guarded by the internal key.
+	internal := v1.Group("/internal", RequireInternalKey(opts.InternalAPIKey))
+	internal.Post("/variants/lookup", products.LookupVariants)
 
 	// Admin API. Tokens are issued by Identity and verified locally.
 	admin := v1.Group("/admin", auth.Middleware(opts.Verifier), auth.RequireRole(auth.RoleAdmin))

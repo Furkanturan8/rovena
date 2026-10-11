@@ -13,7 +13,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | Servis | Ne yapar | Dışarıya açık port |
 | --- | --- | --- |
 | `postgres` | PostgreSQL 17 veritabanı sunucusu | 127.0.0.1:5433 (yalnızca kendi bilgisayarın) |
-| `rabbitmq` | Mesaj kuyruğu (Payment kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
+| `rabbitmq` | Mesaj kuyruğu (Payment ve Order kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
 | `identity` | Identity API sunucusu | 127.0.0.1:8081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
@@ -25,6 +25,8 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `inventory-seed` | Demo varyantlara açılış stoğu yazar (`tools` profili) | yok |
 | `payment-migrate` | Payment tablolarını (ve outbox/inbox) kurar, işi bitince kapanır | yok |
 | `payment` | Payment servisi: RabbitMQ'dan `PaymentRequested` tüketir, sonuç olaylarını yayınlar; HTTP yalnızca okuma | 127.0.0.1:8085 |
+| `order-migrate` | Order tablolarını (ve outbox/inbox) kurar, işi bitince kapanır | yok |
+| `order` | Order servisi: sepet, checkout, Saga; Catalog ve Inventory'yi REST ile çağırır, ödeme olaylarını dinler, kurtarma işini çalıştırır | 127.0.0.1:8086 |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:
@@ -66,6 +68,9 @@ Catalog:
 Payment:
 - `00001_create_payments.sql` → ödemeler (tutarsız durumları ve sipariş başına ikinci başarıyı engelleyen kısıtlarla) + `outbox_events` + `processed_events`
 
+Order:
+- `00001_create_orders.sql` → sepet, siparişler (durum/rezervasyon tutarlılığını koruyan kısıtlarla), sipariş satırları (fiyat görüntüsü), durum geçmişi + `outbox_events` + `processed_events`
+
 Inventory:
 - `00001_create_inventory.sql` → stok kalemleri, rezervasyonlar, rezervasyon kalemleri, hareket defteri (stoğun söz verilenin altına düşmesini engelleyen `CHECK` kısıtlarıyla)
 
@@ -77,8 +82,8 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 `infrastructure/nginx/nginx.conf`:
 
-- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye, `/api/v1/stock` ve `/admin/stock/...` isteklerini `http://inventory:8083`'e yönlendirir. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
-- Inventory'nin `/api/v1/internal/...` uçları **bilerek yönlendirilmez**: rezervasyon uçları yalnızca servisler arasıdır, internetten erişilebilir olmamalıdır ([11](11-inventory-servisi.md)).
+- `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye, `/api/v1/stock` ve `/admin/stock/...` isteklerini `http://inventory:8083`'e, `/payments` ve `/admin/payments` isteklerini `http://payment:8085`'e, `/cart`, `/checkout`, `/orders` ve `/admin/orders` isteklerini `http://order:8086`'ya yönlendirir. Checkout, başka bir servisi beklediği tek yer olduğu için ayrı ve daha sıkı bir hız sınırı (burst 10) alır. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
+- Inventory'nin ve Catalog'un `/api/v1/internal/...` uçları **bilerek yönlendirilmez**: rezervasyon uçları yalnızca servisler arasıdır, internetten erişilebilir olmamalıdır ([11](11-inventory-servisi.md)).
 - `limit_req`: IP başına saniyede 30 istek (burst 60) sınırı (kaba saldırı koruması). Aşılırsa `limit_req_status 429` sayesinde JSON zarflı **429** ve `Retry-After` döner. Nginx'in varsayılanı 503'tür ve bir kesinti gibi okunur; bu yüzden bilerek değiştirildi.
 - `X-Request-ID` başlığı yoksa üretir ve servise iletir. Bir isteği tüm servislerin loglarında izlemek için kullanılır.
 - `resolver 127.0.0.11` + `set $identity ...`: Nginx, servis henüz ayakta değilken de başlayabilsin diye adresi istek anında çözer.
@@ -88,7 +93,7 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 ## RabbitMQ
 
-Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](12-mesajlasma.md)). Şu an yalnızca Payment kullanıyor: `payment.requests` kuyruğundan dinler. Order servisi gelince `PaymentRequested`'i gönderen taraf o olacak. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `.env` içinde).
+Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](12-mesajlasma.md)). İki kullanıcısı var: Payment `payment.requests` kuyruğundan `PaymentRequested`'i dinler; Order `order.payment-results` kuyruğundan `PaymentSucceeded` ve `PaymentFailed`'i dinler ve `PaymentRequested`'i kendisi yayınlar. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `.env` içinde).
 
 ## `.env` ve gizli değerler
 
@@ -97,7 +102,7 @@ Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](
 - Veritabanı parolaları (servis başına ayrı)
 - `RABBITMQ_*`
 - `JWT_SECRET`: token imzalama anahtarı, en az 32 karakter, **tüm servislerde aynı** olmalı. Sızarsa herkes admin token'ı üretebilir.
-- `INTERNAL_API_KEY`: servisler arası çağrıların ortak anahtarı (en az 32 karakter). Şimdilik Inventory'nin rezervasyon uçları ve Payment'ın dahili okuma ucu ister; Order servisi geldiğinde onu gönderen taraf olacak.
+- `INTERNAL_API_KEY`: servisler arası çağrıların ortak anahtarı (en az 32 karakter). Inventory'nin rezervasyon uçları, Catalog'un fiyat arama ucu ve Payment'ın dahili okuma ucu ister; Order servisi bunu Catalog ve Inventory çağrılarında gönderir.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`: `make seed-admin` ile oluşturulacak ilk admin.
 
 Compose bu değerleri konteynerlere ortam değişkeni olarak verir; servis kodu `internal/infrastructure/config` paketiyle okur.

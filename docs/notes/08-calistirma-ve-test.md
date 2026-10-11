@@ -74,7 +74,7 @@ curl -s -X POST localhost:8083/api/v1/internal/reservations \
 
 Aynı `order_id` ile ikinci istek 201 yerine **200** ve aynı rezervasyonu döner; stok iki kez tutulmaz. Stok yetmezse 409 ve `fields` içinde hangi varyantta kaç adet kaldığı gelir.
 
-Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment) → `{"checks":{"postgres":"ok"},"ready":true}`.
+Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment), `curl localhost:8086/readyz` (Order) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
 Veritabanına bakmak için (parolayı `.env` içinden al):
 
@@ -87,8 +87,9 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ## Testler
 
 ```bash
-make test               # shared + identity + catalog + inventory + payment, HTTP testleri dahil (veritabanı gerekmez)
-make test-integration   # gerçek Postgres ve RabbitMQ'ya karşı shared (mesajlaşma), Catalog, Identity, Inventory ve Payment testleri (önce make up)
+make test               # shared + identity + catalog + inventory + payment + order, HTTP testleri dahil (veritabanı gerekmez)
+make test-integration   # gerçek Postgres ve RabbitMQ'ya karşı shared (mesajlaşma), Catalog, Identity, Inventory, Payment ve Order testleri (önce make up)
+make test-env           # (test-integration bunu kendisi çağırır) yalıtılmış test ortamı: orders_test ve payment_test veritabanları + RabbitMQ'da `test` vhost'u
 make vet     # statik analiz
 ```
 
@@ -114,6 +115,11 @@ make vet     # statik analiz
 | `payment/.../transport/http/http_test.go` | Müşteri yalnızca kendi ödemesini görür, admin listesi, internal anahtar, yazma ucu olmaması |
 | `payment/.../postgres/integration_test.go` | (Gerçek Postgres) eşzamanlı `Begin` tek satır, tek kazanan tamamlama, durum+olay atomikliği, sipariş başına tek başarı |
 | `payment/.../consumer/integration_test.go` | (Gerçek RabbitMQ + Postgres) `PaymentRequested` → sonuç olayı, tekrarlar, yeniden denemeler, DLQ |
+| `order/internal/application/service_test.go` | Sepet kuralları (fiyat Catalog'dan), checkout (idempotent tekrar, yarış, fiyat görüntüsü, stok yok, Inventory kesintisi), ödeme sonuçları (tekrar teslim, geç başarı, yanlış tutar, rezervasyon kaybı), kurtarma işi |
+| `order/.../transport/http/http_test.go` | Her yol token ister, admin yolları müşteriye kapalı, istemci fiyatı yok sayılır, başkasının siparişi 404, müşteri yanıtı iç bilgileri göstermez |
+| `order/.../transport/consumer/payment_result_test.go` | Düzelmeyecek mesaj DLQ'ya, Inventory kesintisi retry'a |
+| `order/.../postgres/integration_test.go` | (Gerçek Postgres) eşzamanlı checkout tek sipariş, sepet sınırı, tek kazanan geçiş, durum+olay atomikliği, CHECK kısıtları, 12 eşzamanlı ödeme sonucu tek onay |
+| `catalog/.../transport/http/internal_test.go` | Dahili fiyat arama ucu: anahtar şart, `sellable` kuralı, bilinmeyen id atlanır |
 | `shared/messaging`, `shared/outbox` | Bkz. [12](12-mesajlasma.md) |
 
 ### Testlerin üç katmanı
@@ -123,6 +129,10 @@ make vet     # statik analiz
 3. **Entegrasyon:** Gerçek PostgreSQL (`-tags integration`). SQL'in, kısıtların, kilitlerin ve transaction'ların doğru çalıştığını gösterir.
 
 Identity entegrasyon testleri her test için **geçici bir PostgreSQL şeması** (`itest_<rastgele>`) açar, migration'ları oraya uygular ve test bitince `DROP SCHEMA ... CASCADE` yapar. Böylece testler birbirinden ve geliştirme verisinden izoledir; "sistemde en az bir admin" gibi **global** kurallar, gerçek admin hesabına dokunmadan test edilebilir.
+
+Outbox yazan entegrasyon testleri (shared, Payment, Order) canlı yığından **yalıtılmıştır**: ayrı veritabanları (`orders_test`, `payment_test`) ve RabbitMQ'da ayrı bir `test` sanal sunucusu (vhost) kullanırlar; `make test-integration` bunları kendisi kurar (`make test-env`). Neden: çalışan Order ve Payment servislerinin outbox yayıncıları canlı veritabanındaki her olayı yayınlar. Testler canlı veritabanına sipariş yazsaydı, çalışan Payment uydurma siparişlerin parasını "çekerdi" ve sonuçlar Order'ın ölü mektup kuyruğuna (DLQ) düşerdi. Bu hata gerçekten yaşandı (DLQ'da 24 mesaj birikti) ve ayrım bu yüzden eklendi. Aynı sebeple `check_contract.py` ödemeleri uydurma olayla değil gerçek checkout'larla üretir.
+
+Order'ın birim ve HTTP testleri `internal/repository/memory` paketindeki bellek içi repository'yi kullanır. Postgres repository'siyle aynı korumalı geçiş kurallarını uygular, böylece servis testleri gerçek durum makinesini sınar.
 
 ### Yarış testi yazarken dikkat
 

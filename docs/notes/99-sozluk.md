@@ -61,7 +61,7 @@
 | **Deadlock (kilitlenme)** | İki işlemin birbirinin kilidini beklemesi; sabit bir kilit sırası belirleyerek önlenir |
 | **Ledger (hareket defteri)** | Değişiklikleri üzerine yazmak yerine art arda ekleyen kayıt; "sayı neden bu" sorusu sonradan cevaplanabilir |
 | **Telafi işlemi (compensating action)** | Geri alınamayan bir adımın etkisini tersine çeviren işlem (rezervasyonu bırakmak gibi) |
-| **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
+| **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp; projede checkout akışı (Order yürütür) |
 | **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da bir tabloya yazıp sonra ayrı bir süreçle güvenle yayınlama kalıbı |
 | **Relay (yayıncı)** | Outbox tablosundaki yayınlanmamış olayları RabbitMQ'ya gönderip işaretleyen arka plan işi |
 | **Inbox (`processed_events`)** | Hangi olayların işlendiğini tutan tablo; tekrar teslim edilen olayı tanıyıp atlamayı sağlar |
@@ -82,3 +82,8 @@
 | **Telafi / iade (refund)** | Çekilmiş parayı müşteriye geri vermek |
 | **Olay sözleşmesi (event contract)** | Bir olayın adı, sürümü ve payload şekli; yayıncı ve tüketicilerin ortak anlaşması (`shared/events`) |
 | **Ack / nack** | Tüketicinin mesajı "işledim" / "işleyemedim, geri ver" diye bildirmesi |
+| **Snapshot (görüntü)** | Siparişin satırlarına sipariş anındaki ad ve fiyatın kopyalanması; sonradan katalog değişse de sipariş değişmez |
+| **Korumalı geçiş (guarded transition)** | Durumu yalnızca beklenen durumdaysa değiştiren ve değişip değişmediğini bildiren güncelleme; tekrar çalışmayı zararsız yapar |
+| **Kurtarma işi (recovery job)** | Saga'nın iki adımı arasında takılan kayıtları bulup eksik adımı tekrar deneyen ya da kaydı iptal eden arka plan işi |
+| **Idempotency-Key (başlık)** | Checkout isteğinin tekrar gönderilmesini güvenli yapan, istemcinin seçtiği anahtar; aynı anahtar aynı siparişi döner |
+| **Orphan (sahipsiz) rezervasyon** | Sahibi olan sipariş ona haber verilmeden iptal edildiği için kimsenin bırakmayacağı rezervasyon |

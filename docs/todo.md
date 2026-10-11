@@ -29,13 +29,13 @@
 
 ## Faz 3: Order servisi ve checkout Saga
 
-- [ ] Sepet: ekle/çıkar/güncelle; fiyat ve ad **Catalog'dan sunucuda** alınır (istemci fiyatına güvenilmez)
-- [ ] Checkout: idempotency anahtarı, bekleyen sipariş + ürün/fiyat snapshot'ı
-- [ ] Saga: Inventory'de rezerve et (REST) → `PaymentRequested` (outbox) → sonuca göre commit/release → onay/iptal
-- [ ] Sipariş durum geçmişi; müşteri uçları (kendi siparişleri) ve admin uçları
-- [ ] Kurtarma işi: takılı kalan siparişi bul, eksik adımı tekrar dene ya da iptal edip rezervasyonu bırak
-- [ ] Gateway'e Order rotaları (Payment rotaları Faz 2'de eklendi); OpenAPI + sözleşme testi
-- [ ] Testler (birim, HTTP, entegrasyon, eşzamanlılık) + mutasyon kontrolü + not bölümü
+- [x] Sepet: ekle/çıkar/güncelle; fiyat ve ad **Catalog'dan sunucuda** alınır (istemci fiyatına güvenilmez)
+- [x] Checkout: idempotency anahtarı, bekleyen sipariş + ürün/fiyat snapshot'ı
+- [x] Saga: Inventory'de rezerve et (REST) → `PaymentRequested` (outbox) → sonuca göre commit/release → onay/iptal
+- [x] Sipariş durum geçmişi; müşteri uçları (kendi siparişleri) ve admin uçları
+- [x] Kurtarma işi: takılı kalan siparişi bul, eksik adımı tekrar dene ya da iptal edip rezervasyonu bırak
+- [x] Gateway'e Order rotaları (Payment rotaları Faz 2'de eklendi); OpenAPI + sözleşme testi (Catalog'a dahili fiyat arama ucu da eklendi)
+- [x] Testler (birim, HTTP, entegrasyon, eşzamanlılık) + mutasyon kontrolü + not bölümü
 
 ## Faz 4: Uçtan uca dayanıklılık
 
@@ -56,6 +56,9 @@
 - [ ] `shared/httpx` ve `shared/auth` middleware için kendi birim testleri
 - [ ] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? (olay ile) Karar ver
 - [ ] Payment: eşzamanlı çift çekim durumunda iade akışı (şimdilik yalnızca loglanır, DLQ'ya düşer); sağlayıcıdan gerçek iade
+- [ ] Order: stok yetmediği için iptal olan siparişte sepet boşalmış kalıyor; sepeti geri yükle ya da iptal sebebine göre boşaltma
+- [ ] Order: müşterinin `awaiting_payment` siparişi kendisinin iptal edebilmesi (ödeme ile yarışı düşünülerek)
+- [ ] Order: `payment_timeout` / `reservation_lost` iptalinden sonra gelen başarılı ödeme için otomatik iade (şimdilik `REFUND NEEDED` loglanır)
 - [ ] Outbox/Inbox temizliği: yayınlanmış `outbox_events` ve eski `processed_events` satırlarını periyodik sil
 - [ ] Servisler arası JWT: HS256 yerine asimetrik imza (RS256/EdDSA) değerlendir
 - [ ] Sonra: React frontend (ayrı plan)

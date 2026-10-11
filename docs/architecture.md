@@ -42,6 +42,7 @@ flowchart TD
     Order <--> RabbitMQ
     Payment <--> RabbitMQ
     Order -->|"REST: reserve, commit, release (internal key)"| Inventory
+    Order -->|"REST: current prices (internal key)"| Catalog
 
     Identity -. telemetry .-> Observability
     Catalog -. telemetry .-> Observability
@@ -141,6 +142,10 @@ Owns:
 Order items preserve the product name, variant, quantity, and purchase price at the time of the order. Historical orders must not change when catalog information changes.
 
 The Order Service coordinates the checkout Saga and does not directly modify inventory or payment data.
+
+The cart stores only variant ids and quantities. Names and prices are looked up in Catalog (an internal lookup endpoint) whenever the cart is shown and when an order is placed, so a client can never set a price. A checkout needs an `Idempotency-Key`; the same key returns the same order. The order is created in the same transaction that empties the cart, and only if the cart still holds exactly the lines that were priced.
+
+Order status moves `pending` -> `awaiting_payment` -> `paid` -> `confirmed`, or to `cancelled` from any of the first three. The order's belief about its stock reservation (`none`, `held`, `committed`, `released`) is tracked separately, so a half-finished compensation (cancelled but still holding stock) can be found and finished. Every transition is guarded (it applies only from the expected status) and queues its event in the same transaction.
 
 ### 3.5 Payment Service
 
@@ -319,7 +324,20 @@ Failure and recovery:
 * Order must not leave an order pending indefinitely: a recovery job finds orders that are stuck (no payment outcome after a timeout, or a crash between two steps), then retries the missing step or cancels the order and releases the reservation.
 * If the release call itself fails, it is retried; the expiry above is the final safety net.
 
-The implementation should explicitly define timeouts, retry counts, and the recovery job's schedule.
+Timeouts, retry counts and the recovery schedule (all configurable, these are the defaults):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| Catalog / Inventory call timeout | 5 s | One attempt per call; retrying is the recovery job's task |
+| `ORDER_RECOVERY_INTERVAL` | 15 s | How often the recovery job runs |
+| `ORDER_STUCK_AFTER` | 30 s | An order unchanged for this long is looked at |
+| `ORDER_PENDING_MAX_AGE` | 5 min | A `pending` order that still has no stock reservation is cancelled (`checkout_timeout`) |
+| `ORDER_PAYMENT_TIMEOUT` | 2 min | Wait this long for a payment answer before asking again |
+| `ORDER_MAX_PAYMENT_REQUESTS` | 3 | After the last request stays unanswered for the timeout, the order is cancelled (`payment_timeout`) and its stock released |
+
+All payment requests for one order carry the same idempotency key (`order:<id>`), so asking again can never charge twice.
+
+Known gaps: when a payment succeeds after its order was cancelled (late success, or the reservation expired first), money has been taken for an order that will not ship. The service logs `REFUND NEEDED`; automated refunds are future work.
 
 ## 8. Reliability Patterns
 
@@ -420,6 +438,8 @@ Service boundaries may evolve as domain knowledge grows. Splitting a service fur
 * **Mock payment provider:** Enables realistic payment workflow development without processing real payments.
 * **Hybrid checkout:** Stock reservation is a synchronous, idempotent REST call from Order to Inventory because its result is needed immediately and must name the failing item; payment is asynchronous over RabbitMQ. This keeps Inventory free of a message consumer and avoids a second saga participant waiting for events.
 * **Saga and Transactional Outbox:** Address cross-service consistency and reliable event publication.
+* **Guarded transitions instead of an Inbox in Order and Payment:** Their real effect is a call to another service, which a database transaction cannot cover. Idempotency comes from the state machine (an update applies only from the expected state) and from idempotent downstream calls.
+* **Order never trusts the client's prices:** The cart holds ids and quantities; prices come from Catalog at display time and at checkout, and the order keeps its own snapshot.
 * **Docker Compose first:** Keeps local development reproducible without premature orchestration complexity.
 
 The guiding principle is to keep the system distributed where independent business ownership is valuable, while avoiding infrastructure and abstractions that do not serve a concrete purpose.

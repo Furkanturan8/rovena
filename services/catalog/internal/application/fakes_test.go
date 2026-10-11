@@ -138,6 +138,21 @@ func (f fakeVariants) GetByID(_ context.Context, id uuid.UUID) (*domain.Variant,
 	}
 	return nil, domain.ErrVariantNotFound
 }
+func (f fakeVariants) Snapshots(_ context.Context, ids []uuid.UUID) ([]domain.VariantSnapshot, error) {
+	f.s.mu.Lock()
+	defer f.s.mu.Unlock()
+	var out []domain.VariantSnapshot
+	for _, id := range ids {
+		for _, p := range f.s.products {
+			for _, v := range p.Variants {
+				if v.ID == id {
+					out = append(out, domain.VariantSnapshot{Variant: v, ProductName: p.Name, ProductStatus: p.Status})
+				}
+			}
+		}
+	}
+	return out, nil
+}
 func (f fakeVariants) Update(_ context.Context, v *domain.Variant) error {
 	f.s.mu.Lock()
 	defer f.s.mu.Unlock()

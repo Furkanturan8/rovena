@@ -1,6 +1,6 @@
 # 12 - Mesajlaşma: olaylar, Outbox ve idempotent tüketici
 
-Şimdiye kadar servisler birbirine yalnızca REST ile konuştu. Ödeme gibi yavaş, hata verebilen ve tekrar denenmesi gereken işler için bu yetmez: **RabbitMQ** üzerinden asenkron mesajlaşma gerekir. Bu bölüm, Order ve Payment servislerinin üzerine kurulacağı altyapıyı anlatır. Kod `shared/messaging` ve `shared/outbox` paketlerindedir; henüz hiçbir servis kullanmıyor, Faz 2'de Payment ilk kullanıcı olacak.
+Şimdiye kadar servisler birbirine yalnızca REST ile konuştu. Ödeme gibi yavaş, hata verebilen ve tekrar denenmesi gereken işler için bu yetmez: **RabbitMQ** üzerinden asenkron mesajlaşma gerekir. Bu bölüm, Order ve Payment servislerinin üzerine kurulacağı altyapıyı anlatır. Kod `shared/messaging` ve `shared/outbox` paketlerindedir; Payment ([13](13-payment-servisi.md)) ve Order ([14](14-order-servisi-ve-saga.md)) kullanıyor.
 
 Mesajlaşmayı güvenilir yapan üç parça var ve her biri ayrı bir riske karşı:
 

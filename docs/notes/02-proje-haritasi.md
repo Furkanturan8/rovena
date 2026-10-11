@@ -13,7 +13,8 @@ rovena/
 │   ├── identity/             Kullanıcı ve kimlik servisi (ayrı Go modülü)
 │   ├── catalog/              Ürün kataloğu servisi (ayrı Go modülü)
 │   ├── inventory/            Stok ve rezervasyon servisi (ayrı Go modülü)
-│   └── payment/              Ödeme servisi (ayrı Go modülü)
+│   ├── payment/              Ödeme servisi (ayrı Go modülü)
+│   └── order/                Sepet, checkout ve Saga servisi (ayrı Go modülü)
 ├── infrastructure/           Servis olmayan altyapı ayarları
 │   ├── postgres/             Veritabanlarını oluşturan başlangıç betiği
 │   └── nginx/                API Gateway ayarları

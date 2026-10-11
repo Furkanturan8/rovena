@@ -233,3 +233,25 @@ func summaryPage(items []domain.ProductSummary, total int, f domain.ProductFilte
 	}
 	return response.Page[ProductSummaryResponse]{Items: out, Total: total, Page: f.Page, PageSize: f.PageSize}
 }
+
+// LookupVariants returns current price and name for the given variants. Ids that do
+// not exist are left out, so the caller can tell which lines vanished.
+func (h *ProductHandler) LookupVariants(c *fiber.Ctx) error {
+	var req LookupVariantsRequest
+	if err := httpx.BindAndValidate(c, &req); err != nil {
+		return err
+	}
+	ids := make([]uuid.UUID, len(req.VariantIDs))
+	for i, s := range req.VariantIDs {
+		ids[i], _ = uuid.Parse(s) // format already validated
+	}
+	snaps, err := h.products.VariantSnapshots(c.UserContext(), ids)
+	if err != nil {
+		return err
+	}
+	out := make([]VariantSnapshotResponse, len(snaps))
+	for i, s := range snaps {
+		out[i] = ToVariantSnapshotResponse(s)
+	}
+	return response.OK(c, out)
+}

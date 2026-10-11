@@ -38,6 +38,9 @@ type VariantRepository interface {
 	// Create returns ErrSKUTaken, ErrVariantExists, or ErrProductNotFound (unknown product).
 	Create(ctx context.Context, v *domain.Variant) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Variant, error)
+	// Snapshots returns the variants that exist, in no particular order; unknown ids
+	// are simply missing from the result.
+	Snapshots(ctx context.Context, ids []uuid.UUID) ([]domain.VariantSnapshot, error)
 	// Update locks the parent product row, so concurrent changes to one product are
 	// serialized, and returns ErrNoActiveVariant when it would deactivate the last
 	// active variant of an active product.

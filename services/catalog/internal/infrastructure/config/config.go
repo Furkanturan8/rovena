@@ -14,9 +14,15 @@ type Config struct {
 	JWTSecret      string
 	AllowedOrigins string
 	TrustedProxies []string
+
+	// InternalAPIKey guards the service-to-service lookup endpoint.
+	InternalAPIKey string
 }
 
-const minJWTSecretLen = 32
+const (
+	minJWTSecretLen      = 32
+	minInternalAPIKeyLen = 32
+)
 
 func Load() (*Config, error) {
 	cfg := &Config{
@@ -27,6 +33,7 @@ func Load() (*Config, error) {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		AllowedOrigins: get("ALLOWED_ORIGINS", "http://localhost:5173"),
 		TrustedProxies: strings.Split(get("TRUSTED_PROXIES", "127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"), ","),
+		InternalAPIKey: os.Getenv("INTERNAL_API_KEY"),
 	}
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("missing required env: DATABASE_URL")
@@ -38,6 +45,9 @@ func Load() (*Config, error) {
 func (c *Config) ValidateServer() error {
 	if len(c.JWTSecret) < minJWTSecretLen {
 		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLen)
+	}
+	if len(c.InternalAPIKey) < minInternalAPIKeyLen {
+		return fmt.Errorf("INTERNAL_API_KEY must be at least %d characters", minInternalAPIKeyLen)
 	}
 	return nil
 }

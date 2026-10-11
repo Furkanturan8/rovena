@@ -27,14 +27,14 @@ Bu projede mikroservis seçilmesinin sebebi, bu zorlukları öğrenmektir. Gerç
 | Identity | Kullanıcı kaydı, giriş, roller | Yazıldı |
 | Catalog | Ürünler, kategoriler, varyantlar | Yazıldı |
 | Inventory | Stok, rezervasyon | Yazıldı |
-| Order | Sepet, sipariş, checkout akışı | Planlı |
 | Payment | Ödeme (sahte sağlayıcı) | Yazıldı |
+| Order | Sepet, checkout, sipariş, Saga | Yazıldı |
 
 ## İki tür iletişim
 
 **Senkron (REST/HTTP):** "Bunu yap ve cevabını bekliyorum." Örnek: tarayıcı `GET /api/v1/users/me` der ve cevabı bekler.
 
-**Asenkron (RabbitMQ mesajları):** "Şu oldu, ilgilenen bakar." Örnek: Order servisi "OrderCreated" olayını yayınlar; Inventory servisi bunu alıp stok ayırır. Gönderen cevabı beklemez. Altyapısı hazır ([12](12-mesajlasma.md)); ilk kullanıcıları Payment ve Order servisleri olacak.
+**Asenkron (RabbitMQ mesajları):** "Şu oldu, ilgilenen bakar." Örnek: Order servisi "OrderCreated" olayını yayınlar; Inventory servisi bunu alıp stok ayırır. Gönderen cevabı beklemez. Altyapısı hazır ([12](12-mesajlasma.md)); Payment ve Order servisleri kullanıyor.
 
 ## En zor konu: dağıtık tutarlılık
 

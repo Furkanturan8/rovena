@@ -170,3 +170,24 @@ func TestAddVariant_UnknownProduct(t *testing.T) {
 		t.Fatalf("err = %v, want ErrProductNotFound", err)
 	}
 }
+
+func TestVariantSnapshots_JoinsProductAndSkipsUnknown(t *testing.T) {
+	h := setup(t)
+	p := h.activeProduct(t, "SNAP"+uuid.NewString()[:6], 2)
+
+	got, err := h.variants.Snapshots(h.ctx, []uuid.UUID{p.Variants[0].ID, p.Variants[1].ID, uuid.New()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d snapshots, want 2 (unknown id skipped)", len(got))
+	}
+	for _, s := range got {
+		if s.ProductName != p.Name || s.ProductStatus != domain.StatusActive || !s.Sellable() || s.PriceCents != 1000 {
+			t.Errorf("snapshot %+v", s)
+		}
+	}
+	if none, err := h.variants.Snapshots(h.ctx, nil); err != nil || len(none) != 0 {
+		t.Fatalf("empty input: %v, %v", none, err)
+	}
+}

@@ -25,7 +25,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const testSecret = "test-secret-test-secret-test-secret-1234"
+const (
+	testSecret      = "test-secret-test-secret-test-secret-1234"
+	testInternalKey = "internal-key-internal-key-internal-key-1"
+)
 
 type env struct {
 	t     *testing.T
@@ -43,6 +46,7 @@ func newEnv(t *testing.T) *env {
 		AllowedOrigins: "https://shop.example",
 		TrustedProxies: []string{"127.0.0.1"},
 		Verifier:       auth.NewVerifier([]byte(testSecret)),
+		InternalAPIKey: testInternalKey,
 		Readiness: map[string]httpx.ReadinessCheck{
 			"postgres": func(context.Context) error { return e.readyErr },
 		},

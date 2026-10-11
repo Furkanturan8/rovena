@@ -51,6 +51,7 @@ func run() error {
 		AllowedOrigins: cfg.AllowedOrigins,
 		TrustedProxies: cfg.TrustedProxies,
 		Verifier:       auth.NewVerifier([]byte(cfg.JWTSecret)),
+		InternalAPIKey: cfg.InternalAPIKey,
 		Readiness: map[string]httpx.ReadinessCheck{
 			"postgres": func(ctx context.Context) error { return db.PingContext(ctx) },
 		},

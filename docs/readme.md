@@ -61,7 +61,7 @@ The development environment runs locally with Docker Compose.
 
 ```bash
 cp .env.example .env      # fill in every value; JWT_SECRET: openssl rand -base64 48
-make up                   # postgres, rabbitmq, identity, catalog, inventory and payment (+ migrations), nginx gateway
+make up                   # postgres, rabbitmq, identity, catalog, inventory, payment and order (+ migrations), nginx gateway
 make seed-admin           # creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD
 make seed-catalog         # loads demo categories and products
 make seed-inventory       # gives every demo variant an opening stock
@@ -98,7 +98,9 @@ The gateway listens on `http://localhost:8080`. Current API surface:
 | GET | `/api/v1/admin/stock/:variantId/movements` | admin |
 | POST, GET | `/api/v1/internal/reservations[/:id]`, `/:id/commit`, `/:id/release`, `/by-order/:orderId` | internal key, not routed by the gateway |
 
-Reservations are the service-to-service API the Order Service will drive: reserving is idempotent per
+Catalog also has one internal endpoint (`POST /api/v1/internal/variants/lookup`, current price and name of many variants) that the Order Service uses to price carts.
+
+Reservations are the service-to-service API the Order Service drives: reserving is idempotent per
 order, committing turns a hold into a sale, releasing is the compensating action, and holds that are
 never resolved expire after `RESERVATION_TTL` (default 15 minutes).
 
@@ -118,7 +120,25 @@ that creates or changes a payment.
 The provider is a fake whose answer is chosen by the test card token (`tok_visa`, `tok_declined`, `tok_flaky`, ...);
 see [`docs/openapi/payment.yaml`](openapi/payment.yaml) for the events and the full list.
 
-Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`).
+**Order**
+
+Every route needs a signed-in user and only ever touches that user's own cart and orders (the customer id comes from the
+token, never from the path or the body). Prices always come from Catalog; a price sent by the client is ignored.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET, DELETE | `/api/v1/cart` | signed-in user |
+| PUT, DELETE | `/api/v1/cart/items/:variantId` (body: `quantity`) | signed-in user |
+| POST | `/api/v1/checkout` (header `Idempotency-Key`, body: `payment_method`) | signed-in user |
+| GET | `/api/v1/orders[/:id]` | signed-in user, own orders only |
+| GET | `/api/v1/admin/orders[/:id]` (`status`, `customer_id`, `page`, `page_size`) | admin |
+
+Checkout answers as soon as stock is held and payment has been requested (`status: awaiting_payment`); poll the order
+until it is `confirmed` or `cancelled`. Repeating a checkout with the same `Idempotency-Key` returns the same order.
+A recovery job repairs orders that get stuck between saga steps. See [`docs/openapi/order.yaml`](openapi/order.yaml)
+and [`docs/notes/14-order-servisi-ve-saga.md`](notes/14-order-servisi-ve-saga.md).
+
+Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`, order: `8086`).
 
 ## Project Goals
 

@@ -244,3 +244,23 @@ func numberImages(in []domain.Image) []domain.Image {
 	}
 	return out
 }
+
+// MaxSnapshotIDs bounds one lookup so a caller cannot ask for the whole catalog.
+const MaxSnapshotIDs = 100
+
+// VariantSnapshots answers the Order service: current price and name of the given
+// variants. Unknown ids are left out of the result; the caller decides what that means.
+func (s *ProductService) VariantSnapshots(ctx context.Context, ids []uuid.UUID) ([]domain.VariantSnapshot, error) {
+	if len(ids) > MaxSnapshotIDs {
+		return nil, domain.ErrTooManyVariants
+	}
+	seen := make(map[uuid.UUID]bool, len(ids))
+	unique := ids[:0:0]
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			unique = append(unique, id)
+		}
+	}
+	return s.variants.Snapshots(ctx, unique)
+}

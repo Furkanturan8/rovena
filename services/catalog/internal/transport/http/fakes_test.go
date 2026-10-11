@@ -240,6 +240,22 @@ func (r variantRepo) GetByID(_ context.Context, id uuid.UUID) (*domain.Variant, 
 	return nil, domain.ErrVariantNotFound
 }
 
+func (r variantRepo) Snapshots(_ context.Context, ids []uuid.UUID) ([]domain.VariantSnapshot, error) {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []domain.VariantSnapshot
+	for _, id := range ids {
+		for _, p := range r.s.products {
+			for _, v := range p.Variants {
+				if v.ID == id {
+					out = append(out, domain.VariantSnapshot{Variant: v, ProductName: p.Name, ProductStatus: p.Status})
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
 func (r variantRepo) Update(_ context.Context, v *domain.Variant) error {
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()

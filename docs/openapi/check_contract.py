@@ -2,16 +2,15 @@
 
 For every call it verifies that the status code is documented, the JSON body matches the
 documented schema, and no undocumented fields appear. It creates rows whose names start with
-"speccheck" (Inventory: SKUs starting with "SPC-", Payment: idempotency keys starting with "speccheck-") and removes
-them at the end (psql inside the postgres container).
+"speccheck" (Inventory: SKUs starting with "SPC-"; Order and Payment: everything that belongs to the spec-check user) and
+removes them at the end (psql inside the postgres container).
 
     python3 -m venv .venv && .venv/bin/pip install openapi-spec-validator jsonschema pyyaml requests
     .venv/bin/python docs/openapi/check_contract.py
 
-Uses INTERNAL_API_KEY (environment variable, else .env) for the Inventory and Payment /internal endpoints (service ports
-8083 and 8085). It must be the key the running containers were started with.
-Payments are created the way production does it: a PaymentRequested event is published to RabbitMQ (through its
-management API on port 15672) and the running Payment service handles it.
+Uses INTERNAL_API_KEY (environment variable, else .env) for the Catalog, Inventory and Payment /internal endpoints (service ports
+8082, 8083 and 8085). It must be the key the running containers were started with.
+Payments are created the way production does it: by real checkouts in the Order section, through the whole saga.
 Uses ~12 of the 20 requests/minute that /auth/* allows per IP, so do not run it twice within a minute.
 """
 import atexit, json, os, sys, time, subprocess, uuid, yaml, requests
@@ -21,8 +20,10 @@ ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2])
 G = "http://localhost:8080"
 INTERNAL = "http://localhost:8083"  # inventory /internal/* is not routed by the gateway
 PAYMENT = "http://localhost:8085"   # payment /internal/* neither
-INTERNALS = {"inventory": INTERNAL, "payment": PAYMENT}
-specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory", "payment")}
+CATALOG = "http://localhost:8082"   # nor catalog /internal/*
+ORDER = "http://localhost:8086"     # order serves its health checks only on its own port
+INTERNALS = {"inventory": INTERNAL, "payment": PAYMENT, "catalog": CATALOG}
+specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory", "payment", "order")}
 problems, seen = [], set()
 
 def resolve(doc, node):
@@ -75,8 +76,8 @@ def check(api, method, template, resp, note=""):
         if want and resp.headers.get(h) != want:
             problems.append(f"{label}: header {h} = {resp.headers.get(h)!r}, spec says {want!r}")
 
-def call(api, method, template, path=None, token=None, json_body=None, raw=None, note="", base=G, key=None):
-    headers = {}
+def call(api, method, template, path=None, token=None, json_body=None, raw=None, note="", base=G, key=None, headers=None):
+    headers = dict(headers or {})
     if token: headers["Authorization"] = f"Bearer {token}"
     if key: headers["X-Internal-Key"] = key
     if raw is not None:
@@ -103,6 +104,19 @@ def cleanup():
         DELETE FROM outbox_events WHERE envelope->>'correlation_id' LIKE 'speccheck-%';
         DELETE FROM payments WHERE idempotency_key LIKE 'speccheck-%';""")
 
+    # Orders are removed by the idempotency keys this script chose; their carts, events and payments with them.
+    uid = globals().get("user_id")
+    if uid:
+        oids = ",".join(f"'{o}'" for o in order_ids) or "'00000000-0000-0000-0000-000000000000'"
+        psql("orders", f"""
+            DELETE FROM outbox_events WHERE envelope->'payload'->>'order_id' IN ({oids});
+            DELETE FROM orders WHERE customer_id = '{uid}';
+            DELETE FROM carts WHERE customer_id = '{uid}';""")
+        psql("payment", f"""
+            DELETE FROM outbox_events WHERE envelope->'payload'->>'order_id' IN ({oids});
+            DELETE FROM payments WHERE customer_id = '{uid}';""")
+
+order_ids = []  # every order this script places, for the cleanup above
 atexit.register(cleanup)
 
 # ---- static: every example in the spec must satisfy its own schema
@@ -315,22 +329,119 @@ call(N, "POST", R + "/{id}/release", path=f"{R}/nope/release", base=INTERNAL, ke
 for hp in ("healthz", "readyz"):
     resp = requests.get(f"{INTERNAL}/{hp}"); check(N, "GET", f"/{hp}", resp)
 
-# ================================================================= payment
-P = "payment"
-RABBIT = "http://localhost:15672/api/exchanges/%2F/rovena.events/publish"
-RABBIT_AUTH = (env["RABBITMQ_USER"], env["RABBITMQ_PASSWORD"])
+# ================================================================= order
+O = "order"
+oh = lambda key: {"Idempotency-Key": key}
+cat_admin = {"Authorization": f"Bearer {admin}"}
+op = requests.post(G + "/api/v1/admin/products", headers=cat_admin, json={
+    "name": mark + " order product", "brand": "Spec", "category_id": sub_id, "status": "active",
+    "images": [{"url": "https://img.test/o.jpg", "alt": "o"}],
+    "variants": [{"sku": f"spc-{tag}-o1", "size": "M", "color": "Kirmizi", "price_cents": 1500},
+                 {"sku": f"spc-{tag}-o2", "size": "L", "color": "Kirmizi", "price_cents": 700}]}).json()["data"]
+o_pid = op["id"]; (o1, o1_sku), (o2, o2_sku) = [(v["id"], v["sku"]) for v in op["variants"]]
+for vid_, sku_ in ((o1, o1_sku), (o2, o2_sku)):
+    requests.post(G + "/api/v1/admin/stock", headers=cat_admin, json={"variant_id": vid_, "sku": sku_, "on_hand": 5, "reason": "speccheck"}).raise_for_status()
 
-def request_payment(order_id, customer_id, method, amount=459900):
-    """Publish PaymentRequested the way the Order service will; the running Payment service picks it up."""
-    envelope = {"event_id": str(uuid.uuid4()), "type": "PaymentRequested", "version": 1,
-                "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "correlation_id": f"speccheck-{tag}",
-                "payload": {"order_id": order_id, "customer_id": customer_id, "idempotency_key": f"speccheck-{order_id}",
-                            "amount_cents": amount, "currency": "TRY", "payment_method": method}}
-    r = requests.post(RABBIT, auth=RABBIT_AUTH, json={
-        "properties": {"delivery_mode": 2, "content_type": "application/json"}, "routing_key": "PaymentRequested",
-        "payload": json.dumps(envelope), "payload_encoding": "string"})
-    if not r.ok or not r.json().get("routed"):
-        sys.exit(f"could not publish PaymentRequested: {r.status_code} {r.text}")
+# catalog: the internal lookup the Order service uses
+LK = "/api/v1/internal/variants/lookup"
+lk = call(C, "POST", LK, base=CATALOG, key=KEY, json_body={"variant_ids": [o1, o2, str(uuid.uuid4())]})              # 200, unknown id left out
+if len(lk.json()["data"]) != 2: problems.append("catalog lookup should leave unknown ids out")
+call(C, "POST", LK, base=CATALOG, json_body={"variant_ids": [o1]}, note="(no key)")                                 # 401
+call(C, "POST", LK, base=CATALOG, key="wrong-key", json_body={"variant_ids": [o1]}, note="(wrong key)")             # 401
+call(C, "POST", LK, base=CATALOG, key=KEY, json_body={"variant_ids": []})                                           # 422
+call(C, "POST", LK, base=CATALOG, key=KEY, json_body={"variant_ids": ["nope"]})                                     # 422
+call(C, "POST", LK, base=CATALOG, key=KEY, raw="{")                                                                  # 400
+
+def wait_order(oid, statuses=("confirmed", "cancelled")):
+    for _ in range(300):
+        o = requests.get(f"{G}/api/v1/orders/{oid}", headers={"Authorization": f"Bearer {me_tok}"}).json()["data"]
+        if o["status"] in statuses:
+            return o
+        time.sleep(0.1)
+    sys.exit(f"order {oid} did not reach {statuses}; are payment, inventory and order running?")
+
+def place(key, method, note=""):
+    r = call(O, "POST", "/api/v1/checkout", token=me_tok, headers=oh(key), json_body={"payment_method": method}, note=note)
+    if r.status_code in (200, 201): order_ids.append(r.json()["data"]["id"])
+    return r
+
+def put(vid_, qty, **kw):
+    return call(O, "PUT", "/api/v1/cart/items/{variantId}", path=f"/api/v1/cart/items/{vid_}", token=me_tok, json_body={"quantity": qty}, **kw)
+
+call(O, "GET", "/api/v1/cart", token=me_tok, note="(empty)")                                                         # 200
+r = call(O, "PUT", "/api/v1/cart/items/{variantId}", path=f"/api/v1/cart/items/{o1}", token=me_tok,
+         json_body={"quantity": 2, "price_cents": 1, "unit_price_cents": 1})                                          # 200, price ignored
+if r.json()["data"]["total_cents"] != 3000: problems.append(f"order: the cart trusted a client price: {r.json()['data']}")
+put(o2, 1)                                                                                                            # 200
+put(o1, 0)                                                                                                            # 422
+put(o1, 100)                                                                                                          # 422
+put(str(uuid.uuid4()), 1)                                                                                             # 409 not on sale
+call(O, "PUT", "/api/v1/cart/items/{variantId}", path="/api/v1/cart/items/nope", token=me_tok, json_body={"quantity": 1})   # 400
+call(O, "PUT", "/api/v1/cart/items/{variantId}", path=f"/api/v1/cart/items/{o1}", token=me_tok, raw="{")             # 400
+call(O, "GET", "/api/v1/cart", token=me_tok)                                                                         # 200 two lines
+call(O, "DELETE", "/api/v1/cart/items/{variantId}", path=f"/api/v1/cart/items/{o2}", token=me_tok)                   # 200
+call(O, "DELETE", "/api/v1/cart/items/{variantId}", path="/api/v1/cart/items/nope", token=me_tok)                    # 400
+
+# checkout: refused requests first (the cart still holds 2 x o1)
+call(O, "POST", "/api/v1/checkout", token=me_tok, json_body={"payment_method": "tok_visa"}, note="(no key)")         # 400
+call(O, "POST", "/api/v1/checkout", token=me_tok, headers=oh("k" * 65), json_body={"payment_method": "tok_visa"}, note="(long key)")  # 400
+call(O, "POST", "/api/v1/checkout", token=me_tok, headers=oh(f"speccheck-{tag}-x"), json_body={}, note="(no method)")  # 422
+call(O, "POST", "/api/v1/checkout", token=me_tok, headers=oh(f"speccheck-{tag}-x"), raw="{", note="(bad json)")       # 400
+
+k1 = f"speccheck-{tag}-1"
+first = place(k1, "tok_visa")                                                                                         # 201
+if first.json()["data"]["status"] != "awaiting_payment": problems.append(f"order: unexpected first status {first.json()['data']}")
+o_paid = first.json()["data"]["id"]
+again = place(k1, "tok_visa", note="(replay)")                                                                        # 200
+if again.json()["data"]["id"] != o_paid: problems.append("order: a replayed checkout returned another order")
+place(k1, "tok_declined", note="(key reused)")                                                                        # 422
+place(f"speccheck-{tag}-empty", "tok_visa", note="(cart is empty)")                                                   # 422
+done = wait_order(o_paid)
+if done["status"] != "confirmed": problems.append(f"order: paid order ended {done}")
+
+# a declined card, an unavailable item, and stock running out
+put(o1, 1)
+declined = place(f"speccheck-{tag}-2", "tok_declined")                                                                # 201
+o_declined = declined.json()["data"]["id"]
+d = wait_order(o_declined)
+if (d["status"], d.get("failure_code")) != ("cancelled", "card_declined"): problems.append(f"order: declined order ended {d}")
+
+put(o1, 99)
+oos = place(f"speccheck-{tag}-3", "tok_visa")                                                                         # 201, cancelled at once
+if oos.json()["data"].get("failure_code") != "out_of_stock": problems.append(f"order: expected out_of_stock, got {oos.json()['data']}")
+
+put(o2, 1)
+requests.patch(f"{G}/api/v1/admin/products/{o_pid}/variants/{o2}", headers=cat_admin, json={"active": False}).raise_for_status()
+place(f"speccheck-{tag}-4", "tok_visa", note="(item switched off)")                                                  # 409
+put(o2, 1, note="(switched off)")                                                                                     # 409
+call(O, "DELETE", "/api/v1/cart", token=me_tok)                                                                       # 204
+
+# reading orders
+mine = call(O, "GET", "/api/v1/orders", token=me_tok)                                                                # 200
+if mine.json()["data"]["total"] != 3: problems.append(f"order: expected 3 orders, got {mine.json()['data']['total']}")
+call(O, "GET", "/api/v1/orders", path="/api/v1/orders?status=confirmed&page=1&page_size=1", token=me_tok, note="?status")
+call(O, "GET", "/api/v1/orders", path="/api/v1/orders?status=bogus", token=me_tok)                                    # 400
+call(O, "GET", "/api/v1/orders/{id}", path=f"/api/v1/orders/{o_paid}", token=me_tok)                                  # 200
+call(O, "GET", "/api/v1/orders/{id}", path=f"/api/v1/orders/{o_paid}", token=admin, note="(not the owner)")           # 404
+call(O, "GET", "/api/v1/orders/{id}", path=f"/api/v1/orders/{uuid.uuid4()}", token=me_tok)                            # 404
+call(O, "GET", "/api/v1/orders/{id}", path="/api/v1/orders/nope", token=me_tok)                                       # 400
+
+A = "/api/v1/admin/orders"
+call(O, "GET", A, token=admin)                                                                                        # 200
+call(O, "GET", A, path=f"{A}?customer_id={user_id}&status=cancelled&page_size=1", token=admin, note="?filters")
+call(O, "GET", A, path=f"{A}?status=bogus", token=admin)                                                              # 400
+call(O, "GET", A, path=f"{A}?customer_id=nope", token=admin)                                                          # 400
+call(O, "GET", A + "/{id}", path=f"{A}/{o_paid}", token=admin)                                                        # 200
+call(O, "GET", A + "/{id}", path=f"{A}/{uuid.uuid4()}", token=admin)                                                  # 404
+call(O, "GET", A + "/{id}", path=f"{A}/nope", token=admin)                                                            # 400
+for hp in ("healthz", "readyz"):
+    resp = requests.get(f"{ORDER}/{hp}"); check(O, "GET", f"/{hp}", resp)
+
+# ================================================================= payment
+# Payments are never created through the API, so this section reads the ones the order section's
+# real checkouts produced (a paid order and a declined one). Publishing made-up PaymentRequested
+# events would leave PaymentSucceeded/Failed for orders Order does not know in its dead-letter queue.
+P = "payment"
 
 def wait_for_payment(order_id):
     for _ in range(100):
@@ -340,16 +451,13 @@ def wait_for_payment(order_id):
         time.sleep(0.1)
     sys.exit(f"payment for order {order_id} did not finish in time; is the payment service running?")
 
-paid_order, declined_order, foreign_order = (str(uuid.uuid4()) for _ in range(3))
-request_payment(paid_order, user_id, "tok_visa")
-request_payment(declined_order, user_id, "tok_declined")
-request_payment(foreign_order, str(uuid.uuid4()), "tok_visa")
-paid = wait_for_payment(paid_order); declined = wait_for_payment(declined_order); wait_for_payment(foreign_order)
+paid_order, declined_order = o_paid, o_declined
+paid = wait_for_payment(paid_order); declined = wait_for_payment(declined_order)
 
 B = "/api/v1/payments/by-order/{orderId}"
 call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}", token=me_tok)                                    # 200 succeeded
 call(P, "GET", B, path=f"/api/v1/payments/by-order/{declined_order}", token=me_tok, note="(failed)")               # 200 failed
-call(P, "GET", B, path=f"/api/v1/payments/by-order/{foreign_order}", token=me_tok, note="(not mine)")              # 404
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}", token=admin, note="(not mine)")                  # 404
 call(P, "GET", B, path=f"/api/v1/payments/by-order/{uuid.uuid4()}", token=me_tok)                                  # 404
 call(P, "GET", B, path="/api/v1/payments/by-order/nope", token=me_tok)                                             # 400
 call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}")                                                  # 401
@@ -379,7 +487,7 @@ for hp in ("healthz", "readyz"):
 for api, doc in specs.items():
     for tpl, ops in doc["paths"].items():
         for m, op in ops.items():
-            if m not in ("get", "post", "patch", "delete") or not op.get("security"):
+            if m not in ("get", "post", "put", "patch", "delete") or not op.get("security"):
                 continue
             path = tpl
             for name in ("id", "variantId", "orderId"):
@@ -399,7 +507,7 @@ print("\n== Documented but not exercised ==")
 for api, doc in specs.items():
     for tpl, ops in doc["paths"].items():
         for m, op in ops.items():
-            if m not in ("get", "post", "patch", "delete"): continue
+            if m not in ("get", "post", "put", "patch", "delete"): continue
             miss = [c for c in op["responses"] if (api, m, tpl, c) not in seen]
             if miss: print(f" {api}: {m.upper()} {tpl}: {', '.join(miss)}")
 print(f"\n{len(seen)} distinct (operation,status) pairs checked")

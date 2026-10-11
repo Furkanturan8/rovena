@@ -1,0 +1,574 @@
+openapi: 3.0.3
+info:
+  title: Rovena Order API
+  version: 1.0.0
+  description: |
+    The shopping cart, checkout and the customer's orders. The Order service also runs the checkout
+    **Saga** that ties Catalog, Inventory and Payment together (see `docs/architecture.md`, section 7).
+
+    | Group | Path | Who calls it | Access |
+    | --- | --- | --- | --- |
+    | Cart | `/api/v1/cart...` | the customer's app | `Authorization: Bearer <access_token>` of any user |
+    | Checkout | `/api/v1/checkout` | the customer's app | same, plus an `Idempotency-Key` header |
+    | Orders | `/api/v1/orders...` | the customer's app | same; a customer sees only their own orders |
+    | Admin | `/api/v1/admin/orders...` | admins | token of an admin |
+
+    There is no customer id in any path: it always comes from the token. Nothing here is routed to
+    other services' data: the Order service never reads another service's tables, it asks over REST
+    (Catalog for prices, Inventory for stock) or listens to events (Payment).
+
+    **Prices come from Catalog.** The cart stores only variant ids and quantities. Names and prices are
+    looked up whenever the cart is shown and when an order is placed; a price sent by the client is ignored.
+    An order keeps a **snapshot** of every line (name, SKU, size, colour, unit price), so later catalog
+    changes never rewrite history.
+
+    **Order states.**
+
+    | Status | Meaning |
+    | --- | --- |
+    | `pending` | Order exists; stock is not held yet (Inventory was unreachable). The service keeps trying and cancels after 5 minutes (`checkout_timeout`). |
+    | `awaiting_payment` | Stock is held and a payment was requested. |
+    | `paid` | Payment succeeded; committing the stock is still in progress. Normally lasts milliseconds. |
+    | `confirmed` | Final. Paid, stock committed. |
+    | `cancelled` | Final. See `failure_code`. |
+
+    `failure_code` of a cancelled order: `out_of_stock`, `item_unavailable`, `checkout_timeout`,
+    `payment_timeout` (no answer after three payment requests), `reservation_lost` (the hold expired before
+    the payment arrived), or the payment's own code: `card_declined`, `insufficient_funds`, `expired_card`,
+    `invalid_payment_method`, `amount_limit_exceeded`, `provider_unavailable`. `failure_message` is safe to
+    show to the customer.
+
+    **Checkout is asynchronous after its first step.** `POST /checkout` returns as soon as stock has been
+    held and the payment has been *requested*; the payment itself finishes a moment later. Poll
+    `GET /orders/{id}` until `status` is `confirmed` or `cancelled`. An order is only final in those two states.
+
+    **Idempotency.** Every checkout needs an `Idempotency-Key` header (1-64 printable ASCII characters
+    without spaces; a UUID works well). Sending the same key again returns the same order with **200**
+    instead of creating a second one, and never charges twice. Keys are scoped to the customer. Reusing a
+    key with a different `payment_method` is rejected with 422.
+
+    **Money** is an integer in minor units: `459900` = 4.599,00 TRY.
+
+    ## Events (RabbitMQ)
+
+    Envelope and exchange are described in the Payment API document.
+
+    **Publishes** (through the outbox): `PaymentRequested` v1, `OrderConfirmed` v1
+    (`order_id`, `customer_id`, `total_cents`, `currency`) and `OrderCancelled` v1
+    (`order_id`, `customer_id`, `code`, `message`).
+    **Consumes** (queue `order.payment-results`): `PaymentSucceeded` and `PaymentFailed`.
+
+    **Response envelope.** Success: `{"success": true, "data": ...}`.
+    Error: `{"success": false, "message": "...", "fields": {...}}`.
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60, and 10 for checkout); beyond that it answers 429 with the usual JSON error and a `Retry-After` header.
+tags:
+  - name: Cart
+    description: The signed-in customer's cart
+  - name: Checkout
+    description: Turn the cart into an order
+  - name: Orders
+    description: The customer's own orders
+  - name: Orders (admin)
+    description: Requires the `admin` role
+  - name: Health
+    description: Only on the service port (`http://localhost:8086`), not through the gateway
+paths:
+  /api/v1/cart:
+    get:
+      tags: [Cart]
+      summary: Show my cart
+      description: |
+        Priced with Catalog's current prices. A line whose variant was deactivated or removed after it was
+        added is still listed, with `available: false` and no price; it is left out of `total_cents`, and
+        checkout refuses to go on until the customer removes it.
+      operationId: getCart
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: The cart (`items` is an empty array for an empty cart)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CartEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      tags: [Cart]
+      summary: Empty my cart
+      operationId: clearCart
+      security: [{bearerAuth: []}]
+      responses:
+        '204': {description: Done}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/cart/items/{variantId}:
+    put:
+      tags: [Cart]
+      summary: Set the quantity of a variant
+      description: |
+        Adds the variant to the cart or replaces its quantity. The variant must exist and be on sale.
+        The body has no price field; any extra field is ignored. A cart holds at most 50 different variants
+        and at most 99 of each.
+      operationId: setCartItem
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetCartItemRequest'}
+      responses:
+        '200':
+          description: The cart after the change
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CartEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409':
+          description: The variant is not on sale (`fields.variant_id` names it), or the cart is full
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: An item in the cart is no longer available, fields: {variant_id: 6f9d8e2a-3c1b-4a5d-9e7f-0a1b2c3d4e5f}}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+    delete:
+      tags: [Cart]
+      summary: Remove a variant from my cart
+      description: Succeeds even if the variant was not in the cart.
+      operationId: removeCartItem
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/VariantId'}
+      responses:
+        '200':
+          description: The cart after the change
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CartEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/checkout:
+    post:
+      tags: [Checkout]
+      summary: Place an order from my cart
+      description: |
+        Prices the cart with Catalog, stores the order with a snapshot of every line, empties the cart,
+        holds the stock in Inventory and asks Payment to charge the customer.
+
+        * **201**: a new order. Look at `status`: `awaiting_payment` is the normal result; `cancelled` with
+          `failure_code: out_of_stock` means the stock ran out (the order exists so the attempt is on record);
+          `pending` means Inventory could not answer right now and the service will finish the job by itself.
+        * **200**: the `Idempotency-Key` was used before; the existing order is returned.
+        * **409**: the cart changed while the order was being placed (nothing was created; review the cart
+          and try again) or a line can no longer be bought (`fields.variant_id`).
+        * **503**: Catalog could not be reached. Nothing was created and the cart is untouched.
+
+        `payment_method` is a provider token (see the Payment API for the test tokens), never a card number.
+      operationId: checkout
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 64}
+          description: Printable ASCII, no spaces. Repeat the same value to retry safely.
+          example: 3f5b9c2e-7a41-4d0e-9a53-1c2d3e4f5a6b
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CheckoutRequest'}
+      responses:
+        '200':
+          description: The key was used before; this is the order it created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderEnvelope'}
+        '201':
+          description: A new order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderEnvelope'}
+        '400':
+          description: Missing or malformed `Idempotency-Key`, or unreadable body
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: The Idempotency-Key header is required}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409':
+          description: The cart changed during checkout, or a line can no longer be bought
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: 'The cart changed during checkout, please review it and try again'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '503': {$ref: '#/components/responses/Unavailable'}
+  /api/v1/orders:
+    get:
+      tags: [Orders]
+      summary: My orders
+      description: Newest first. Only the caller's own orders.
+      operationId: listMyOrders
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Status'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of orders
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/orders/{id}:
+    get:
+      tags: [Orders]
+      summary: One of my orders, with its status history
+      description: |
+        Somebody else's order answers **404**, exactly like an id that does not exist, so the endpoint does
+        not reveal which order ids exist. `history` lists the statuses the order went through.
+      operationId: getMyOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderDetailEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/OrderNotFound'}
+  /api/v1/admin/orders:
+    get:
+      tags: [Orders (admin)]
+      summary: List all orders
+      description: Newest first, with the saga bookkeeping (`reservation_state`, `payment_requests`).
+      operationId: adminListOrders
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/Status'}
+        - name: customer_id
+          in: query
+          schema: {type: string, format: uuid}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of orders
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminOrderPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/admin/orders/{id}:
+    get:
+      tags: [Orders (admin)]
+      summary: Get any order, with its full history
+      operationId: adminGetOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The order with operational detail and every recorded step
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminOrderDetailEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/OrderNotFound'}
+  /healthz:
+    servers: [{url: 'http://localhost:8086', description: Order service port}]
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+  /readyz:
+    servers: [{url: 'http://localhost:8086', description: Order service port}]
+    get:
+      tags: [Health]
+      summary: Readiness (database reachable)
+      operationId: readyz
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+        '503':
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token issued by the Identity API. The admin endpoints need an admin's token.
+  parameters:
+    VariantId:
+      name: variantId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    OrderId:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Status:
+      name: status
+      in: query
+      schema: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+      description: Values below 1 are treated as 1.
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: Values above 100 are clamped to 100.
+  responses:
+    BadRequest:
+      description: Invalid id or invalid query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid id}
+    Unauthorized:
+      description: Missing, malformed, expired or invalidly signed access token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid or expired access token}
+    Forbidden:
+      description: The token is valid but the user is not an admin
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Forbidden}
+    OrderNotFound:
+      description: No such order (or, for customers, not theirs)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Order not found}
+    ValidationFailed:
+      description: The request is well-formed but not acceptable (bad quantity, empty cart, reused idempotency key, ...)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: The cart is empty}
+    Unavailable:
+      description: Catalog could not be reached; nothing was changed
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: 'A required service is temporarily unavailable, please try again'}
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string}
+        fields:
+          type: object
+          additionalProperties: {type: string}
+    Readiness:
+      type: object
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, enum: [ok, unavailable]}
+    SetCartItemRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity: {type: integer, minimum: 1, maximum: 99, example: 2}
+    CheckoutRequest:
+      type: object
+      required: [payment_method]
+      properties:
+        payment_method:
+          type: string
+          maxLength: 128
+          description: Provider token for the card, never a card number
+          example: tok_visa
+    CartLine:
+      type: object
+      required: [variant_id, product_name, sku, size, color, unit_price_cents, quantity, line_total_cents, available]
+      properties:
+        variant_id: {type: string, format: uuid}
+        product_name: {type: string}
+        sku: {type: string}
+        size: {type: string}
+        color: {type: string}
+        unit_price_cents: {type: integer, format: int64, description: 'Current price; 0 when the variant no longer exists'}
+        quantity: {type: integer}
+        line_total_cents: {type: integer, format: int64}
+        available: {type: boolean, description: False when the variant can no longer be bought}
+    Cart:
+      type: object
+      required: [items, total_cents, currency]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/CartLine'}
+        total_cents: {type: integer, format: int64, description: Counts only available lines}
+        currency: {type: string, example: TRY, description: 'Empty for an empty cart'}
+    CartEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Cart'}
+    OrderItem:
+      type: object
+      description: A line as it was when the order was placed
+      required: [variant_id, product_id, sku, product_name, size, color, unit_price_cents, quantity, line_total_cents]
+      properties:
+        variant_id: {type: string, format: uuid}
+        product_id: {type: string, format: uuid}
+        sku: {type: string}
+        product_name: {type: string}
+        size: {type: string}
+        color: {type: string}
+        unit_price_cents: {type: integer, format: int64}
+        quantity: {type: integer}
+        line_total_cents: {type: integer, format: int64}
+    Order:
+      type: object
+      required: [id, status, total_cents, currency, items, created_at, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+        total_cents: {type: integer, format: int64, example: 3700}
+        currency: {type: string, example: TRY}
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/OrderItem'}
+        failure_code: {type: string, description: Present only on a cancelled order}
+        failure_message: {type: string, description: Present only on a cancelled order}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    OrderEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Order'}
+    OrderPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Order'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    OrderPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/OrderPage'}
+    HistoryEntry:
+      type: object
+      required: [status, at]
+      properties:
+        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+        at: {type: string, format: date-time}
+    OrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/Order'
+        - type: object
+          required: [history]
+          properties:
+            history:
+              type: array
+              items: {$ref: '#/components/schemas/HistoryEntry'}
+    OrderDetailEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/OrderDetail'}
+    AdminOrder:
+      allOf:
+        - $ref: '#/components/schemas/Order'
+        - type: object
+          required: [customer_id, reservation_id, reservation_state, payment_requests]
+          properties:
+            customer_id: {type: string, format: uuid}
+            reservation_id: {type: string, format: uuid, nullable: true}
+            reservation_state:
+              type: string
+              enum: [none, held, committed, released]
+              description: What the order believes about its stock reservation in Inventory
+            payment_requests: {type: integer, description: How many times PaymentRequested was sent}
+    AdminOrderPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminOrder'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    AdminOrderPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AdminOrderPage'}
+    AdminHistoryEntry:
+      type: object
+      required: [from, to, reason, at]
+      properties:
+        from: {type: string, nullable: true, description: Null for the first entry}
+        to: {type: string}
+        reason: {type: string}
+        at: {type: string, format: date-time}
+    AdminOrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminOrder'
+        - type: object
+          required: [history]
+          properties:
+            history:
+              type: array
+              items: {$ref: '#/components/schemas/AdminHistoryEntry'}
+    AdminOrderDetailEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AdminOrderDetail'}

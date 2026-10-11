@@ -14,6 +14,8 @@ func MapDomainError(err error) (*errorx.AppError, bool) {
 		return errorx.WithMessage(errorx.ErrNotFound, "Category not found"), true
 	case errors.Is(err, domain.ErrProductNotFound):
 		return errorx.WithMessage(errorx.ErrNotFound, "Product not found"), true
+	case errors.Is(err, domain.ErrTooManyVariants):
+		return errorx.WithMessage(errorx.ErrValidation, "Too many variant ids"), true
 	case errors.Is(err, domain.ErrVariantNotFound):
 		return errorx.WithMessage(errorx.ErrNotFound, "Variant not found"), true
 	case errors.Is(err, domain.ErrSlugTaken):

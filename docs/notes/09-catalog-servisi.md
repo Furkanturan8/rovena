@@ -197,4 +197,4 @@ Hepsi yakalandı. Bu işlem otomatik bir araçla değil elle yapıldı; ileride 
 ## Sonraki adımlarla bağlantı
 
 - **Inventory** varyant id'sini kullanarak stok tutuyor ([11](11-inventory-servisi.md)). Yeni bir varyant eklendiğinde Inventory'nin bundan haberdar olması için Catalog bir olay (`VariantCreated`) yayınlayacak. Bu, Transactional Outbox'ın ilk gerçek kullanım yeri olabilir.
-- **Order** sipariş anında ürün adı, varyant ve fiyatı kendi tablosuna **kopyalar**; sonradan Catalog'da fiyat değişse de eski sipariş değişmez.
+- **Order** sipariş anında ürün adı, varyant ve fiyatı kendi tablosuna **kopyalar**; sonradan Catalog'da fiyat değişse de eski sipariş değişmez ([14](14-order-servisi-ve-saga.md)). Fiyatı almak için Catalog'a bu iş için eklenmiş **dahili** bir uç vardır: `POST /api/v1/internal/variants/lookup` (internal anahtar ister, gateway'den geçmez). Verilen varyant id'lerinin güncel ad/fiyat/`sellable` bilgisini döner; `sellable` hem varyant hem ürün `active` ise doğrudur.

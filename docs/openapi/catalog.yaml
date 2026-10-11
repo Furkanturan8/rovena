@@ -32,6 +32,8 @@ tags:
   - name: Categories (admin)
   - name: Products (admin)
   - name: Variants (admin)
+  - name: Variants (internal)
+    description: Service-to-service; requires the internal key; not available through the gateway
   - name: Health
     description: Only on the service port, not through the gateway
 paths:
@@ -388,6 +390,37 @@ paths:
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/internal/variants/lookup:
+    servers: [{url: 'http://localhost:8082', description: Catalog service port}]
+    post:
+      tags: [Variants (internal)]
+      summary: Current price and name of many variants
+      description: |
+        For the Order service, which keeps only variant ids in a cart and asks here for the price whenever it
+        needs one. Unknown ids are left out of the answer (the caller decides what that means). `sellable` is
+        true only when the variant **and** its product are `active`. Answers are never cached.
+        Not routed by the gateway: call it on the service port.
+      operationId: internalLookupVariants
+      security: [{internalKey: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LookupVariantsRequest'}
+      responses:
+        '200':
+          description: The variants that exist
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VariantSnapshotListEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401':
+          description: The `X-Internal-Key` header is missing or wrong
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: Missing or invalid internal API key}
+        '422': {$ref: '#/components/responses/ValidationError'}
   /healthz:
     servers: [{url: 'http://localhost:8082', description: Catalog service port}]
     get:
@@ -422,6 +455,11 @@ paths:
               schema: {$ref: '#/components/schemas/Readiness'}
 components:
   securitySchemes:
+    internalKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Key
+      description: Shared service-to-service key; the value of `INTERNAL_API_KEY` in `.env`. Never expose it to browsers.
     bearerAuth:
       type: http
       scheme: bearer
@@ -719,3 +757,33 @@ components:
       properties:
         success: {type: boolean, example: true}
         data: {$ref: '#/components/schemas/ProductPage'}
+    LookupVariantsRequest:
+      type: object
+      required: [variant_ids]
+      properties:
+        variant_ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: {type: string, format: uuid}
+    VariantSnapshot:
+      type: object
+      required: [variant_id, product_id, product_name, sku, size, color, price_cents, currency, sellable]
+      properties:
+        variant_id: {type: string, format: uuid}
+        product_id: {type: string, format: uuid}
+        product_name: {type: string}
+        sku: {type: string}
+        size: {type: string}
+        color: {type: string}
+        price_cents: {type: integer, format: int64}
+        currency: {type: string, example: TRY}
+        sellable: {type: boolean, description: True only when both the variant and its product are active}
+    VariantSnapshotListEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/VariantSnapshot'}
