@@ -55,6 +55,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	db = telemetry.InstrumentBun(db) // one span per query, inside the trace of the request that caused it
 	defer func() { _ = db.Close() }()
 
 	app := transport.NewApp(transport.Options{

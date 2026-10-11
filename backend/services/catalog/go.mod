@@ -42,6 +42,8 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/tmthrgd/go-hex v0.0.0-20190904060850-447a3041c3bc // indirect
+	github.com/uptrace/bun/extra/bunotel v1.3.0 // indirect
+	github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect

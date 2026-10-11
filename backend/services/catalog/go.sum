@@ -85,6 +85,10 @@ github.com/uptrace/bun/dialect/pgdialect v1.3.0 h1:0ZkGqGugxaPCxko4DV2f4d7i+FnM2
 github.com/uptrace/bun/dialect/pgdialect v1.3.0/go.mod h1:kP5HGEpAX8iJCqj3WHm04XnoeBPacdCN1P2HiwMtHpg=
 github.com/uptrace/bun/driver/pgdriver v1.3.0 h1:T+zyNIlbKUmVFLyaEZTN+pQNNt6eYmgLzYWwnCNh/Zw=
 github.com/uptrace/bun/driver/pgdriver v1.3.0/go.mod h1:dARxa/PXsaP0bbvQHQxGy4wiMK409XFNrCvWF5HKX/8=
+github.com/uptrace/bun/extra/bunotel v1.3.0 h1:rkmMmUsZEdMVOkNN0ldweZYhbngGpJBt0T8M83V0JDg=
+github.com/uptrace/bun/extra/bunotel v1.3.0/go.mod h1:KEaPX5PS3DsbdWnXQII6Cno7uMraZXmT2UU17CZd39I=
+github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2 h1:ZjUj9BLYf9PEqBn8W/OapxhPjVRdC6CsXTdULHsyk5c=
+github.com/uptrace/opentelemetry-go-extra/otelsql v0.3.2/go.mod h1:O8bHQfyinKwTXKkiKNGmLQS7vRsqRxIQTFZpYpHK3IQ=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
 github.com/valyala/fasthttp v1.51.0 h1:8b30A5JlZ6C7AS81RsWjYMQmrZG6feChmgAolCl1SqA=
