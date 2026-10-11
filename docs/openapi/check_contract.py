@@ -16,14 +16,15 @@ Uses ~12 of the 20 requests/minute that /auth/* allows per IP, so do not run it 
 import atexit, json, os, sys, time, subprocess, uuid, yaml, requests
 from openapi_schema_validator import OAS30Validator
 
-ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2])
+ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "backend")  # compose file, .env and Makefile live here
+DOCS = str(__import__("pathlib").Path(__file__).resolve().parent)
 G = "http://localhost:8080"
 INTERNAL = "http://localhost:8083"  # inventory /internal/* is not routed by the gateway
 PAYMENT = "http://localhost:8085"   # payment /internal/* neither
 CATALOG = "http://localhost:8082"   # nor catalog /internal/*
 ORDER = "http://localhost:8086"     # order serves its health checks only on its own port
 INTERNALS = {"inventory": INTERNAL, "payment": PAYMENT, "catalog": CATALOG}
-specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory", "payment", "order")}
+specs = {n: yaml.safe_load(open(f"{DOCS}/{n}.yaml")) for n in ("identity", "catalog", "inventory", "payment", "order")}
 problems, seen = [], set()
 
 def resolve(doc, node):

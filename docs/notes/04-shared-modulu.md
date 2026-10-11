@@ -1,6 +1,6 @@
 # 04 - Shared modülü
 
-`shared/` bütün servislerin ortak kullandığı küçük bir kütüphanedir. Amaç, her serviste aynı kodu kopyalamamaktır: hata biçimi, JSON cevap zarfı, token doğrulama gibi.
+`backend/shared/` bütün servislerin ortak kullandığı küçük bir kütüphanedir. Amaç, her serviste aynı kodu kopyalamamaktır: hata biçimi, JSON cevap zarfı, token doğrulama gibi.
 
 ## Neden dikkatli olmalı?
 

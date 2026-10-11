@@ -62,4 +62,4 @@ Testin işe yaradığı da denendi: şemadan bir alan silindiğinde ("undocument
 - Şema elle yazılıyor. Koddan otomatik üretmek (swag gibi) mümkün ama Go'da DTO etiketlerinden üretilen şemalar bu kadar ayrıntılı hata/örnek içermiyor; elle yazım + sözleşme testi bu projede daha öğretici bir denge.
 - Sözleşme testi bütün durumları denemez: 429, `readyz` 503 ve birkaç tekrarlayan 400 türü canlıda denenmez (birim ve HTTP testlerinde vardır).
 - Sözleşme testi çalışan yığın gerektirir, bu yüzden `make test` içinde değildir.
-- Dahili Inventory uçları için betiğin, çalışan konteynerin kullandığı `INTERNAL_API_KEY` değerini bilmesi gerekir. İlk denemede `.env` ile konteyner farklı anahtarlar kullandığı için 401 aldı; bu da yapılandırmanın tek kaynaktan (`.env`) okunmasının neden önemli olduğunu gösterdi.
+- Dahili Inventory uçları için betiğin, çalışan konteynerin kullandığı `INTERNAL_API_KEY` değerini bilmesi gerekir. İlk denemede `backend/.env` ile konteyner farklı anahtarlar kullandığı için 401 aldı; bu da yapılandırmanın tek kaynaktan (`backend/.env`) okunmasının neden önemli olduğunu gösterdi.

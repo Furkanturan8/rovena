@@ -26,7 +26,7 @@ sequenceDiagram
 
 ## Adım adım
 
-1. **Nginx** (`infrastructure/nginx/nginx.conf`): Yol `/api/v1/users` ile eşleşir. Hız sınırı kontrol edilir, `X-Request-ID` eklenir, istek `identity:8081`'e iletilir.
+1. **Nginx** (`backend/infrastructure/nginx/nginx.conf`): Yol `/api/v1/users` ile eşleşir. Hız sınırı kontrol edilir, `X-Request-ID` eklenir, istek `identity:8081`'e iletilir.
 
 2. **Fiber middleware zinciri** (`transport/http/router.go`), sırayla:
    - `RequestIDMiddleware`: kimlik numarasını al/üret.
@@ -35,7 +35,7 @@ sequenceDiagram
    - `helmet`: güvenlik başlıkları ekler.
    - `cors`: tarayıcı çapraz-kaynak kurallarını uygular.
 
-3. **Route grubu** `/users` için `auth.Middleware` çalışır (`shared/auth/middleware.go`): Bearer token'ı doğrular, `Claims`'i isteğe koyar. Token yoksa/bozuksa 401 ile burada biter.
+3. **Route grubu** `/users` için `auth.Middleware` çalışır (`backend/shared/auth/middleware.go`): Bearer token'ı doğrular, `Claims`'i isteğe koyar. Token yoksa/bozuksa 401 ile burada biter.
 
 4. **Handler** (`user_handler.go` → `UpdateMe`):
    - `currentUserID` ile token'dan kullanıcı id'sini alır. (Kullanıcı id'si **URL'den değil token'dan** gelir; başkasının profilini değiştirmek mümkün olmaz.)

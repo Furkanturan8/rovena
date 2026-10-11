@@ -1,6 +1,6 @@
 # 12 - Mesajlaşma: olaylar, Outbox ve idempotent tüketici
 
-Şimdiye kadar servisler birbirine yalnızca REST ile konuştu. Ödeme gibi yavaş, hata verebilen ve tekrar denenmesi gereken işler için bu yetmez: **RabbitMQ** üzerinden asenkron mesajlaşma gerekir. Bu bölüm, Order ve Payment servislerinin üzerine kurulacağı altyapıyı anlatır. Kod `shared/messaging` ve `shared/outbox` paketlerindedir; Payment ([13](13-payment-servisi.md)) ve Order ([14](14-order-servisi-ve-saga.md)) kullanıyor.
+Şimdiye kadar servisler birbirine yalnızca REST ile konuştu. Ödeme gibi yavaş, hata verebilen ve tekrar denenmesi gereken işler için bu yetmez: **RabbitMQ** üzerinden asenkron mesajlaşma gerekir. Bu bölüm, Order ve Payment servislerinin üzerine kurulacağı altyapıyı anlatır. Kod `backend/shared/messaging` ve `backend/shared/outbox` paketlerindedir; Payment ([13](13-payment-servisi.md)) ve Order ([14](14-order-servisi-ve-saga.md)) kullanıyor.
 
 Mesajlaşmayı güvenilir yapan üç parça var ve her biri ayrı bir riske karşı:
 
@@ -151,7 +151,7 @@ Bu işaret, handler'ın kendi veritabanı değişiklikleriyle **aynı transactio
 
 ## Servislere nasıl bağlanacak?
 
-1. `shared/outbox/schema.sql` dosyasını servisin `migrations/` klasörüne kopyala (goose biçiminde hazır). `outbox_events` ve `processed_events` tabloları oluşur.
+1. `backend/shared/outbox/schema.sql` dosyasını servisin `migrations/` klasörüne kopyala (goose biçiminde hazır). `outbox_events` ve `processed_events` tabloları oluşur.
 2. `main.go`'da `messaging.Dial` ile `Broker` aç, `outbox.NewRelay(db, broker, log).Run(ctx)` ile relay'i arka planda başlat (Inventory'deki `Expirer` ile aynı kalıp).
 3. Olay üreten kod `outbox.Emit` / `Add`'i iş transaction'ında çağırır.
 4. Olay tüketen servis bir `Subscription` tanımlar ve `broker.Consume`'a `Inbox.Handler` verir.

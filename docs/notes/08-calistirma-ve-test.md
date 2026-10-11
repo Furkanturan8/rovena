@@ -76,7 +76,7 @@ Aynı `order_id` ile ikinci istek 201 yerine **200** ve aynı rezervasyonu döne
 
 Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment), `curl localhost:8086/readyz` (Order) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
-Veritabanına bakmak için (parolayı `.env` içinden al):
+Veritabanına bakmak için (parolayı `backend/.env` içinden al):
 
 ```bash
 docker compose exec postgres psql -U identity -d identity -c 'select email, role from users;'
@@ -89,6 +89,7 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ```bash
 make test               # shared + identity + catalog + inventory + payment + order, HTTP testleri dahil (veritabanı gerekmez)
 make test-integration   # gerçek Postgres ve RabbitMQ'ya karşı shared (mesajlaşma), Catalog, Identity, Inventory, Payment ve Order testleri (önce make up)
+make e2e                # uçtan uca ve hata enjeksiyonu senaryoları (konteynerleri durdurup başlatır, ~3 dk), bkz. [15](15-uctan-uca-testler.md)
 make test-env           # (test-integration bunu kendisi çağırır) yalıtılmış test ortamı: orders_test ve payment_test veritabanları + RabbitMQ'da `test` vhost'u
 make vet     # statik analiz
 ```
@@ -97,7 +98,7 @@ make vet     # statik analiz
 
 | Dosya | Neyi doğrular |
 | --- | --- |
-| `shared/auth/verifier_test.go` | Token doğrulama: geçerli, yanlış secret, süresi geçmiş, yanlış yayıncı, `alg: none` vb. |
+| `backend/shared/auth/verifier_test.go` | Token doğrulama: geçerli, yanlış secret, süresi geçmiş, yanlış yayıncı, `alg: none` vb. |
 | `identity/internal/application/auth_service_test.go` | Kayıt (e-posta normalizasyonu, rol), çift kayıt, çok uzun parola, giriş hataları, refresh rotasyonu, **refresh yeniden kullanımında tüm oturumların iptali**, süresi dolmuş token, logout idempotentliği |
 | `identity/internal/application/user_service_test.go` | Son admin düşürülemez, başka admin varsa düşürülebilir, geçersiz rol |
 | `catalog/internal/application/service_test.go` | Slug çakışması, taslak varsayılanı, yayın ve son aktif varyant kuralları, taslak/arşivin herkese açık görünmemesi |
@@ -120,7 +121,7 @@ make vet     # statik analiz
 | `order/.../transport/consumer/payment_result_test.go` | Düzelmeyecek mesaj DLQ'ya, Inventory kesintisi retry'a |
 | `order/.../postgres/integration_test.go` | (Gerçek Postgres) eşzamanlı checkout tek sipariş, sepet sınırı, tek kazanan geçiş, durum+olay atomikliği, CHECK kısıtları, 12 eşzamanlı ödeme sonucu tek onay |
 | `catalog/.../transport/http/internal_test.go` | Dahili fiyat arama ucu: anahtar şart, `sellable` kuralı, bilinmeyen id atlanır |
-| `shared/messaging`, `shared/outbox` | Bkz. [12](12-mesajlasma.md) |
+| `backend/shared/messaging`, `backend/shared/outbox` | Bkz. [12](12-mesajlasma.md) |
 
 ### Testlerin üç katmanı
 
@@ -145,7 +146,7 @@ Order'ın birim ve HTTP testleri `internal/repository/memory` paketindeki bellek
 ### Henüz olmayanlar
 
 - Entegrasyon testleri şu an çalışan Compose Postgres'ine bağlanıyor; CI'da Testcontainers ile kendi kendine yeten hale getirilebilir.
-- Ortak kod (`shared/httpx`, `shared/auth` middleware) yalnızca servislerin HTTP testleri üzerinden dolaylı test ediliyor; kendi birim testleri yok (yalnızca `auth.Verifier`'ın var).
+- Ortak kod (`backend/shared/httpx`, `backend/shared/auth` middleware) yalnızca servislerin HTTP testleri üzerinden dolaylı test ediliyor; kendi birim testleri yok (yalnızca `auth.Verifier`'ın var).
 - Uçtan uca testler (birden fazla servis olunca).
 
 Bu eksikler bilerek not edilmiştir; ilerleyen adımlarda eklenecek.
@@ -155,7 +156,7 @@ Bu eksikler bilerek not edilmiştir; ilerleyen adımlarda eklenecek.
 | Belirti | Sebep / çözüm |
 | --- | --- |
 | `port is already allocated` | Başka bir program aynı portu kullanıyor. Postgres için host portu bu yüzden 5433. |
-| Compose "set in .env" hatası | `.env` eksik ya da bir değişken boş. |
+| Compose "set in .env" hatası | `backend/.env` eksik ya da bir değişken boş. |
 | Parolayı değiştirdim ama Postgres eski parolayı kullanıyor | Init betiği sadece ilk kurulumda çalışır. `docker compose down -v` ile volume'u sil. |
-| Compose "variable is not set" / "required variable ... is missing" uyarıları | `docker compose` komutunu proje kökü dışındaki bir klasörde (ör. `services/inventory`) çalıştırdın. Compose `docker-compose.yml`'i üst klasörde bulur ama **`.env`'i çalışma dizininden okur**, bu yüzden değişkenler boş gelir. Komutları proje kökünden çalıştır (`make up` zaten öyle yapar), ya da `docker compose --project-directory <kök> ...` kullan. |
+| Compose "variable is not set" / "required variable ... is missing" uyarıları | `docker compose` komutunu proje kökü dışındaki bir klasörde (ör. `backend/services/inventory`) çalıştırdın. Compose `backend/docker-compose.yml`'i üst klasörde bulur ama **`backend/.env`'i çalışma dizininden okur**, bu yüzden değişkenler boş gelir. Komutları proje kökünden çalıştır (`make up` zaten öyle yapar), ya da `docker compose --project-directory <kök> ...` kullan. |
 | `identity` sürekli yeniden başlıyor | `docker compose logs identity`: genelde `JWT_SECRET` 32 karakterden kısa veya veritabanına erişilemiyor. |

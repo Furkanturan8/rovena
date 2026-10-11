@@ -85,7 +85,7 @@ Charge(ctx, domain.ChargeRequest) (domain.ChargeResult, error)
 - **Kesin cevap** (`error == nil`): `Approved` doğru ya da yanlış (ret). Ret **son sözdür**, yeniden denenmez.
 - **Cevap yok** (`error != nil`): zaman aşımı, kesinti. Para çekilip çekilmediği **bilinmiyor**. Bu yüzden her çağrı idempotency anahtarını taşır.
 
-`infrastructure/provider/fake.go` sahte sağlayıcıdır. Sonucu **test kartı token'ı** belirler, böylece akışın her sonucu bilerek tetiklenebilir:
+`backend/infrastructure/provider/fake.go` sahte sağlayıcıdır. Sonucu **test kartı token'ı** belirler, böylece akışın her sonucu bilerek tetiklenebilir:
 
 | `payment_method` | Sonuç |
 | --- | --- |
@@ -142,7 +142,7 @@ Veritabanı ayrıca tutarsız durumları reddeder (`payments_outcome_consistent`
 
 | Yol | Ne yapar |
 | --- | --- |
-| `shared/events/payment.go` | Olay sözleşmesi: tip adları, sürümler, payload yapıları (Order da aynısını kullanacak) |
+| `backend/shared/events/payment.go` | Olay sözleşmesi: tip adları, sürümler, payload yapıları (Order da aynısını kullanacak) |
 | `internal/domain/payment.go` | `Payment`, durumlar, hata kodları, `Outcome`, domain hataları |
 | `internal/application/payment_service.go` | `Process`: tüm iş kuralları (idempotency, deneme sınırı, tek ödeme/sipariş) |
 | `internal/application/query_service.go` | Okuma; müşteri sahiplik kuralı |
@@ -169,7 +169,7 @@ Veritabanı ayrıca tutarsız durumları reddeder (`payments_outcome_consistent`
 | Test | Ne kanıtlar |
 | --- | --- |
 | `application/service_test.go` | Onay/ret sonuçları ve olayları; correlation id korunur; tekrar eden istek tek kez çeker ve sonucu yeniden yayınlar; yeniden kullanılan anahtar reddedilir; sağlayıcı kesintisi → retry → `provider_unavailable`; sağlayıcı toparlanırsa başarı; zaman aşımı; çökme sonrası `pending` ödemenin devamı; ödenmiş siparişe ikinci ödeme; 20 eşzamanlı istek tek çekim; geçersiz girdiler iz bırakmaz |
-| `infrastructure/provider/fake_test.go` | Token → sonuç eşlemesi, anahtar hafızası, `flaky`, `slow`, gecikme, eşzamanlılık |
+| `backend/infrastructure/provider/fake_test.go` | Token → sonuç eşlemesi, anahtar hafızası, `flaky`, `slow`, gecikme, eşzamanlılık |
 | `transport/http/http_test.go` | Müşteri yalnızca kendi ödemesini görür, başkasının 404'ü olmayanla aynı, müşteri görünümü sızdırmaz, admin filtre/sayfalama, internal anahtar, yazma ucu yok, `alg: none` |
 | `transport/consumer/payment_requested_test.go` | Okunamayan/desteklenmeyen mesajlar `Permanent` |
 | `repository/postgres/integration_test.go` | (Gerçek Postgres) 16 eşzamanlı `Begin` tek satır, tek kazanan tamamlama, durum+olay atomikliği, sipariş başına tek başarı, tutarsız durumları reddeden kısıtlar |
@@ -196,7 +196,7 @@ OpenAPI şeması `docs/openapi/payment.yaml`; çalışan yığına karşı sözl
 
 ## Elle denemek
 
-Normalde `PaymentRequested`'i Order yayınlar. Payment'ı tek başına denemek için olayı RabbitMQ yönetim API'siyle de yayınlayabilirsin (`make up` sonrası; kullanıcı/parola `.env` içinde):
+Normalde `PaymentRequested`'i Order yayınlar. Payment'ı tek başına denemek için olayı RabbitMQ yönetim API'siyle de yayınlayabilirsin (`make up` sonrası; kullanıcı/parola `backend/.env` içinde):
 
 ```bash
 ORDER=$(uuidgen | tr A-Z a-z); CUSTOMER=$(uuidgen | tr A-Z a-z)

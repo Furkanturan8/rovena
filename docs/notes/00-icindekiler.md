@@ -8,7 +8,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | --- | --- | --- |
 | 01 | [Mikroservis nedir?](01-mikroservis-nedir.md) | Monolit ile farkı, neden ve ne zaman mikroservis, bu projedeki servisler |
 | 02 | [Proje haritası](02-proje-haritasi.md) | Kök dizindeki her klasör ve dosya ne işe yarıyor |
-| 03 | [Altyapı](03-altyapi.md) | Docker Compose, PostgreSQL, RabbitMQ, Nginx gateway, `.env` |
+| 03 | [Altyapı](03-altyapi.md) | Docker Compose, PostgreSQL, RabbitMQ, Nginx gateway, `backend/.env` |
 | 04 | [Shared modülü](04-shared-modulu.md) | Servislerin ortak kullandığı kod ve neden ayrı modül |
 | 05 | [Identity servisi: katmanlar](05-identity-katmanlar.md) | Bir servisin içi: domain, application, transport, repository, infrastructure |
 | 06 | [Kimlik doğrulama akışı](06-kimlik-dogrulama.md) | JWT, refresh token, rotasyon, roller, diğer servislerin token'ı doğrulaması |
@@ -20,6 +20,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 12 | [Mesajlaşma](12-mesajlasma.md) | Olay zarfı, RabbitMQ topolojisi (retry, DLQ), Transactional Outbox, idempotent tüketici |
 | 13 | [Payment servisi](13-payment-servisi.md) | Ödeme durumları, idempotency anahtarı, sağlayıcı arayüzü ve sahte sağlayıcı, sağlayıcı cevap vermezse ne olur, tek ödeme/sipariş |
 | 14 | [Order servisi ve checkout Saga](14-order-servisi-ve-saga.md) | Sepet, fiyatı sunucuda belirleme, checkout idempotency, Saga adımları ve telafi, korumalı geçişler, takılan siparişi kurtarma |
+| 15 | [Uçtan uca testler](15-uctan-uca-testler.md) | `make e2e`: gerçek siparişler, konteyner durdurma/yeniden başlatma, RabbitMQ kesintisi, kayıp mesaj, beklenen sonuçlar |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -41,4 +42,5 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 | Mesajlaşma altyapısı (Faz 1) | Tamamlandı | Olay zarfı, RabbitMQ topolojisi (retry, DLQ), Transactional Outbox, idempotent Inbox; gerçek RabbitMQ ve Postgres ile entegrasyon testleri, mutasyon kontrolü |
 | Payment servisi (Faz 2) | Tamamlandı | `PaymentRequested` tüketir, `PaymentSucceeded/Failed` yayınlar; idempotency anahtarı, sahte sağlayıcı, okuma uçları; birim, HTTP, Postgres ve RabbitMQ entegrasyon testleri, mutasyon kontrolü |
 | Order servisi ve checkout Saga (Faz 3) | Tamamlandı | Sepet, checkout (Idempotency-Key), Catalog/Inventory REST + Payment olayları, korumalı durum geçişleri, kurtarma işi; birim, HTTP, Postgres entegrasyon testleri, mutasyon kontrolü, gerçek yığında uçtan uca deneme |
+| Uçtan uca dayanıklılık (Faz 4) | Tamamlandı | `make e2e`: 13 senaryo (başarılı sipariş, yetersiz stok, ret, sağlayıcı kesintisi, çift istek, tekrar olay, servis yeniden başlatma, RabbitMQ/Inventory/Payment kesintisi, kayıp mesaj, sessiz ödeme) |
 | Frontend | Planlı | Önce backend |

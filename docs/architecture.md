@@ -261,7 +261,7 @@ Initial event examples:
 
 Stock reservation is intentionally not an event flow (see section 7 and the "Hybrid checkout" decision in section 13): Inventory exposes idempotent REST endpoints instead, so there are no `StockReserved` or `StockReservationFailed` events.
 
-Event payload contracts (type names, versions, fields) live in `shared/events`. Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
+Event payload contracts (type names, versions, fields) live in `backend/shared/events`. Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
 
 Events represent facts that have occurred. Commands request that a service perform an action. These concepts must remain distinct.
 

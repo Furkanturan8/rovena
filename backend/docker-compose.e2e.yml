@@ -1,0 +1,10 @@
+# Used by `make e2e` on top of docker-compose.yml: the Order service's recovery timings are
+# shortened so that failure scenarios (lost messages, silent payment) finish in seconds
+# instead of minutes. Never use these values outside tests.
+services:
+  order:
+    environment:
+      ORDER_RECOVERY_INTERVAL: 3s
+      ORDER_STUCK_AFTER: 5s
+      ORDER_PAYMENT_TIMEOUT: 15s
+      ORDER_MAX_PAYMENT_REQUESTS: "3"

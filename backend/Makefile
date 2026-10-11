@@ -1,6 +1,6 @@
 SERVICES := identity catalog inventory payment order
 
-.PHONY: up down logs test test-env test-integration vet seed-admin seed-catalog seed-inventory
+.PHONY: up down logs e2e test test-env test-integration vet seed-admin seed-catalog seed-inventory
 
 up:
 	docker compose up -d --build
@@ -10,6 +10,14 @@ down:
 
 logs:
 	docker compose logs -f
+
+# End-to-end and fault-injection scenarios (about 8 minutes). Starts the Order service with the short recovery
+# timings of docker-compose.e2e.yml and puts the normal ones back afterwards. Stops and starts containers.
+e2e:
+	@test -x .venv/bin/python || (python3 -m venv .venv && .venv/bin/pip install -q requests)
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d order
+	@until curl -fs localhost:8086/readyz >/dev/null; do sleep 1; done
+	@.venv/bin/python e2e/run.py $(SCENARIO); rc=$$?; docker compose up -d order >/dev/null; exit $$rc
 
 test:
 	cd shared && go test ./...

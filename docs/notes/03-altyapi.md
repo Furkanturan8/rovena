@@ -6,9 +6,9 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 
 - **Konteyner:** Bir programı bağımlılıklarıyla birlikte izole çalıştıran paket. "Bende çalışıyor" sorununu bitirir.
 - **İmaj:** Konteynerin şablonu. `Dockerfile` ile üretilir.
-- **Docker Compose:** Birden fazla konteyneri tek dosyada (`docker-compose.yml`) tanımlayıp tek komutla (`docker compose up`) başlatır. Konteynerler aynı sanal ağa girer ve birbirine **servis adıyla** ulaşır (örn. `postgres:5432`, `identity:8081`).
+- **Docker Compose:** Birden fazla konteyneri tek dosyada (`backend/docker-compose.yml`) tanımlayıp tek komutla (`docker compose up`) başlatır. Konteynerler aynı sanal ağa girer ve birbirine **servis adıyla** ulaşır (örn. `postgres:5432`, `identity:8081`).
 
-## `docker-compose.yml` içindeki servisler
+## `backend/docker-compose.yml` içindeki servisler
 
 | Servis | Ne yapar | Dışarıya açık port |
 | --- | --- | --- |
@@ -33,12 +33,12 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 
 - **`depends_on` + `condition`:** `identity`, `identity-migrate` başarıyla bitmeden başlamaz (`service_completed_successfully`). `identity-migrate` de Postgres "healthy" olmadan başlamaz. Sadece "konteyner başladı" yetmez, "hazır" olması beklenir (`healthcheck`).
 - **Volume'ler** (`postgres-data`, `rabbitmq-data`): Konteyner silinse bile veritabanı verisi kalsın diye diskte tutulur. Sıfırdan başlamak için `docker compose down -v`.
-- **`${DEGISKEN:?mesaj}`:** `.env` dosyasından değer okur; yoksa Compose hata verir. Böylece parolasız çalışmaz.
+- **`${DEGISKEN:?mesaj}`:** `backend/.env` dosyasından değer okur; yoksa Compose hata verir. Böylece parolasız çalışmaz.
 - **`127.0.0.1:` öneki:** Port yalnızca yerel makineden erişilebilir; ağdaki başkaları veritabanına bağlanamaz.
 
 ## PostgreSQL: servis başına veritabanı
 
-`infrastructure/postgres/init-databases.sh` Postgres ilk kez başlarken bir kez çalışır ve her servis için **ayrı veritabanı + ayrı kullanıcı** oluşturur:
+`backend/infrastructure/postgres/init-databases.sh` Postgres ilk kez başlarken bir kez çalışır ve her servis için **ayrı veritabanı + ayrı kullanıcı** oluşturur:
 
 | Veritabanı/kullanıcı | Sahibi |
 | --- | --- |
@@ -54,7 +54,7 @@ Betik yalnızca **boş volume'da** çalışır. Sonradan değiştirirsen `docker
 
 ## Migration nedir?
 
-Veritabanı tablolarının şeması kodla birlikte sürümlenir. `services/identity/migrations/` altındaki SQL dosyaları sırayla uygulanır:
+Veritabanı tablolarının şeması kodla birlikte sürümlenir. `backend/services/identity/migrations/` altındaki SQL dosyaları sırayla uygulanır:
 
 Identity:
 - `00001_create_users.sql` → `users` tablosu
@@ -80,7 +80,7 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 ## Nginx: API Gateway
 
-`infrastructure/nginx/nginx.conf`:
+`backend/infrastructure/nginx/nginx.conf`:
 
 - `/api/v1/auth/...` ve `/api/v1/users/...` isteklerini `http://identity:8081`'e, `/api/v1/products`, `/categories` ve `/admin/products|categories` isteklerini `http://catalog:8082`'ye, `/api/v1/stock` ve `/admin/stock/...` isteklerini `http://inventory:8083`'e, `/payments` ve `/admin/payments` isteklerini `http://payment:8085`'e, `/cart`, `/checkout`, `/orders` ve `/admin/orders` isteklerini `http://order:8086`'ya yönlendirir. Checkout, başka bir servisi beklediği tek yer olduğu için ayrı ve daha sıkı bir hız sınırı (burst 10) alır. Yeni servis eklendikçe buraya yeni `location` bloğu eklenir.
 - Inventory'nin ve Catalog'un `/api/v1/internal/...` uçları **bilerek yönlendirilmez**: rezervasyon uçları yalnızca servisler arasıdır, internetten erişilebilir olmamalıdır ([11](11-inventory-servisi.md)).
@@ -93,11 +93,11 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 ## RabbitMQ
 
-Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](12-mesajlasma.md)). İki kullanıcısı var: Payment `payment.requests` kuyruğundan `PaymentRequested`'i dinler; Order `order.payment-results` kuyruğundan `PaymentSucceeded` ve `PaymentFailed`'i dinler ve `PaymentRequested`'i kendisi yayınlar. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `.env` içinde).
+Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](12-mesajlasma.md)). İki kullanıcısı var: Payment `payment.requests` kuyruğundan `PaymentRequested`'i dinler; Order `order.payment-results` kuyruğundan `PaymentSucceeded` ve `PaymentFailed`'i dinler ve `PaymentRequested`'i kendisi yayınlar. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `backend/.env` içinde).
 
-## `.env` ve gizli değerler
+## `backend/.env` ve gizli değerler
 
-`.env.example` hangi değişkenlerin gerektiğini gösterir. Gerçek `.env`:
+`backend/.env.example` hangi değişkenlerin gerektiğini gösterir. Gerçek `backend/.env`:
 
 - Veritabanı parolaları (servis başına ayrı)
 - `RABBITMQ_*`
@@ -107,11 +107,11 @@ Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](
 
 Compose bu değerleri konteynerlere ortam değişkeni olarak verir; servis kodu `internal/infrastructure/config` paketiyle okur.
 
-## Dockerfile (`services/identity/Dockerfile`)
+## Dockerfile (`backend/services/identity/Dockerfile`)
 
 İki aşamalı (multi-stage) build:
 
 1. **build aşaması:** Go imajında kodu derler. Önce yalnızca `go.mod/go.sum` kopyalanıp bağımlılıklar indirilir; kod değişince bu katman yeniden indirilmez (build cache). Üç program derlenir: `api`, `migrate`, `seed`.
 2. **çalışma aşaması:** Sadece derlenmiş dosyaları, içinde neredeyse hiçbir şey olmayan `distroless` imajına koyar ve **root olmayan** kullanıcıyla çalıştırır. Küçük imaj, küçük saldırı yüzeyi.
 
-Build context kök dizindir (`docker build -f services/identity/Dockerfile .`), çünkü imaj hem `services/identity` hem `shared` klasörüne ihtiyaç duyar.
+Build context kök dizindir (`docker build -f backend/services/identity/Dockerfile .`), çünkü imaj hem `backend/services/identity` hem `shared` klasörüne ihtiyaç duyar.

@@ -80,7 +80,7 @@
 | **Token (kart)** | Gerçek kart numarası yerine sağlayıcının verdiği, tek başına işe yaramayan temsil; sisteme kart numarası hiç girmez |
 | **Çift çekim (double charge)** | Aynı ödemenin iki kez çekilmesi; ödeme sistemlerinin kaçınması gereken en kötü hata |
 | **Telafi / iade (refund)** | Çekilmiş parayı müşteriye geri vermek |
-| **Olay sözleşmesi (event contract)** | Bir olayın adı, sürümü ve payload şekli; yayıncı ve tüketicilerin ortak anlaşması (`shared/events`) |
+| **Olay sözleşmesi (event contract)** | Bir olayın adı, sürümü ve payload şekli; yayıncı ve tüketicilerin ortak anlaşması (`backend/shared/events`) |
 | **Ack / nack** | Tüketicinin mesajı "işledim" / "işleyemedim, geri ver" diye bildirmesi |
 | **Snapshot (görüntü)** | Siparişin satırlarına sipariş anındaki ad ve fiyatın kopyalanması; sonradan katalog değişse de sipariş değişmez |
 | **Korumalı geçiş (guarded transition)** | Durumu yalnızca beklenen durumdaysa değiştiren ve değişip değişmediğini bildiren güncelleme; tekrar çalışmayı zararsız yapar |

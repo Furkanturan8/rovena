@@ -5,12 +5,12 @@
 ## Faz 0: Temel servisler (bitti)
 
 - [x] Altyapı: Compose, Postgres (servis başına DB), RabbitMQ, Nginx gateway
-- [x] `shared/` modülü (errorx, response, httpx, auth, logging)
+- [x] `backend/shared/` modülü (errorx, response, httpx, auth, logging)
 - [x] Identity, Catalog, Inventory servisleri (birim, HTTP ve gerçek Postgres entegrasyon testleriyle)
 - [x] OpenAPI şemaları (3 servis) ve sözleşme testi
 - [x] Hibrit checkout kararı: stok rezervasyonu REST, ödeme RabbitMQ (`architecture.md` bölüm 7)
 
-## Faz 1: Mesajlaşma altyapısı (`shared/`) (bitti)
+## Faz 1: Mesajlaşma altyapısı (`backend/shared/`) (bitti)
 
 - [x] Olay zarfı: `event_id`, tip, sürüm, zaman, `correlation_id` (+ request id taşıma)
 - [x] RabbitMQ bağlantısı ve topoloji: exchange, kuyruklar, retry (gecikmeli) kuyruğu, dead-letter kuyruğu
@@ -39,9 +39,9 @@
 
 ## Faz 4: Uçtan uca dayanıklılık
 
-- [ ] E2E senaryolar: başarılı sipariş, yetersiz stok, ödeme hatası, çift checkout isteği, tekrarlanan olay
-- [ ] Hata enjeksiyonu: servis yeniden başlatma, RabbitMQ kesintisi, yarıda kalan Saga'nın toparlanması
-- [ ] Tek `make` komutuyla çalışan E2E paketi; sonuçları nota işle
+- [x] E2E senaryolar: başarılı sipariş, yetersiz stok, ödeme hatası, çift checkout isteği, tekrarlanan olay
+- [x] Hata enjeksiyonu: servis yeniden başlatma, RabbitMQ kesintisi, yarıda kalan Saga'nın toparlanması
+- [x] Tek `make` komutuyla çalışan E2E paketi; sonuçları nota işle
 
 ## Faz 5: Gözlemlenebilirlik ve CI
 
@@ -53,7 +53,7 @@
 
 - [ ] Refresh token için kısa "grace period" (eşzamanlı iki sekme oturumu kapatmasın)
 - [ ] Gateway: 404 ve 502/504 için de JSON hata gövdesi
-- [ ] `shared/httpx` ve `shared/auth` middleware için kendi birim testleri
+- [ ] `backend/shared/httpx` ve `backend/shared/auth` middleware için kendi birim testleri
 - [ ] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? (olay ile) Karar ver
 - [ ] Payment: eşzamanlı çift çekim durumunda iade akışı (şimdilik yalnızca loglanır, DLQ'ya düşer); sağlayıcıdan gerçek iade
 - [ ] Order: stok yetmediği için iptal olan siparişte sepet boşalmış kalıyor; sepeti geri yükle ya da iptal sebebine göre boşaltma

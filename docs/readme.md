@@ -39,18 +39,24 @@ Rovena follows a domain-oriented microservices architecture with independently o
 
 ```text
 rovena/
-├── services/
-│   ├── identity/
-│   ├── catalog/
-│   ├── inventory/
-│   ├── order/
-│   └── payment/
-├── frontend/
-├── infrastructure/
-├── docs/
-│   └── architecture.md
-├── docker-compose.yml
-└── README.md
+├── backend/                 everything that runs the backend; run `make` and `docker compose` from here
+│   ├── services/
+│   │   ├── identity/
+│   │   ├── catalog/
+│   │   ├── inventory/
+│   │   ├── order/
+│   │   └── payment/
+│   ├── shared/
+│   ├── infrastructure/
+│   ├── e2e/
+│   ├── docker-compose.yml
+│   ├── Makefile
+│   └── .env.example
+├── frontend/                (planned)
+└── docs/
+    ├── architecture.md
+    ├── notes/
+    └── openapi/
 ```
 
 Each service owns its business logic, data access, migrations, and API contracts.
@@ -58,6 +64,8 @@ Each service owns its business logic, data access, migrations, and API contracts
 ## Getting Started
 
 The development environment runs locally with Docker Compose.
+
+All commands below run inside `backend/` (`cd backend` first).
 
 ```bash
 cp .env.example .env      # fill in every value; JWT_SECRET: openssl rand -base64 48

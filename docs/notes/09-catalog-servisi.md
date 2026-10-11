@@ -13,7 +13,7 @@ Catalog, **vitrinde ne satıldığını** bilen servistir: kategoriler, ürünle
 
 "Bu üründen kaç tane var?" sorusunu Catalog **cevaplayamaz**; bu bilinçli bir sınırdır. İleride ürün sayfası hem Catalog'dan ürünü hem Inventory'den stok durumunu alıp birleştirecek.
 
-Catalog, kullanıcıyı Identity'ye sormadan tanır: admin uçlarında `shared/auth` ile JWT'yi **kendisi doğrular** ([06](06-kimlik-dogrulama.md)). Aynı `JWT_SECRET` ile yapılandırılmıştır.
+Catalog, kullanıcıyı Identity'ye sormadan tanır: admin uçlarında `backend/shared/auth` ile JWT'yi **kendisi doğrular** ([06](06-kimlik-dogrulama.md)). Aynı `JWT_SECRET` ile yapılandırılmıştır.
 
 ## Veri modeli
 

@@ -4,32 +4,39 @@
 rovena/
 ├── .claude/                  Claude Code ayarları (kurallar, izinler); uygulamanın parçası değil
 ├── CLAUDE.md                 Claude için proje özeti ve mimari kararlar
-├── docs/                     Dokümantasyon
+├── docs/                     Dokümantasyon (backend ve ileride frontend için ortak)
 │   ├── readme.md             Proje tanıtımı
 │   ├── architecture.md       Hedef mimari
+│   ├── todo.md               Yol haritası
+│   ├── openapi/              API şemaları ve sözleşme testi
 │   └── notes/                Bu öğrenme notları
-├── shared/                   Tüm servislerin ortak kullandığı Go kodu (ayrı Go modülü)
-├── services/
-│   ├── identity/             Kullanıcı ve kimlik servisi (ayrı Go modülü)
-│   ├── catalog/              Ürün kataloğu servisi (ayrı Go modülü)
-│   ├── inventory/            Stok ve rezervasyon servisi (ayrı Go modülü)
-│   ├── payment/              Ödeme servisi (ayrı Go modülü)
-│   └── order/                Sepet, checkout ve Saga servisi (ayrı Go modülü)
-├── infrastructure/           Servis olmayan altyapı ayarları
-│   ├── postgres/             Veritabanlarını oluşturan başlangıç betiği
-│   └── nginx/                API Gateway ayarları
-├── docker-compose.yml        Tüm sistemi tek komutla ayağa kaldıran tanım
-├── Makefile                  Kısa komutlar (make up, make test)
-├── .env.example              Gerekli ortam değişkenlerinin şablonu
-├── .env                      Gerçek (gizli) değerler; git'e girmez
+├── backend/                  Backend'e ait her şey; make ve docker compose buradan çalıştırılır
+│   ├── shared/               Tüm servislerin ortak kullandığı Go kodu (ayrı Go modülü)
+│   ├── services/
+│   │   ├── identity/         Kullanıcı ve kimlik servisi (ayrı Go modülü)
+│   │   ├── catalog/          Ürün kataloğu servisi (ayrı Go modülü)
+│   │   ├── inventory/        Stok ve rezervasyon servisi (ayrı Go modülü)
+│   │   ├── payment/          Ödeme servisi (ayrı Go modülü)
+│   │   └── order/            Sepet, checkout ve Saga servisi (ayrı Go modülü)
+│   ├── infrastructure/       Servis olmayan altyapı ayarları
+│   │   ├── postgres/         Veritabanlarını oluşturan başlangıç betiği
+│   │   └── nginx/            API Gateway ayarları
+│   ├── e2e/                  Uçtan uca senaryolar (make e2e)
+│   ├── docker-compose.yml    Tüm sistemi tek komutla ayağa kaldıran tanım
+│   ├── Makefile              Kısa komutlar (make up, make test)
+│   ├── .env.example          Gerekli ortam değişkenlerinin şablonu
+│   └── .env                  Gerçek (gizli) değerler; git'e girmez
+├── frontend/                 (planlı) React uygulaması
 └── .gitignore
 ```
 
+Frontend eklenince `backend/` dokunulmadan yanına `frontend/` gelir; ikisi `docs/` klasörünü paylaşır. Bu belgedeki `make`, `docker compose` ve `curl` komutları, aksi söylenmedikçe `backend/` klasöründen çalıştırılır.
+
 ## Kök dosyalar
 
-- **`docker-compose.yml`**: Hangi konteynerlerin (Postgres, RabbitMQ, Identity, Nginx...) nasıl çalışacağını tanımlar. Ayrıntı: [03](03-altyapi.md).
-- **`Makefile`**: `make up`, `make down`, `make test`, `make seed-admin` gibi uzun komutlara kısayollar.
-- **`.env` / `.env.example`**: Parolalar ve JWT secret gibi gizli değerler. `.env.example` şablondur ve git'e girer, `.env` gerçek değerleri taşır ve girmez. Gizli değerler kodun içine yazılmaz; konteynere ortam değişkeni olarak verilir.
+- **`backend/docker-compose.yml`**: Hangi konteynerlerin (Postgres, RabbitMQ, Identity, Nginx...) nasıl çalışacağını tanımlar. Ayrıntı: [03](03-altyapi.md).
+- **`backend/Makefile`**: `make up`, `make down`, `make test`, `make seed-admin` gibi uzun komutlara kısayollar.
+- **`backend/.env` / `backend/.env.example`**: Parolalar ve JWT secret gibi gizli değerler. `backend/.env.example` şablondur ve git'e girer, `backend/.env` gerçek değerleri taşır ve girmez. Gizli değerler kodun içine yazılmaz; konteynere ortam değişkeni olarak verilir.
 - **`CLAUDE.md`**: Yapay zeka asistanına projeyi anlatan not. Diğer geliştiriciler için de kısa bir özet işlevi görür.
 
 ## Neden her servis ve shared ayrı `go.mod`?
@@ -40,7 +47,7 @@ Go'da `go.mod` bir "modül"ü tanımlar (bağımlılıkları ve sürümleriyle b
 - Bir servis tek başına derlenebilir ve kendi Docker imajına paketlenebilir.
 - Servis sınırı kodda da görünür: bir servis, ötekinin `internal/` klasörünü import edemez.
 
-`services/identity/go.mod` içinde şu satırlar `shared` modülünü bağlar:
+`backend/services/identity/go.mod` içinde şu satırlar `shared` modülünü bağlar:
 
 ```text
 require github.com/Furkanturan8/rovena/shared v0.0.0

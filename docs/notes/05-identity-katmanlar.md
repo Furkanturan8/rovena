@@ -70,7 +70,7 @@ services/identity/
 
 İş akışlarının (use case) yaşadığı yer. HTTP bilmez, SQL bilmez.
 
-**`ports.go`**: Application'ın dışarıdan ihtiyaç duyduğu iki yetenek için arayüz: `PasswordHasher` (hash/compare) ve `AccessTokenIssuer` (access token üret). Gerçeklemeleri `infrastructure/security` içindedir.
+**`ports.go`**: Application'ın dışarıdan ihtiyaç duyduğu iki yetenek için arayüz: `PasswordHasher` (hash/compare) ve `AccessTokenIssuer` (access token üret). Gerçeklemeleri `backend/infrastructure/security` içindedir.
 
 **`auth_service.go`**: `AuthService`
 
@@ -105,7 +105,7 @@ HTTP dünyasını application'a çeviren katman.
 - **`auth_handler.go`**, **`user_handler.go`**: Handler'lar yalnızca şunu yapar: isteği oku/doğrula → application servisini çağır → cevabı DTO'ya çevir. İş mantığı yok. Hata olursa `return err`.
 - **`errors.go`**: `MapDomainError`; domain hatalarını HTTP hatalarına çevirir (`ErrEmailTaken` → 409, `ErrInvalidCredentials` → 401, `ErrLastAdmin` → 409 ...). Shared'daki merkezi hata yakalayıcıya verilir.
 
-## infrastructure/
+## backend/infrastructure/
 
 Dış dünyayla konuşan somut parçalar.
 

@@ -80,7 +80,7 @@ Rol access token'ın içinde olduğu için, bir admin'in rolü düşürüldüğ�
 
 ## Diğer servisler token'ı nasıl kullanacak?
 
-Catalog gibi bir servis, `shared/auth` paketindeki `Middleware`'i kendi route'larına ekler ve **aynı `JWT_SECRET`** ile yapılandırılır:
+Catalog gibi bir servis, `backend/shared/auth` paketindeki `Middleware`'i kendi route'larına ekler ve **aynı `JWT_SECRET`** ile yapılandırılır:
 
 ```go
 admin := router.Group("/admin", auth.Middleware(verifier), auth.RequireRole(auth.RoleAdmin))
