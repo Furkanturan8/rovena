@@ -22,7 +22,9 @@ type AuthService struct {
 	hasher     PasswordHasher
 	issuer     AccessTokenIssuer
 	refreshTTL time.Duration
-	now        func() time.Time
+	// refreshGrace is how long after a rotation the old refresh token is still accepted once more.
+	refreshGrace time.Duration
+	now          func() time.Time
 
 	// dummyHash is compared against when the email is unknown so that login
 	// timing does not reveal which emails are registered.
@@ -44,6 +46,17 @@ func NewAuthService(
 		users: users, tokens: tokens, hasher: hasher, issuer: issuer,
 		refreshTTL: refreshTTL, now: time.Now, dummyHash: dummy,
 	}, nil
+}
+
+// WithRefreshGrace lets a refresh token that was rotated less than d ago be presented again without
+// being taken for theft; the second caller gets a pair of its own. This is for the benign case of
+// two browser tabs refreshing at the same moment: without it the loser's request looks exactly like a
+// stolen token being replayed, and every session of the user is closed. The cost is that a thief who
+// replays a stolen token within d of its owner is not detected by that replay. Zero (the default)
+// turns the allowance off.
+func (s *AuthService) WithRefreshGrace(d time.Duration) *AuthService {
+	s.refreshGrace = d
+	return s
 }
 
 type RegisterInput struct {
@@ -123,24 +136,45 @@ func (s *AuthService) Refresh(ctx context.Context, rawToken string) (*TokenPair,
 		return nil, err
 	}
 	if stored.RevokedAt != nil {
-		if err := s.tokens.RevokeAllForUser(ctx, stored.UserID); err != nil {
-			return nil, err
-		}
-		return nil, domain.ErrInvalidRefreshToken
+		return s.reused(ctx, stored)
 	}
 	if stored.Expired(s.now()) {
 		return nil, domain.ErrInvalidRefreshToken
 	}
-	revoked, err := s.tokens.Revoke(ctx, stored.ID)
+	rotated, err := s.tokens.Rotate(ctx, stored.ID)
 	if err != nil {
 		return nil, err
 	}
-	if !revoked {
-		if err := s.tokens.RevokeAllForUser(ctx, stored.UserID); err != nil {
+	if !rotated {
+		// Another request rotated it between our read and our write. Look again to see whether that
+		// was a rotation we may tolerate or something worse.
+		current, err := s.tokens.GetByHash(ctx, hashToken(rawToken))
+		if err != nil {
 			return nil, err
 		}
-		return nil, domain.ErrInvalidRefreshToken
+		return s.reused(ctx, current)
 	}
+	return s.pairFor(ctx, stored)
+}
+
+// reused handles a refresh token that is no longer active. Shortly after a rotation it is the second
+// tab; in every other case it is treated as theft and all sessions of the user end.
+func (s *AuthService) reused(ctx context.Context, stored *domain.RefreshToken) (*TokenPair, error) {
+	if s.withinGrace(stored) && !stored.Expired(s.now()) {
+		return s.pairFor(ctx, stored)
+	}
+	if err := s.tokens.RevokeAllForUser(ctx, stored.UserID); err != nil {
+		return nil, err
+	}
+	return nil, domain.ErrInvalidRefreshToken
+}
+
+func (s *AuthService) withinGrace(stored *domain.RefreshToken) bool {
+	return s.refreshGrace > 0 && stored.RotatedAt != nil && s.now().Sub(*stored.RotatedAt) <= s.refreshGrace
+}
+
+// pairFor issues a new token pair for the owner of stored.
+func (s *AuthService) pairFor(ctx context.Context, stored *domain.RefreshToken) (*TokenPair, error) {
 	user, err := s.users.GetByID(ctx, stored.UserID)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {

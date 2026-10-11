@@ -45,12 +45,13 @@ type refreshTokenRow struct {
 	TokenHash string     `bun:",notnull"`
 	ExpiresAt time.Time  `bun:",notnull"`
 	RevokedAt *time.Time `bun:",nullzero"`
+	RotatedAt *time.Time `bun:",nullzero"`
 	CreatedAt time.Time  `bun:",notnull"`
 }
 
 func (r *refreshTokenRow) toDomain() *domain.RefreshToken {
 	return &domain.RefreshToken{
 		ID: r.ID, UserID: r.UserID, TokenHash: r.TokenHash,
-		ExpiresAt: r.ExpiresAt, RevokedAt: r.RevokedAt, CreatedAt: r.CreatedAt,
+		ExpiresAt: r.ExpiresAt, RevokedAt: r.RevokedAt, RotatedAt: r.RotatedAt, CreatedAt: r.CreatedAt,
 	}
 }

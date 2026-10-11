@@ -56,6 +56,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	db = telemetry.InstrumentBun(db) // one span per query, inside the trace of the request that caused it
 	defer func() { _ = db.Close() }()
 
 	hasher := security.NewBcryptHasher(cfg.BcryptCost)
@@ -67,6 +68,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	authSvc.WithRefreshGrace(cfg.RefreshGrace)
 
 	app := transport.NewApp(transport.Options{
 		Logger:         log,

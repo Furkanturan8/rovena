@@ -33,5 +33,8 @@ type RefreshTokenRepository interface {
 	// Revoke marks the token revoked and reports whether this call did it.
 	// false means it was already revoked, which callers treat as token reuse.
 	Revoke(ctx context.Context, id uuid.UUID) (bool, error)
+	// Rotate revokes the token because a refresh is replacing it, and reports whether this call did it.
+	// false means someone revoked it first.
+	Rotate(ctx context.Context, id uuid.UUID) (bool, error)
 	RevokeAllForUser(ctx context.Context, userID uuid.UUID) error
 }

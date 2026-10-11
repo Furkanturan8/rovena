@@ -9,13 +9,15 @@ import (
 )
 
 type Config struct {
-	Env            string
-	LogLevel       string
-	HTTPPort       string
-	DatabaseURL    string
-	JWTSecret      string
-	AccessTTL      time.Duration
-	RefreshTTL     time.Duration
+	Env         string
+	LogLevel    string
+	HTTPPort    string
+	DatabaseURL string
+	JWTSecret   string
+	AccessTTL   time.Duration
+	RefreshTTL  time.Duration
+	// RefreshGrace is how long a just-rotated refresh token still works once more (two tabs refreshing together).
+	RefreshGrace   time.Duration
 	AllowedOrigins string
 	BcryptCost     int
 	TrustedProxies []string
@@ -45,6 +47,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.RefreshTTL, err = duration("REFRESH_TOKEN_TTL", 30*24*time.Hour); err != nil {
+		return nil, err
+	}
+	if cfg.RefreshGrace, err = nonNegativeDuration("REFRESH_TOKEN_GRACE", 10*time.Second); err != nil {
 		return nil, err
 	}
 	if cfg.BcryptCost, err = integer("BCRYPT_COST", 12); err != nil {
@@ -84,6 +89,19 @@ func duration(key string, fallback time.Duration) (time.Duration, error) {
 	d, err := time.ParseDuration(v)
 	if err != nil || d <= 0 {
 		return 0, fmt.Errorf("%s must be a positive duration, got %q", key, v)
+	}
+	return d, nil
+}
+
+// nonNegativeDuration is like duration but accepts 0, which turns a feature off.
+func nonNegativeDuration(key string, fallback time.Duration) (time.Duration, error) {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil || d < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative duration, got %q", key, v)
 	}
 	return d, nil
 }

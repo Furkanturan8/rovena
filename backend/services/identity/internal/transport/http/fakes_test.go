@@ -163,6 +163,20 @@ func (r tokenRepo) Revoke(_ context.Context, id uuid.UUID) (bool, error) {
 	return false, nil
 }
 
+func (r tokenRepo) Rotate(ctx context.Context, id uuid.UUID) (bool, error) {
+	ok, err := r.Revoke(ctx, id)
+	if ok {
+		r.s.mu.Lock()
+		defer r.s.mu.Unlock()
+		for _, t := range r.s.tokens {
+			if t.ID == id {
+				t.RotatedAt = t.RevokedAt
+			}
+		}
+	}
+	return ok, err
+}
+
 func (r tokenRepo) RevokeAllForUser(_ context.Context, userID uuid.UUID) error {
 	r.s.mu.Lock()
 	defer r.s.mu.Unlock()

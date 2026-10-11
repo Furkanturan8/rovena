@@ -92,10 +92,11 @@ func (f *fakeUsers) UpdateRole(_ context.Context, id uuid.UUID, role domain.Role
 type fakeTokens struct {
 	mu     sync.Mutex
 	byHash map[string]*domain.RefreshToken
+	now    func() time.Time
 }
 
 func newFakeTokens() *fakeTokens {
-	return &fakeTokens{byHash: map[string]*domain.RefreshToken{}}
+	return &fakeTokens{byHash: map[string]*domain.RefreshToken{}, now: time.Now}
 }
 
 func (f *fakeTokens) Create(_ context.Context, t *domain.RefreshToken) error {
@@ -127,6 +128,22 @@ func (f *fakeTokens) Revoke(_ context.Context, id uuid.UUID) (bool, error) {
 			}
 			now := time.Now()
 			t.RevokedAt = &now
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *fakeTokens) Rotate(_ context.Context, id uuid.UUID) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, t := range f.byHash {
+		if t.ID == id {
+			if t.RevokedAt != nil {
+				return false, nil
+			}
+			now := f.now()
+			t.RevokedAt, t.RotatedAt = &now, &now
 			return true, nil
 		}
 	}

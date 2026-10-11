@@ -415,3 +415,79 @@ func TestLastAdmin_ConcurrentMutualDemotion(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshTokenRepository_RotateIsRecordedAndOnlyOnce(t *testing.T) {
+	h := setup(t)
+	u := h.register(t, "rot@example.com").User
+	now := time.Now()
+	rotated, loggedOut := uuid.New(), uuid.New()
+	for id, hash := range map[uuid.UUID]string{rotated: "h-rot", loggedOut: "h-out"} {
+		if err := h.tokens.Create(h.ctx, &domain.RefreshToken{ID: id, UserID: u.ID, TokenHash: hash, ExpiresAt: now.Add(time.Hour), CreatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := h.tokens.Rotate(h.ctx, rotated)
+	second, err2 := h.tokens.Rotate(h.ctx, rotated)
+	if err != nil || err2 != nil || !first || second {
+		t.Fatalf("Rotate twice = %v/%v (%v, %v), want true then false", first, second, err, err2)
+	}
+	if got, _ := h.tokens.GetByHash(h.ctx, "h-rot"); got.RevokedAt == nil || got.RotatedAt == nil {
+		t.Fatalf("a rotation must set both revoked_at and rotated_at: %+v", got)
+	}
+	if ok, _ := h.tokens.Revoke(h.ctx, loggedOut); !ok {
+		t.Fatal("revoke failed")
+	}
+	if got, _ := h.tokens.GetByHash(h.ctx, "h-out"); got.RevokedAt == nil || got.RotatedAt != nil {
+		t.Fatalf("a logout is not a rotation: %+v", got)
+	}
+	if again, _ := h.tokens.Rotate(h.ctx, loggedOut); again {
+		t.Fatal("a revoked token can not be rotated")
+	}
+}
+
+// Two tabs refresh with the same token at the same moment. Without the grace one of them would
+// be taken for a thief and every session would end; with it they all get working tokens.
+func TestConcurrentRefreshWithGrace_NobodyIsLoggedOut(t *testing.T) {
+	h := setup(t)
+	h.auth.WithRefreshGrace(10 * time.Second)
+	res := h.register(t, "grace@example.com")
+
+	const n = 8
+	pairs := make([]*application.TokenPair, n)
+	errs := make([]error, n)
+	runConcurrently(n, func(i int) {
+		pairs[i], errs[i] = h.auth.Refresh(h.ctx, res.Tokens.RefreshToken)
+	})
+	seen := map[string]bool{}
+	for i := range errs {
+		if errs[i] != nil {
+			t.Fatalf("refresh %d failed: %v", i, errs[i])
+		}
+		seen[pairs[i].RefreshToken] = true
+	}
+	if len(seen) != n {
+		t.Fatalf("%d distinct tokens for %d refreshes", len(seen), n)
+	}
+	for tk := range seen {
+		if _, err := h.auth.Refresh(h.ctx, tk); err != nil {
+			t.Fatalf("a token issued during the burst is dead: %v", err)
+		}
+	}
+}
+
+func TestRefreshGrace_ReplayAfterItEndsStillKillsTheFamily(t *testing.T) {
+	h := setup(t)
+	h.auth.WithRefreshGrace(time.Nanosecond) // expires immediately
+	res := h.register(t, "late@example.com")
+	next, err := h.auth.Refresh(h.ctx, res.Tokens.RefreshToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(5 * time.Millisecond)
+	if _, err := h.auth.Refresh(h.ctx, res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := h.auth.Refresh(h.ctx, next.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatal("the whole family must be dead after a late replay")
+	}
+}

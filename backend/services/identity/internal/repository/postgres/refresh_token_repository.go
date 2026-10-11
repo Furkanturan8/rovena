@@ -56,6 +56,21 @@ func (r *RefreshTokenRepository) Revoke(ctx context.Context, id uuid.UUID) (bool
 	return n > 0, err
 }
 
+func (r *RefreshTokenRepository) Rotate(ctx context.Context, id uuid.UUID) (bool, error) {
+	now := time.Now()
+	res, err := r.db.NewUpdate().Model((*refreshTokenRow)(nil)).
+		Set("revoked_at = ?", now).
+		Set("rotated_at = ?", now).
+		Where("id = ?", id).
+		Where("revoked_at IS NULL").
+		Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
 func (r *RefreshTokenRepository) RevokeAllForUser(ctx context.Context, userID uuid.UUID) error {
 	_, err := r.db.NewUpdate().Model((*refreshTokenRow)(nil)).
 		Set("revoked_at = ?", time.Now()).

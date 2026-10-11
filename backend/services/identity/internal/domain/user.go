@@ -33,6 +33,8 @@ type RefreshToken struct {
 	TokenHash string
 	ExpiresAt time.Time
 	RevokedAt *time.Time
+	// RotatedAt is set when a refresh replaced this token (as opposed to a logout or a theft response).
+	RotatedAt *time.Time
 	CreatedAt time.Time
 }
 

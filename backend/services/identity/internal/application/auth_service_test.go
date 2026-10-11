@@ -25,6 +25,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	svc.now = func() time.Time { return e.clock }
+	e.tokens.now = svc.now
 	e.svc = svc
 	return e
 }
@@ -166,5 +167,123 @@ func TestLogout_RevokesAndIsIdempotent(t *testing.T) {
 	}
 	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
 		t.Errorf("refresh after logout err = %v", err)
+	}
+}
+
+// ---------------------------------------------------------------- grace period for a second tab
+
+func withGrace(t *testing.T, grace time.Duration) (*env, *AuthResult) {
+	t.Helper()
+	e := newEnv(t)
+	e.svc.WithRefreshGrace(grace)
+	return e, register(t, e)
+}
+
+func TestRefresh_SecondTabWithinTheGraceIsNotTheft(t *testing.T) {
+	e, res := withGrace(t, 10*time.Second)
+	ctx := context.Background()
+
+	tabA, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.clock = e.clock.Add(2 * time.Second)
+	tabB, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken) // the other tab, same old token
+	if err != nil {
+		t.Fatalf("a second tab must not be treated as theft: %v", err)
+	}
+	if tabB.RefreshToken == tabA.RefreshToken || tabB.RefreshToken == res.Tokens.RefreshToken {
+		t.Fatal("each tab needs a token of its own")
+	}
+	// Both sessions stay usable.
+	for name, token := range map[string]string{"tab A": tabA.RefreshToken, "tab B": tabB.RefreshToken} {
+		if _, err := e.svc.Refresh(ctx, token); err != nil {
+			t.Errorf("%s lost its session: %v", name, err)
+		}
+	}
+}
+
+func TestRefresh_ReplayAfterTheGraceIsStillTheft(t *testing.T) {
+	e, res := withGrace(t, 10*time.Second)
+	ctx := context.Background()
+	rotated, _ := e.svc.Refresh(ctx, res.Tokens.RefreshToken)
+
+	e.clock = e.clock.Add(11 * time.Second)
+	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatalf("err = %v", err)
+	}
+	if e.tokens.activeTokens(res.User.ID) != 0 {
+		t.Fatal("a replay after the grace must end every session")
+	}
+	if _, err := e.svc.Refresh(ctx, rotated.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatal("the rotated token must be revoked as well")
+	}
+}
+
+func TestRefresh_GraceIsOffByDefault(t *testing.T) {
+	e := newEnv(t)
+	res := register(t, e)
+	_, _ = e.svc.Refresh(context.Background(), res.Tokens.RefreshToken)
+	if _, err := e.svc.Refresh(context.Background(), res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// A logout revokes the token but is not a rotation: it can never be presented again.
+func TestRefresh_ALoggedOutTokenGetsNoGrace(t *testing.T) {
+	e, res := withGrace(t, 10*time.Second)
+	ctx := context.Background()
+	if err := e.svc.Logout(ctx, res.Tokens.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatalf("a logged-out token must stay dead, err = %v", err)
+	}
+}
+
+func TestRefresh_ExpiredTokenGetsNoGraceEither(t *testing.T) {
+	e, res := withGrace(t, time.Hour)
+	ctx := context.Background()
+	// Rotated one minute before it expires, then presented again after it expired: the rotation
+	// is well inside the hour of grace, but an expired token is dead whatever happened to it.
+	e.clock = e.clock.Add(24*time.Hour - time.Minute)
+	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	e.clock = e.clock.Add(2 * time.Minute)
+	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); !errors.Is(err, domain.ErrInvalidRefreshToken) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRefresh_ConcurrentRefreshesOfOneTokenAllSucceedWithinTheGrace(t *testing.T) {
+	e, res := withGrace(t, 10*time.Second)
+	const n = 8
+	results := make(chan error, n)
+	tokens := make(chan string, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			pair, err := e.svc.Refresh(context.Background(), res.Tokens.RefreshToken)
+			if err == nil {
+				tokens <- pair.RefreshToken // before reporting, so the channel is complete when all results are in
+			}
+			results <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-results; err != nil {
+			t.Fatalf("a concurrent refresh failed: %v", err)
+		}
+	}
+	close(tokens)
+	seen := map[string]bool{}
+	for tk := range tokens {
+		if seen[tk] {
+			t.Fatal("two refreshes got the same token")
+		}
+		seen[tk] = true
+	}
+	if got := e.tokens.activeTokens(res.User.ID); got != n {
+		t.Fatalf("active tokens = %d, want %d", got, n)
 	}
 }
