@@ -51,18 +51,19 @@
 
 ## Faz 6: Cilalama ve borçlar
 
-- [ ] Refresh token için kısa "grace period" (eşzamanlı iki sekme oturumu kapatmasın)
-- [ ] Gateway: 404 ve 502/504 için de JSON hata gövdesi
-- [ ] `backend/shared/httpx` ve `backend/shared/auth` middleware için kendi birim testleri
-- [ ] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? (olay ile) Karar ver
-- [ ] Payment: eşzamanlı çift çekim durumunda iade akışı (şimdilik yalnızca loglanır, DLQ'ya düşer); sağlayıcıdan gerçek iade
-- [ ] Order: stok yetmediği için iptal olan siparişte sepet boşalmış kalıyor; sepeti geri yükle ya da iptal sebebine göre boşaltma
-- [ ] Order: müşterinin `awaiting_payment` siparişi kendisinin iptal edebilmesi (ödeme ile yarışı düşünülerek)
-- [ ] Order: `payment_timeout` / `reservation_lost` iptalinden sonra gelen başarılı ödeme için otomatik iade (şimdilik `REFUND NEEDED` loglanır)
-- [ ] Outbox/Inbox temizliği: yayınlanmış `outbox_events` ve eski `processed_events` satırlarını periyodik sil
-- [ ] Gözlemlenebilirlik: Grafana panoları, uyarı kuralları (outbox birikimi, DLQ), veritabanı span'ları, trace örnekleme oranı
-- [ ] CI iş akışını GitHub'da ilk kez çalıştırıp düzelt (yerelde denenemedi)
-- [ ] Servisler arası JWT: HS256 yerine asimetrik imza (RS256/EdDSA) değerlendir
+- [x] Refresh token için kısa "grace period" (eşzamanlı iki sekme oturumu kapatmasın) (`REFRESH_TOKEN_GRACE`, 10 sn)
+- [x] Gateway: 404, 413 ve 502/503/504 için de JSON hata gövdesi
+- [x] `backend/shared/httpx` ve `backend/shared/auth` middleware için kendi birim testleri
+- [x] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? **Karar: hayır**, gerekçe not 17
+- [x] Payment: eşzamanlı çift çekimde otomatik iade; sipariş iptali sonrası gelen ödeme için `RefundRequested`/`PaymentRefunded` akışı
+- [x] Order: iptalde sepet geri yüklenir (müşterinin kendi iptali hariç)
+- [x] Order: müşteri `pending`/`awaiting_payment` siparişini iptal edebilir (`POST /orders/{id}/cancel`)
+- [x] Order: `payment_timeout` / `reservation_lost` / müşteri iptalinden sonra gelen başarılı ödeme otomatik iade edilir
+- [x] Outbox/Inbox temizliği (`outbox.Cleaner`, `OUTBOX_RETENTION`)
+- [x] Gözlemlenebilirlik: Grafana panosu, uyarı kuralları (outbox birikimi, DLQ, iade, ...), veritabanı span'ları, trace örnekleme ayarı
+- [x] Servisler arası JWT: asimetrik imza **değerlendirildi, ertelendi** (gerekçe ve göç planı not 17); üretime çıkmadan önce yapılmalı
+- [ ] Alertmanager (ya da Grafana contact point): uyarılar şimdilik yalnızca görünür
+- [ ] Kısmi iade (tek kalem), Catalog'da yayında ama stok kaydı olmayan ürün için vitrin/admin uyarısı
 - [ ] Sonra: React frontend (ayrı plan)
 
 ## Her fazın bitiş ölçütü

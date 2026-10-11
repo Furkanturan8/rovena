@@ -139,16 +139,19 @@ token, never from the path or the body). Prices always come from Catalog; a pric
 | PUT, DELETE | `/api/v1/cart/items/:variantId` (body: `quantity`) | signed-in user |
 | POST | `/api/v1/checkout` (header `Idempotency-Key`, body: `payment_method`) | signed-in user |
 | GET | `/api/v1/orders[/:id]` | signed-in user, own orders only |
+| POST | `/api/v1/orders/:id/cancel` | signed-in user, own unpaid orders only |
 | GET | `/api/v1/admin/orders[/:id]` (`status`, `customer_id`, `page`, `page_size`) | admin |
 
 Checkout answers as soon as stock is held and payment has been requested (`status: awaiting_payment`); poll the order
 until it is `confirmed` or `cancelled`. Repeating a checkout with the same `Idempotency-Key` returns the same order.
-A recovery job repairs orders that get stuck between saga steps. See [`docs/openapi/order.yaml`](openapi/order.yaml)
+A recovery job repairs orders that get stuck between saga steps. A cancelled order puts its items back into the cart
+(unless the customer cancelled), and money taken for a cancelled order is refunded automatically. See [`docs/openapi/order.yaml`](openapi/order.yaml)
 and [`docs/notes/14-order-servisi-ve-saga.md`](notes/14-order-servisi-ve-saga.md).
 
 **Observability.** Every service continues the caller's W3C trace (HTTP headers and, through the outbox, event envelopes)
 and serves Prometheus metrics at `/metrics` on its own port. `make up` also starts Jaeger (traces,
-`http://localhost:16686`) and Prometheus (`http://localhost:9090`). See
+`http://localhost:16686`), Prometheus (`http://localhost:9090`, with alert rules) and Grafana (`http://localhost:3000`, a
+ready-made dashboard). See
 [`docs/notes/16-gozlemlenebilirlik-ve-ci.md`](notes/16-gozlemlenebilirlik-ve-ci.md).
 
 Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`, order: `8086`).

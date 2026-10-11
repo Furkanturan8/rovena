@@ -29,6 +29,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `order` | Order servisi: sepet, checkout, Saga; Catalog ve Inventory'yi REST ile çağırır, ödeme olaylarını dinler, kurtarma işini çalıştırır | 127.0.0.1:8086 |
 | `jaeger` | Trace arayüzü ve toplayıcısı (bellekte saklar); servisler OTLP ile iz gönderir | 127.0.0.1:16686 |
 | `prometheus` | Her servisin `/metrics` yolunu ve RabbitMQ kuyruk metriklerini 10 sn'de bir okur | 127.0.0.1:9090 |
+| `grafana` | Hazır panolar (`Rovena overview`); Prometheus ve Jaeger'dan okur, geliştirmede girişsiz | 127.0.0.1:3000 |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:
@@ -61,6 +62,7 @@ Veritabanı tablolarının şeması kodla birlikte sürümlenir. `backend/servic
 Identity:
 - `00001_create_users.sql` → `users` tablosu
 - `00002_create_refresh_tokens.sql` → `refresh_tokens` tablosu
+- `00003_refresh_token_rotation.sql` → `rotated_at` (yenileme ile çıkış yapmayı ayırır; iki sekme hoşgörüsü için)
 
 Catalog:
 - `00001_create_catalog.sql` → kategoriler, ürünler, görseller, varyantlar (+ `pg_trgm` eklentisi)
@@ -68,10 +70,14 @@ Catalog:
 - `00003_variants_price_index.sql` → fiyat sıralamasını hızlandıran kısmi indeks
 
 Payment:
+- `00002_refunds.sql` → `refunded` durumu, `refund_ref`, `refunded_at`; para alınmış sayılan durumlar (`succeeded`, `refunded`) için sipariş başına tek kayıt
+- `00003_outbox_cleanup_indexes.sql` → outbox temizleyicisi için yaş indeksleri
 - `00001_create_payments.sql` → ödemeler (tutarsız durumları ve sipariş başına ikinci başarıyı engelleyen kısıtlarla) + `outbox_events` + `processed_events`
 
 Order:
 - `00001_create_orders.sql` → sepet, siparişler (durum/rezervasyon tutarlılığını koruyan kısıtlarla), sipariş satırları (fiyat görüntüsü), durum geçmişi + `outbox_events` + `processed_events`
+- `00002_refunds.sql` → `refund_state`, `refund_requests` (yalnızca iptal edilmiş siparişte iade durumu olabilir)
+- `00003_outbox_cleanup_indexes.sql` → outbox temizleyicisi için yaş indeksleri
 
 Inventory:
 - `00001_create_inventory.sql` → stok kalemleri, rezervasyonlar, rezervasyon kalemleri, hareket defteri (stoğun söz verilenin altına düşmesini engelleyen `CHECK` kısıtlarıyla)

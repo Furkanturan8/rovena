@@ -188,11 +188,15 @@ Veritabanı ayrıca tutarsız durumları reddeder (`payments_outcome_consistent`
 
 OpenAPI şeması `docs/openapi/payment.yaml`; çalışan yığına karşı sözleşme testi (`check_contract.py`) ödemeleri Order'dan gerçek checkout'larla (tüm saga'dan geçen siparişler) üretir.
 
+## İade (Faz 6)
+
+`RefundRequested` olayı gelince Payment siparişin `succeeded` ödemesini sağlayıcıdan geri alır, ödemeyi `refunded` yapar ve `PaymentRefunded` yayınlar. Ayrıntı, akış ve kurallar: [17](17-iade-iptal-ve-temizlik.md). Aynı siparişe iki ayrı anahtarla gelen ve yarışı kazanan **çift çekim** de artık anında iade edilir (eskiden yalnızca `DOUBLE CHARGE` loglanırdı).
+
 ## Bilinen eksikler
 
-- **İade (refund) akışı yok.** Aynı siparişe farklı anahtarla **eşzamanlı** iki istek gelirse ikisi de sağlayıcıdan geçebilir; veritabanı ikinci başarıyı kaydetmeyi reddeder, servis `DOUBLE CHARGE` hatası loglar ve mesaj DLQ'ya gider, ama parayı geri vermek elle yapılır. Gerçek sağlayıcıyla iade eklenmeli.
 - Sahte sağlayıcının anahtar hafızası bellekte; servis yeniden başlayınca unutulur. Gerçek sağlayıcı bunu kendi tarafında tutar.
 - `pending` kalıp hiç ilerlemeyen ödemeleri tarayan bir kurtarma işi yok (mesaj DLQ'ya düşerse). Order'ın kurtarma işi ([14](14-order-servisi-ve-saga.md)) ödeme isteğini aynı anahtarla tekrar göndererek bunu telafi eder.
+- Yalnızca tam iade vardır.
 
 ## Elle denemek
 

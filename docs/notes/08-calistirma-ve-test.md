@@ -124,6 +124,11 @@ make build   # tüm modülleri derle
 | `order/.../transport/consumer/payment_result_test.go` | Düzelmeyecek mesaj DLQ'ya, Inventory kesintisi retry'a |
 | `order/.../postgres/integration_test.go` | (Gerçek Postgres) eşzamanlı checkout tek sipariş, sepet sınırı, tek kazanan geçiş, durum+olay atomikliği, CHECK kısıtları, 12 eşzamanlı ödeme sonucu tek onay |
 | `catalog/.../transport/http/internal_test.go` | Dahili fiyat arama ucu: anahtar şart, `sellable` kuralı, bilinmeyen id atlanır |
+| `shared/auth/middleware_test.go`, `shared/httpx/httpx_test.go` | Token ara katmanı (başlık biçimleri, rol kontrolü, rolsüz rota kapalı), hata işleyici (iç hata istemciye sızmaz), doğrulama, sayfalama sınırları, sağlık/hazırlık, erişim logunda sır yok |
+| `identity/.../auth_service_test.go` (hoşgörü bölümü) | İki sekme yenilemesi hırsızlık sayılmaz, süre dolunca sayılır, çıkış yapılmış token'a hoşgörü yok, süresi dolmuş token'a yok, 8 eşzamanlı yenileme |
+| `order/.../service_test.go` (iade, iptal, sepet) | Geç gelen ödeme iade ister, iade tamamlanır/tekrarlanır/sınırlanır, müşteri iptali (idempotent, yarış, Inventory kesintisi), iptalde sepet geri gelir |
+| `payment/.../service_test.go` (iade bölümü) | İade bir kez yapılır ve her istekte cevaplanır, sağlayıcı kesintisi yeniden denenir, iade edilmiş siparişe yeniden ödeme alınmaz, yarışı kaybeden çift çekim hemen iade edilir |
+| `shared/outbox/integration_test.go` (temizlik) | Eski+yayınlanmış satır silinir, yayınlanmamış asla, 2500 satırlık birikim, relay ile birlikte çalışma |
 | `backend/shared/messaging`, `backend/shared/outbox` | Bkz. [12](12-mesajlasma.md) |
 
 ### Testlerin üç katmanı

@@ -90,7 +90,7 @@ Bir de gerçek bir hata yakalandı: Fiber'in döndürdüğü metinler bir sonrak
 | Outbox birikimi | `backend/shared/outbox/relay.go` |
 | Prometheus ayarı | `backend/infrastructure/prometheus/prometheus.yml` |
 
-Bilerek yapılmayan: veritabanı sorgu span'ları, Grafana panoları, uyarı kuralları (alerting), örnekleme (sampling) ayarı. Hepsi bu temelin üstüne eklenebilir.
+Faz 6'da eklendi: veritabanı sorgu span'ları, Grafana panosu, uyarı kuralları, örnekleme ayarı ([17](17-iade-iptal-ve-temizlik.md)). Hâlâ yok: bildirim gönderen bir Alertmanager.
 
 ---
 
@@ -134,6 +134,5 @@ Kuruldukları gün gerçek bulgular çıktı, yani boşuna değil:
 ## Bilinen eksikler
 
 - CI iş akışı bu makinede çalıştırılamadı (GitHub'a gitmeden denenemez); komutların her biri yerelde ayrı ayrı çalıştırıldı. İlk push'ta bir adım adı/sürümü uyuşmazsa düzeltilmesi gerekir.
-- Trace'ler örneklenmez (hepsi kaydedilir). Gerçek trafikte `OTEL_TRACES_SAMPLER` ile oran düşürülmeli.
 - Jaeger ve Prometheus verisi kalıcı değil.
-- Uyarı kuralı yok: birikim büyürse kimse haberdar edilmiyor, panodan bakmak gerekir.
+- Uyarılar yalnızca görünür (Prometheus `Alerts` sayfası, Grafana); kimseye bildirim gitmez.

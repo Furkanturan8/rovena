@@ -95,5 +95,8 @@
 | **Histogram** | Değerleri aralıklara dağıtıp sayan metrik türü; p95 gibi yüzdeliklerin hesabını sağlar |
 | **Cardinality (etiket çeşitliliği)** | Bir metriğin etiket kombinasyonu sayısı; sipariş id'si gibi sınırsız değerler yüzünden büyürse monitoring sistemini çökertir |
 | **Jaeger / Prometheus** | Trace'leri / metrikleri toplayıp gösteren araçlar |
+| **Refund (iade) akışı** | İptal edilmiş siparişin parasını sağlayıcıdan geri alıp sipariş durumuna işleyen olay zinciri (`RefundRequested` → `PaymentRefunded`) |
+| **Hoşgörü süresi (grace period)** | Yenileme sonrası eski refresh token'ın kısa süre daha kabul edilmesi; iki sekmenin aynı anda yenilemesi hırsızlık sayılmasın diye |
+| **Retention (saklama süresi)** | Bir kaydın silinmeden önce ne kadar tutulacağı (outbox satırları için 7 gün) |
 | **Linter** | Kodu çalıştırmadan inceleyip olası hataları ve stil sorunlarını bulan araç (`golangci-lint`) |
 | **CI (sürekli entegrasyon)** | Her değişiklikte derleme ve testlerin otomatik çalışması (GitHub Actions) |

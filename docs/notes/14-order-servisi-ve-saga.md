@@ -122,7 +122,7 @@ Bu yüzden Order tarafında **Inbox kullanılmıyor**, Payment'taki gerekçeyle 
 | `PaymentSucceeded` | `awaiting_payment` | `paid`, sonra commit, sonra `confirmed` |
 | | `paid` | Sadece commit'i tekrar dener (önceki deneme Inventory yüzünden yarım kalmıştı) |
 | | `confirmed` | Hiçbir şey (tekrar teslim) |
-| | `cancelled` | **Hiçbir şey değişmez**, ama `REFUND NEEDED` loglanır: ödeme geç geldi, para alındı, sipariş iptal |
+| | `cancelled` | Sipariş **iptal kalır**; para alındığı için `RefundRequested` kuyruğa alınır ve para geri verilir ([17](17-iade-iptal-ve-temizlik.md)) |
 | `PaymentFailed` | `awaiting_payment` | `cancelled` (sebep: ödeme hata kodu), sonra release |
 | | `cancelled` | Release'i tekrar dener |
 | | `paid` / `confirmed` | Yok sayılır. Payment ikinci bir ödeme isteğini `order_already_paid` ile reddettiğinde bu olay gelir ve gerçek siparişi etkilememelidir |
@@ -134,7 +134,7 @@ Bu yüzden Order tarafında **Inbox kullanılmıyor**, Payment'taki gerekçeyle 
 
 ### Rezervasyon süresi ödemeden önce dolarsa
 
-Inventory rezervasyonu 15 dakika sonra kendiliğinden bırakır. Ödeme bu süreden sonra başarıyla biterse commit `ErrReservationGone` döner. Order siparişi `cancelled` (`reservation_lost`) yapar ve `REFUND NEEDED` loglar. Müşteri parası alınmış ama malı tutulamamış durumdadır; iade akışı Faz 6'da.
+Inventory rezervasyonu 15 dakika sonra kendiliğinden bırakır. Ödeme bu süreden sonra başarıyla biterse commit `ErrReservationGone` döner. Order siparişi `cancelled` (`reservation_lost`) yapar ve parayı iade ettirir ([17](17-iade-iptal-ve-temizlik.md)).
 
 ## Takılan siparişi toparlayan kurtarma işi
 
@@ -212,13 +212,20 @@ Mutasyon kontrolü (kodu bilerek bozup testlerin kırmızıya döndüğünü gö
 
 Bir mutasyon (ödenmiş siparişi `PaymentFailed`'ın iptal etmesi) ilk denemede **yakalanmadı**: servis katmanındaki yanlışı repository'nin korumalı geçişi örtüyordu. İki katmanı birlikte bozunca yakalandı. Yani koruma iki katmanda ve testler ikisini de ayrı ayrı sınamıyor; bilinçli bir savunma derinliği.
 
+## Faz 6'da eklenenler
+
+Aşağıdakiler [17](17-iade-iptal-ve-temizlik.md)'de anlatılır; burada yalnızca bu bölümün anlattığı akışı nasıl değiştirdikleri var.
+
+- **Para iadesi.** Eskiden "para alındı ama sipariş iptal" durumu yalnızca loglanırdı (`REFUND NEEDED`). Artık sipariş `refund_state` (`none → requested → refunded`) taşır, iade istemi aynı transaction'da outbox'a yazılır ve kurtarma işi cevapsız iade isteğini tekrar eder.
+- **Müşteri iptali:** `POST /orders/{id}/cancel`. Ödeme sürerken de serbest; çekim yine de olursa iade edilir.
+- **İptalde sepet geri gelir** (müşterinin kendi iptali hariç).
+- Ek olarak ödeme sonuçları kuyruğu artık `PaymentRefunded`'ı da dinler.
+
 ## Bilinen eksikler
 
-- **İade yok.** İki durumda para alınıp sipariş iptal kalabilir: ödeme, `payment_timeout` iptalinden **sonra** başarıyla biterse; ve rezervasyon ödemeden önce dolarsa. İkisi de `REFUND NEEDED` loglar, otomatik iade Faz 6'da.
-- Stok yetmediği için iptal olan siparişte **sepet boşalmış kalır** (sepet siparişle birlikte boşaltılıyor). Müşteri ürünleri yeniden eklemek zorunda.
-- Müşteri, `awaiting_payment` bir siparişi kendisi iptal edemez; ödeme ile yarışacağı için bilerek eklenmedi.
 - Kurtarma işi her Order kopyasında çalışır; çakışma korumalı geçişlerle zararsızdır, ama gereksiz iş yapar. Tek kopya varsayımı.
 - `OrderConfirmed` ve `OrderCancelled` olaylarını henüz kimse dinlemiyor (bildirim, e-posta için kanca).
+- İade her zaman siparişin tamamıdır; kısmi iade yok.
 
 ## Elle denemek
 

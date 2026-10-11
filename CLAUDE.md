@@ -29,6 +29,7 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - `make test` → tüm modüllerde `go test ./...`
 - `make lint` / `make tidy-check` / `make build` → golangci-lint, go.mod denetimi, derleme (CI ile aynı)
 - `make test-integration`, `make e2e` → gerçek Postgres/RabbitMQ testleri, uçtan uca ve hata enjeksiyonu senaryoları
+- İade: iptal edilmiş siparişin parası otomatik iade edilir (Payment `RefundRequested` tüketir); müşteri `POST /orders/{id}/cancel` ile ödenmemiş siparişini iptal edebilir. Ayrıntı `docs/notes/17`.
 - Gözlemlenebilirlik: Jaeger `localhost:16686`, Prometheus `localhost:9090`, her servisin `/metrics` yolu (bkz. `docs/notes/16`)
 - `make seed-admin` / `make seed-catalog` → ilk admin / demo ürünler
 

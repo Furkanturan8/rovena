@@ -145,7 +145,7 @@ The Order Service coordinates the checkout Saga and does not directly modify inv
 
 The cart stores only variant ids and quantities. Names and prices are looked up in Catalog (an internal lookup endpoint) whenever the cart is shown and when an order is placed, so a client can never set a price. A checkout needs an `Idempotency-Key`; the same key returns the same order. The order is created in the same transaction that empties the cart, and only if the cart still holds exactly the lines that were priced.
 
-Order status moves `pending` -> `awaiting_payment` -> `paid` -> `confirmed`, or to `cancelled` from any of the first three. The order's belief about its stock reservation (`none`, `held`, `committed`, `released`) is tracked separately, so a half-finished compensation (cancelled but still holding stock) can be found and finished. Every transition is guarded (it applies only from the expected status) and queues its event in the same transaction.
+Order status moves `pending` -> `awaiting_payment` -> `paid` -> `confirmed`, or to `cancelled` from any of the first three. A customer can cancel while the order is `pending` or `awaiting_payment`; the items return to the cart after every cancellation except the customer's own. The order's belief about its stock reservation (`none`, `held`, `committed`, `released`) is tracked separately, so a half-finished compensation (cancelled but still holding stock) can be found and finished. Every transition is guarded (it applies only from the expected status) and queues its event in the same transaction.
 
 ### 3.5 Payment Service
 
@@ -337,7 +337,9 @@ Timeouts, retry counts and the recovery schedule (all configurable, these are th
 
 All payment requests for one order carry the same idempotency key (`order:<id>`), so asking again can never charge twice.
 
-Known gaps: when a payment succeeds after its order was cancelled (late success, or the reservation expired first), money has been taken for an order that will not ship. The service logs `REFUND NEEDED`; automated refunds are future work.
+**Refunds.** When a payment succeeds after its order was cancelled (late success, the customer cancelled while it was in flight, or the stock hold had expired), Order asks Payment for a refund (`RefundRequested`) and records the answer (`PaymentRefunded`). The request is repeated a bounded number of times if unanswered; after that an alert tells a person. A second charge that raced past the "already paid" check is refunded by Payment itself.
+
+**Housekeeping.** Published outbox rows and old inbox markers are deleted after `OUTBOX_RETENTION` (7 days by default); unpublished rows are never deleted.
 
 ## 8. Reliability Patterns
 
@@ -446,6 +448,8 @@ Service boundaries may evolve as domain knowledge grows. Splitting a service fur
 * **Hybrid checkout:** Stock reservation is a synchronous, idempotent REST call from Order to Inventory because its result is needed immediately and must name the failing item; payment is asynchronous over RabbitMQ. This keeps Inventory free of a message consumer and avoids a second saga participant waiting for events.
 * **Saga and Transactional Outbox:** Address cross-service consistency and reliable event publication.
 * **Guarded transitions instead of an Inbox in Order and Payment:** Their real effect is a call to another service, which a database transaction cannot cover. Idempotency comes from the state machine (an update applies only from the expected state) and from idempotent downstream calls.
+* **Stock records are opened by hand, not by an event:** A new Catalog variant does not create an Inventory record automatically (the initial quantity is a business input Catalog does not have, and an event would give Inventory its first consumer). A variant without a record shows as out of stock and is refused at checkout.
+* **HS256 shared secret for tokens, for now:** An asymmetric scheme (Ed25519, public keys for verifiers) was evaluated and postponed until services get separate secret stores; see `docs/notes/17-iade-iptal-ve-temizlik.md` for the migration plan.
 * **Order never trusts the client's prices:** The cart holds ids and quantities; prices come from Catalog at display time and at checkout, and the order keeps its own snapshot.
 * **Docker Compose first:** Keeps local development reproducible without premature orchestration complexity.
 
