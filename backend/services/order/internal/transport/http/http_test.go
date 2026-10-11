@@ -18,6 +18,7 @@ import (
 	"github.com/Furkanturan8/rovena/services/order/internal/repository/memory"
 	transport "github.com/Furkanturan8/rovena/services/order/internal/transport/http"
 	"github.com/Furkanturan8/rovena/shared/auth"
+	"github.com/Furkanturan8/rovena/shared/events"
 	"github.com/Furkanturan8/rovena/shared/httpx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
@@ -543,5 +544,97 @@ func TestAdmin_RejectsBadFilters(t *testing.T) {
 		if res := e.do("GET", "/api/v1/admin/orders?"+q, &admin, nil, nil); res.Status != http.StatusBadRequest {
 			t.Errorf("%s: %d", q, res.Status)
 		}
+	}
+}
+
+// ---------------------------------------------------------------- cancelling
+
+func TestCancel_OwnerCancelsAndRepeatIsHarmless(t *testing.T) {
+	e := newEnv(t)
+	c := e.user(auth.RoleCustomer)
+	e.putItem(c, e.variant("Shirt", 100), 1)
+	id := e.checkout(c, "k", "tok_visa").data()["id"].(string)
+
+	for i := 0; i < 2; i++ {
+		res := e.do("POST", "/api/v1/orders/"+id+"/cancel", &c, nil, nil)
+		d := res.data()
+		if res.Status != 200 || d["status"] != "cancelled" || d["failure_code"] != "cancelled_by_customer" {
+			t.Fatalf("round %d: %d %s", i, res.Status, res.Raw)
+		}
+	}
+	if _, has := e.do("GET", "/api/v1/orders/"+id, &c, nil, nil).data()["refund"]; has {
+		t.Fatal("no refund field when nothing was paid")
+	}
+}
+
+func TestCancel_AccessRules(t *testing.T) {
+	e := newEnv(t)
+	owner, other := e.user(auth.RoleCustomer), e.user(auth.RoleCustomer)
+	e.putItem(owner, e.variant("Shirt", 100), 1)
+	id := e.checkout(owner, "k", "tok_visa").data()["id"].(string)
+
+	if res := e.do("POST", "/api/v1/orders/"+id+"/cancel", nil, nil, nil); res.Status != 401 {
+		t.Errorf("no token: %d", res.Status)
+	}
+	if res := e.do("POST", "/api/v1/orders/"+id+"/cancel", &other, nil, nil); res.Status != 404 {
+		t.Errorf("another customer: %d, want 404", res.Status)
+	}
+	if res := e.do("POST", "/api/v1/orders/nope/cancel", &owner, nil, nil); res.Status != 400 {
+		t.Errorf("bad id: %d", res.Status)
+	}
+	if res := e.do("POST", "/api/v1/orders/"+uuid.NewString()+"/cancel", &owner, nil, nil); res.Status != 404 {
+		t.Errorf("unknown order: %d", res.Status)
+	}
+	if got := e.do("GET", "/api/v1/orders/"+id, &owner, nil, nil).data()["status"]; got != "awaiting_payment" {
+		t.Errorf("the refused requests must leave the order alone, status = %v", got)
+	}
+}
+
+func TestCancel_ConfirmedOrderIs409(t *testing.T) {
+	e := newEnv(t)
+	c := e.user(auth.RoleCustomer)
+	e.putItem(c, e.variant("Shirt", 100), 1)
+	created := e.checkout(c, "k", "tok_visa").data()
+	oid := uuid.MustParse(created["id"].(string))
+	if err := e.svc.OnPaymentSucceeded(context.Background(), events.PaymentSucceededPayload{
+		PaymentID: uuid.New(), OrderID: oid, AmountCents: 100, Currency: "TRY", ProviderRef: "r",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	res := e.do("POST", "/api/v1/orders/"+oid.String()+"/cancel", &c, nil, nil)
+	if res.Status != 409 {
+		t.Fatalf("%d %s", res.Status, res.Raw)
+	}
+}
+
+func TestRefundStateIsShownToTheCustomerAndInDetailToAdmins(t *testing.T) {
+	e := newEnv(t)
+	c, admin := e.user(auth.RoleCustomer), e.user(auth.RoleAdmin)
+	e.putItem(c, e.variant("Shirt", 100), 1)
+	oid := uuid.MustParse(e.checkout(c, "k", "tok_visa").data()["id"].(string))
+	e.do("POST", "/api/v1/orders/"+oid.String()+"/cancel", &c, nil, nil)
+	// the charge went through before the cancellation was noticed
+	if err := e.svc.OnPaymentSucceeded(context.Background(), events.PaymentSucceededPayload{
+		PaymentID: uuid.New(), OrderID: oid, AmountCents: 100, Currency: "TRY", ProviderRef: "r",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	mine := e.do("GET", "/api/v1/orders/"+oid.String(), &c, nil, nil).data()
+	if mine["status"] != "cancelled" || mine["refund"] != "pending" {
+		t.Fatalf("customer view: %v", mine)
+	}
+	adm := e.do("GET", "/api/v1/admin/orders/"+oid.String(), &admin, nil, nil).data()
+	if adm["refund_state"] != "requested" || adm["refund_requests"].(float64) != 1 {
+		t.Fatalf("admin view: %v", adm)
+	}
+
+	if err := e.svc.OnPaymentRefunded(context.Background(), events.PaymentRefundedPayload{
+		PaymentID: uuid.New(), OrderID: oid, AmountCents: 100, Currency: "TRY", RefundRef: "rf",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.do("GET", "/api/v1/orders/"+oid.String(), &c, nil, nil).data()["refund"]; got != "refunded" {
+		t.Fatalf("refund = %v", got)
 	}
 }

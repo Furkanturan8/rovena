@@ -30,6 +30,8 @@ type orderRow struct {
 	ReservationID    *uuid.UUID `bun:",type:uuid"`
 	ReservationState string     `bun:",notnull"`
 	PaymentRequests  int        `bun:",notnull"`
+	RefundState      string     `bun:",notnull"`
+	RefundRequests   int        `bun:",notnull"`
 	FailureCode      string     `bun:",notnull"`
 	FailureMessage   string     `bun:",notnull"`
 	CreatedAt        time.Time  `bun:",notnull"`
@@ -37,11 +39,14 @@ type orderRow struct {
 }
 
 func orderRowFrom(o *domain.Order) *orderRow {
+	if o.RefundState == "" {
+		o.RefundState = domain.RefundNone
+	}
 	return &orderRow{
 		ID: o.ID, CustomerID: o.CustomerID, Status: string(o.Status), TotalCents: o.TotalCents,
 		Currency: o.Currency, IdempotencyKey: o.IdempotencyKey, PaymentMethod: o.PaymentMethod,
 		ReservationID: o.ReservationID, ReservationState: string(o.ReservationState),
-		PaymentRequests: o.PaymentRequests, FailureCode: o.FailureCode, FailureMessage: o.FailureMessage,
+		PaymentRequests: o.PaymentRequests, RefundState: string(o.RefundState), RefundRequests: o.RefundRequests, FailureCode: o.FailureCode, FailureMessage: o.FailureMessage,
 		CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt,
 	}
 }
@@ -51,7 +56,7 @@ func (r *orderRow) toDomain() domain.Order {
 		ID: r.ID, CustomerID: r.CustomerID, Status: domain.Status(r.Status), TotalCents: r.TotalCents,
 		Currency: r.Currency, IdempotencyKey: r.IdempotencyKey, PaymentMethod: r.PaymentMethod,
 		ReservationID: r.ReservationID, ReservationState: domain.ReservationState(r.ReservationState),
-		PaymentRequests: r.PaymentRequests, FailureCode: r.FailureCode, FailureMessage: r.FailureMessage,
+		PaymentRequests: r.PaymentRequests, RefundState: domain.RefundState(r.RefundState), RefundRequests: r.RefundRequests, FailureCode: r.FailureCode, FailureMessage: r.FailureMessage,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }

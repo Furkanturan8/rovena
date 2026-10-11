@@ -67,8 +67,9 @@ func (c Config) withDefaults() Config {
 }
 
 var (
-	ordersFinished  = telemetry.Counter("orders.finished", "Orders that reached a final status, by status and cancellation code")
-	recoveryActions = telemetry.Counter("saga.recovery.actions", "Repairs made by the recovery job, by action")
+	refundsRequested = telemetry.Counter("orders.refunds.requested", "Refunds asked of Payment for cancelled orders, by reason")
+	ordersFinished   = telemetry.Counter("orders.finished", "Orders that reached a final status, by status and cancellation code")
+	recoveryActions  = telemetry.Counter("saga.recovery.actions", "Repairs made by the recovery job, by action")
 )
 
 func countRecovery(ctx context.Context, action string) {
@@ -117,6 +118,11 @@ func (s *OrderService) Checkout(ctx context.Context, in CheckoutInput) (order *d
 		return nil, false, err
 	}
 	if len(cart) == 0 {
+		// Either the cart really is empty, or a request with the same key emptied it a moment ago
+		// (we passed the key check just before that request committed). The key decides which.
+		if prior, perr := s.existing(ctx, in); prior != nil || perr != nil {
+			return prior, false, perr
+		}
 		return nil, false, domain.ErrCartEmpty
 	}
 	items, total, currency, err := s.price(ctx, cart)
@@ -132,7 +138,7 @@ func (s *OrderService) Checkout(ctx context.Context, in CheckoutInput) (order *d
 	o := &domain.Order{
 		ID: id, CustomerID: in.CustomerID, Status: domain.StatusPending,
 		TotalCents: total, Currency: currency, IdempotencyKey: in.IdempotencyKey,
-		PaymentMethod: in.PaymentMethod, ReservationState: domain.ReservationNone,
+		PaymentMethod: in.PaymentMethod, ReservationState: domain.ReservationNone, RefundState: domain.RefundNone,
 		Items: items, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.Create(ctx, o, cart); err != nil {
@@ -284,8 +290,84 @@ func (s *OrderService) cancel(ctx context.Context, o *domain.Order, from []domai
 	if changed {
 		ordersFinished.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "cancelled"), attribute.String("code", code)))
 		s.log.InfoContext(ctx, "order cancelled", "order_id", o.ID, "code", code)
+		if code != domain.CodeCancelledByCustomer {
+			s.restoreCart(ctx, o)
+		}
 	}
 	return changed
+}
+
+// restoreCart puts the items of an order that was cancelled for the customer (no stock, a declined
+// card, a timeout) back into their cart, so they can fix the problem and try again instead of
+// finding the cart empty. Best effort: the order is already cancelled either way.
+func (s *OrderService) restoreCart(ctx context.Context, o *domain.Order) {
+	items := make([]domain.CartItem, len(o.Items))
+	for i, it := range o.Items {
+		items[i] = domain.CartItem{VariantID: it.VariantID, Quantity: it.Quantity}
+	}
+	if err := s.repo.RestoreCart(ctx, o.CustomerID, items); err != nil {
+		s.log.WarnContext(ctx, "could not put the items of a cancelled order back into the cart", "order_id", o.ID, "error", err)
+	}
+}
+
+// requestRefund asks Payment to give back the money of a cancelled order whose payment went
+// through anyway (it arrived after the cancellation, or the stock was gone by the time it did).
+// Safe to repeat: only the first call for an order queues the request.
+func (s *OrderService) requestRefund(ctx context.Context, o *domain.Order, reason string) error {
+	ev, err := s.event(ctx, o, events.RefundRequested, events.RefundRequestedVersion, events.RefundRequestedPayload{
+		OrderID: o.ID, CustomerID: o.CustomerID, Reason: reason,
+	})
+	if err != nil {
+		return err
+	}
+	changed, err := s.repo.RequestRefund(ctx, o.ID, ev)
+	if err != nil {
+		return err
+	}
+	if changed {
+		refundsRequested.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", reason)))
+		s.log.WarnContext(ctx, "money was taken for a cancelled order, refund requested",
+			"order_id", o.ID, "reason", reason, "amount_cents", o.TotalCents)
+	}
+	return nil
+}
+
+// CancelByCustomer lets the customer cancel an order that is not paid yet. Cancelling while the
+// payment is in flight is allowed on purpose: if the payment succeeds anyway, the order is
+// already cancelled, and the money is refunded like for any other late payment.
+// It is idempotent, and an order cancelled for another reason is returned as it is.
+func (s *OrderService) CancelByCustomer(ctx context.Context, orderID, customerID uuid.UUID) (*domain.Order, error) {
+	o, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if o.CustomerID != customerID {
+		return nil, domain.ErrOrderNotFound
+	}
+	switch o.Status {
+	case domain.StatusCancelled:
+		return o, nil
+	case domain.StatusPaid, domain.StatusConfirmed:
+		return nil, domain.ErrCannotCancel
+	}
+
+	s.cancel(ctx, o, []domain.Status{domain.StatusPending, domain.StatusAwaitingPayment},
+		domain.CodeCancelledByCustomer, "You cancelled this order")
+	fresh, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	switch fresh.Status {
+	case domain.StatusCancelled:
+		// Releasing the stock is not the customer's concern; if Inventory is down the recovery
+		// job finishes it.
+		if err := s.settle(ctx, fresh); err != nil {
+			s.log.WarnContext(ctx, "releasing stock of a cancelled order failed, recovery will retry", "order_id", orderID, "error", err)
+		}
+		return s.repo.GetByID(ctx, orderID)
+	default:
+		return nil, domain.ErrCannotCancel // the payment arrived while we were cancelling
+	}
 }
 
 func (s *OrderService) paymentRequested(ctx context.Context, o *domain.Order) (messaging.Envelope, error) {

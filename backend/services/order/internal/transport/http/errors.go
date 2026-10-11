@@ -22,6 +22,8 @@ func MapDomainError(err error) (*errorx.AppError, bool) {
 	switch {
 	case errors.Is(err, domain.ErrOrderNotFound):
 		return errorx.WithMessage(errorx.ErrNotFound, "Order not found"), true
+	case errors.Is(err, domain.ErrCannotCancel):
+		return errorx.WithMessage(errorx.ErrConflict, "This order is already paid and can no longer be cancelled"), true
 	case errors.Is(err, domain.ErrCartEmpty):
 		return errorx.WithMessage(errorx.ErrValidation, "The cart is empty"), true
 	case errors.Is(err, domain.ErrCartChanged):

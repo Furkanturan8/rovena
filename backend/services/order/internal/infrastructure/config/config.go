@@ -25,6 +25,10 @@ type Config struct {
 	ClientTimeout time.Duration
 
 	RabbitMQURL string
+	// OutboxRetention is how long published outbox rows and inbox markers are kept before the cleaner removes them.
+	OutboxRetention time.Duration
+	// OutboxCleanInterval is how often the cleaner runs.
+	OutboxCleanInterval time.Duration
 	// RetryDelay is how long a payment result waits before it is redelivered after an error.
 	RetryDelay time.Duration
 
@@ -76,6 +80,14 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.MaxPaymentRequests, err = positiveInt("ORDER_MAX_PAYMENT_REQUESTS", 3); err != nil {
+		return nil, err
+	}
+
+	if cfg.OutboxRetention, err = duration("OUTBOX_RETENTION", 7*24*time.Hour); err != nil {
+		return nil, err
+	}
+
+	if cfg.OutboxCleanInterval, err = duration("OUTBOX_CLEAN_INTERVAL", time.Hour); err != nil {
 		return nil, err
 	}
 

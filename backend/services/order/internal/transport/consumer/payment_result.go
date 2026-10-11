@@ -30,7 +30,7 @@ func NewPaymentResultHandler(orders *application.OrderService) *PaymentResultHan
 func Subscription(retryDelay time.Duration) messaging.Subscription {
 	return messaging.Subscription{
 		Queue:      Queue,
-		Types:      []string{events.PaymentSucceeded, events.PaymentFailed},
+		Types:      []string{events.PaymentSucceeded, events.PaymentFailed, events.PaymentRefunded},
 		MaxRetries: 5,
 		RetryDelay: retryDelay,
 	}
@@ -60,6 +60,15 @@ func (h *PaymentResultHandler) Handle(ctx context.Context, env messaging.Envelop
 			return messaging.Permanent(err)
 		}
 		err = h.orders.OnPaymentFailed(ctx, p)
+	case events.PaymentRefunded:
+		if env.Version != events.PaymentRefundedVersion {
+			return messaging.Permanent(fmt.Errorf("unsupported %s version %d", env.Type, env.Version))
+		}
+		var p events.PaymentRefundedPayload
+		if err := env.DecodePayload(&p); err != nil {
+			return messaging.Permanent(err)
+		}
+		err = h.orders.OnPaymentRefunded(ctx, p)
 	default:
 		return messaging.Permanent(fmt.Errorf("unexpected event type %q", env.Type))
 	}

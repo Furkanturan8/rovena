@@ -8,6 +8,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// MaxRefundRequests bounds how often the recovery job asks Payment to refund the same order.
+const MaxRefundRequests = 5
+
 const (
 	MaxLineQuantity = 99
 	MaxCartLines    = 50
@@ -54,6 +57,18 @@ const (
 	CodePaymentTimeout   = "payment_timeout"
 	CodeReservationLost  = "reservation_lost"
 	CodePaymentCancelled = "payment_failed"
+	// CodeCancelledByCustomer is the only cancellation that leaves the cart empty: the customer
+	// chose it. After every other cancellation the items go back into the cart.
+	CodeCancelledByCustomer = "cancelled_by_customer"
+)
+
+// RefundState tracks whether money taken for a cancelled order was given back.
+type RefundState string
+
+const (
+	RefundNone      RefundState = "none"
+	RefundRequested RefundState = "requested"
+	RefundRefunded  RefundState = "refunded"
 )
 
 type CartItem struct {
@@ -85,6 +100,8 @@ type Order struct {
 	ReservationID    *uuid.UUID
 	ReservationState ReservationState
 	PaymentRequests  int
+	RefundState      RefundState
+	RefundRequests   int
 	FailureCode      string
 	FailureMessage   string
 	Items            []OrderItem
@@ -118,6 +135,9 @@ var (
 	ErrInvalidQuantity      = errors.New("quantity out of range")
 	ErrIdempotencyKeyReused = errors.New("idempotency key was used with a different request")
 	ErrInvalidRequest       = errors.New("invalid request")
+	// ErrCannotCancel means the order is already paid for or confirmed: the customer can no
+	// longer cancel it by themselves.
+	ErrCannotCancel = errors.New("order can no longer be cancelled")
 	// ErrDuplicateCheckout is returned by the repository when the (customer, key) pair
 	// already has an order; the service then returns that order.
 	ErrDuplicateCheckout = errors.New("checkout already exists for this idempotency key")

@@ -69,8 +69,11 @@ type OrderResponse struct {
 	Items          []OrderItemResponse `json:"items"`
 	FailureCode    string              `json:"failure_code,omitempty"`
 	FailureMessage string              `json:"failure_message,omitempty"`
-	CreatedAt      time.Time           `json:"created_at"`
-	UpdatedAt      time.Time           `json:"updated_at"`
+	// Refund is present only on a cancelled order whose payment went through: "pending" while the
+	// money is on its way back, "refunded" once it is.
+	Refund    string    `json:"refund,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func ToOrderResponse(o *domain.Order) OrderResponse {
@@ -84,9 +87,19 @@ func ToOrderResponse(o *domain.Order) OrderResponse {
 	}
 	return OrderResponse{
 		ID: o.ID.String(), Status: string(o.Status), TotalCents: o.TotalCents, Currency: o.Currency,
-		Items: items, FailureCode: o.FailureCode, FailureMessage: o.FailureMessage,
+		Items: items, FailureCode: o.FailureCode, FailureMessage: o.FailureMessage, Refund: refundLabel(o.RefundState),
 		CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt,
 	}
+}
+
+func refundLabel(s domain.RefundState) string {
+	switch s {
+	case domain.RefundRequested:
+		return "pending"
+	case domain.RefundRefunded:
+		return "refunded"
+	}
+	return ""
 }
 
 // HistoryEntryResponse is what the customer sees: the status and when it was reached.
@@ -118,12 +131,15 @@ type AdminOrderResponse struct {
 	ReservationID    *string `json:"reservation_id"`
 	ReservationState string  `json:"reservation_state"`
 	PaymentRequests  int     `json:"payment_requests"`
+	RefundState      string  `json:"refund_state"`
+	RefundRequests   int     `json:"refund_requests"`
 }
 
 func ToAdminOrderResponse(o *domain.Order) AdminOrderResponse {
 	r := AdminOrderResponse{
 		OrderResponse: ToOrderResponse(o), CustomerID: o.CustomerID.String(),
 		ReservationState: string(o.ReservationState), PaymentRequests: o.PaymentRequests,
+		RefundState: string(o.RefundState), RefundRequests: o.RefundRequests,
 	}
 	if o.ReservationID != nil {
 		s := o.ReservationID.String()

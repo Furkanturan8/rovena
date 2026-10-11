@@ -392,6 +392,92 @@ func (r *OrderRepository) RequestPaymentAgain(ctx context.Context, id uuid.UUID,
 	return changed, err
 }
 
+func (r *OrderRepository) RequestRefund(ctx context.Context, id uuid.UUID, ev messaging.Envelope) (bool, error) {
+	return r.refundStep(ctx, id, ev, domain.RefundNone, "money to be returned, refund requested")
+}
+
+func (r *OrderRepository) RequestRefundAgain(ctx context.Context, id uuid.UUID, ev messaging.Envelope) (bool, error) {
+	return r.refundStep(ctx, id, ev, domain.RefundRequested, "no refund answer yet, refund requested again")
+}
+
+// refundStep queues RefundRequested for a cancelled order that is in refund state from.
+func (r *OrderRepository) refundStep(ctx context.Context, id uuid.UUID, ev messaging.Envelope, from domain.RefundState, note string) (bool, error) {
+	changed := false
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		res, err := tx.NewUpdate().Table("orders").
+			Set("refund_state = ?", string(domain.RefundRequested)).
+			Set("refund_requests = refund_requests + 1").Set("updated_at = now()").
+			Where("id = ? AND status = ? AND refund_state = ?", id, string(domain.StatusCancelled), string(from)).
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return nil
+		}
+		if err := outbox.Add(ctx, tx, ev); err != nil {
+			return err
+		}
+		changed = true
+		cancelled := domain.StatusCancelled
+		return addHistory(ctx, tx, id, &cancelled, cancelled, note)
+	})
+	return changed, err
+}
+
+func (r *OrderRepository) MarkRefunded(ctx context.Context, id uuid.UUID) (bool, error) {
+	changed := false
+	err := r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		res, err := tx.NewUpdate().Table("orders").
+			Set("refund_state = ?", string(domain.RefundRefunded)).Set("updated_at = now()").
+			Where("id = ? AND status = ? AND refund_state = ?", id, string(domain.StatusCancelled), string(domain.RefundRequested)).
+			Exec(ctx)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return nil
+		}
+		changed = true
+		cancelled := domain.StatusCancelled
+		return addHistory(ctx, tx, id, &cancelled, cancelled, "money refunded")
+	})
+	return changed, err
+}
+
+func (r *OrderRepository) RestoreCart(ctx context.Context, customerID uuid.UUID, items []domain.CartItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	return r.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if err := lockCart(ctx, tx, customerID); err != nil {
+			return err
+		}
+		have, err := cartItems(ctx, tx, customerID, false)
+		if err != nil {
+			return err
+		}
+		room := domain.MaxCartLines - len(have)
+		for _, it := range items {
+			if room <= 0 {
+				break
+			}
+			res, err := tx.NewInsert().Model(&cartItemRow{CustomerID: customerID, VariantID: it.VariantID, Quantity: it.Quantity}).
+				On("CONFLICT (customer_id, variant_id) DO NOTHING").Exec(ctx)
+			if err != nil {
+				return err
+			}
+			if n, _ := res.RowsAffected(); n == 1 {
+				room--
+			}
+		}
+		_, err = tx.NewUpdate().Table("carts").Set("updated_at = now()").Where("customer_id = ?", customerID).Exec(ctx)
+		return err
+	})
+}
+
 func (r *OrderRepository) Touch(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.NewUpdate().Table("orders").Set("updated_at = now()").Where("id = ?", id).Exec(ctx)
 	return err
@@ -404,7 +490,8 @@ func (r *OrderRepository) Unfinished(ctx context.Context, olderThan time.Time, l
 		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
 			return q.Where("o.status IN (?)", bun.List([]string{
 				string(domain.StatusPending), string(domain.StatusAwaitingPayment), string(domain.StatusPaid),
-			})).WhereOr("o.status = ? AND o.reservation_state = ?", string(domain.StatusCancelled), string(domain.ReservationHeld))
+			})).WhereOr("o.status = ? AND (o.reservation_state = ? OR (o.refund_state = ? AND o.refund_requests < ?))",
+				string(domain.StatusCancelled), string(domain.ReservationHeld), string(domain.RefundRequested), domain.MaxRefundRequests)
 		}).
 		Order("o.updated_at").Limit(int64(limit)).Scan(ctx)
 	if err != nil {

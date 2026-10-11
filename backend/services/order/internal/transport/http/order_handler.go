@@ -163,6 +163,23 @@ func (h *OrderHandler) MyOrder(c *fiber.Ctx) error {
 	return response.OK(c, ToOrderDetailResponse(d))
 }
 
+// Cancel lets the customer cancel an order that is not paid yet. Repeating it is harmless.
+func (h *OrderHandler) Cancel(c *fiber.Ctx) error {
+	customerID, err := currentCustomer(c)
+	if err != nil {
+		return err
+	}
+	id, err := pathUUID(c, "id")
+	if err != nil {
+		return err
+	}
+	o, err := h.orders.CancelByCustomer(c.UserContext(), id, customerID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, ToOrderResponse(o))
+}
+
 // ---- admin ----
 
 func (h *OrderHandler) AdminList(c *fiber.Ctx) error {

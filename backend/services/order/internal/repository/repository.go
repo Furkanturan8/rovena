@@ -45,6 +45,16 @@ type OrderRepository interface {
 	MarkReleased(ctx context.Context, id uuid.UUID) (changed bool, err error)
 	// RequestPaymentAgain queues another PaymentRequested for an order still awaiting payment.
 	RequestPaymentAgain(ctx context.Context, id uuid.UUID, paymentRequested messaging.Envelope) (changed bool, err error)
+	// RequestRefund marks a cancelled order's money as to be returned and queues RefundRequested.
+	// It applies only while refund_state is none.
+	RequestRefund(ctx context.Context, id uuid.UUID, refundRequested messaging.Envelope) (changed bool, err error)
+	// RequestRefundAgain queues another RefundRequested while the refund is still outstanding.
+	RequestRefundAgain(ctx context.Context, id uuid.UUID, refundRequested messaging.Envelope) (changed bool, err error)
+	// MarkRefunded: refund requested -> refunded.
+	MarkRefunded(ctx context.Context, id uuid.UUID) (changed bool, err error)
+	// RestoreCart puts the items of a cancelled order back into the customer's cart. Lines the
+	// customer already has again are left as they are, and the cart limit is respected.
+	RestoreCart(ctx context.Context, customerID uuid.UUID, items []domain.CartItem) error
 	// Touch moves updated_at forward, so a recovery attempt that changed nothing is not repeated at once.
 	Touch(ctx context.Context, id uuid.UUID) error
 

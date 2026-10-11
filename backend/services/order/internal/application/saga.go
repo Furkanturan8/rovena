@@ -40,9 +40,9 @@ func (s *OrderService) OnPaymentSucceeded(ctx context.Context, p events.PaymentS
 	case domain.StatusConfirmed:
 		return nil
 	case domain.StatusCancelled:
-		s.log.ErrorContext(ctx, "REFUND NEEDED: payment succeeded for a cancelled order",
-			"order_id", o.ID, "payment_id", p.PaymentID, "amount_cents", p.AmountCents, "code", o.FailureCode)
-		return nil
+		// The payment arrived after the order was cancelled (timeout, customer, ...). The order
+		// stays cancelled; the money goes back.
+		return s.requestRefund(ctx, o, o.FailureCode)
 	default:
 		return fmt.Errorf("%w: payment succeeded for order %s in status %s", ErrUnexpectedEvent, o.ID, o.Status)
 	}
@@ -80,6 +80,30 @@ func (s *OrderService) OnPaymentFailed(ctx context.Context, p events.PaymentFail
 	return s.settleByID(ctx, o.ID)
 }
 
+// OnPaymentRefunded handles PaymentRefunded: the customer has their money back.
+func (s *OrderService) OnPaymentRefunded(ctx context.Context, p events.PaymentRefundedPayload) error {
+	o, err := s.paymentOrder(ctx, p.OrderID)
+	if err != nil {
+		return err
+	}
+	if p.AmountCents != o.TotalCents || p.Currency != o.Currency {
+		s.log.ErrorContext(ctx, "REFUND AMOUNT MISMATCH",
+			"order_id", o.ID, "ordered_cents", o.TotalCents, "refunded_cents", p.AmountCents)
+		return fmt.Errorf("%w: refunded %d %s for an order of %d %s", ErrUnexpectedEvent,
+			p.AmountCents, p.Currency, o.TotalCents, o.Currency)
+	}
+	changed, err := s.repo.MarkRefunded(ctx, o.ID)
+	if err != nil {
+		return err
+	}
+	if changed {
+		s.log.InfoContext(ctx, "order refunded", "order_id", o.ID, "refund_ref", p.RefundRef)
+	}
+	// Not changed: a repeated PaymentRefunded, or one for a payment this order never asked to refund
+	// (Payment refunded a duplicate charge by itself). Nothing to do either way.
+	return nil
+}
+
 func (s *OrderService) paymentOrder(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
 	o, err := s.repo.GetByID(ctx, id)
 	if errors.Is(err, domain.ErrOrderNotFound) {
@@ -109,12 +133,14 @@ func (s *OrderService) settle(ctx context.Context, o *domain.Order) error {
 		if errors.Is(err, ErrReservationGone) {
 			// The reservation expired before the payment arrived: the customer paid for
 			// stock that may be sold elsewhere by now.
-			s.log.ErrorContext(ctx, "REFUND NEEDED: reservation lost before payment arrived",
+			s.log.WarnContext(ctx, "reservation expired before the payment arrived; cancelling and refunding",
 				"order_id", o.ID, "reservation_id", *o.ReservationID, "amount_cents", o.TotalCents)
 			s.cancel(ctx, o, []domain.Status{domain.StatusPaid}, domain.CodeReservationLost,
 				"The items could not be kept for you in time")
-			_, err := s.repo.MarkReleased(ctx, o.ID)
-			return err
+			if _, err := s.repo.MarkReleased(ctx, o.ID); err != nil {
+				return err
+			}
+			return s.requestRefund(ctx, o, domain.CodeReservationLost)
 		}
 		if err != nil {
 			return err

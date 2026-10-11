@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Furkanturan8/rovena/services/order/internal/domain"
+	"github.com/Furkanturan8/rovena/shared/events"
 )
 
 // RunRecovery calls Recover every interval until ctx ends.
@@ -87,10 +88,38 @@ func (s *OrderService) recoverOne(ctx context.Context, o *domain.Order, now time
 		}
 		return true
 
-	case domain.StatusPaid, domain.StatusCancelled:
+	case domain.StatusPaid:
 		countRecovery(ctx, "settle_reservation")
 		s.settleOrLog(ctx, o)
 		return true
+
+	case domain.StatusCancelled:
+		acted := false
+		if o.ReservationState == domain.ReservationHeld {
+			acted = true
+			countRecovery(ctx, "settle_reservation")
+			s.settleOrLog(ctx, o)
+		}
+		// Asked for a refund and no PaymentRefunded came back: ask again, a bounded number of times.
+		if o.RefundState == domain.RefundRequested && o.RefundRequests < domain.MaxRefundRequests &&
+			now.Sub(o.UpdatedAt) >= s.cfg.PaymentTimeout {
+			acted = true
+			countRecovery(ctx, "refund_requested_again")
+			ev, err := s.event(ctx, o, events.RefundRequested, events.RefundRequestedVersion, events.RefundRequestedPayload{
+				OrderID: o.ID, CustomerID: o.CustomerID, Reason: "no_answer",
+			})
+			if err == nil {
+				_, err = s.repo.RequestRefundAgain(ctx, o.ID, ev)
+			}
+			if err != nil {
+				s.log.ErrorContext(ctx, "request refund again", "order_id", o.ID, "error", err)
+			}
+			if o.RefundRequests+1 >= domain.MaxRefundRequests {
+				s.log.ErrorContext(ctx, "REFUND STUCK: Payment did not answer the last refund request; a person must check",
+					"order_id", o.ID, "amount_cents", o.TotalCents)
+			}
+		}
+		return acted
 	}
 	return false
 }

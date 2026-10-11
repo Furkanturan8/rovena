@@ -29,6 +29,9 @@ type Repo struct {
 
 	// FailNext makes the named method return an error once.
 	FailNext map[string]error
+	// OnGetCart runs once, before the next cart is read, for tests that need another request to
+	// slip in between two steps of a checkout.
+	OnGetCart func()
 }
 
 func New(now func() time.Time) *Repo {
@@ -47,6 +50,11 @@ func (r *Repo) fail(method string) error {
 }
 
 func (r *Repo) GetCart(_ context.Context, c uuid.UUID) ([]domain.CartItem, error) {
+	if r.OnGetCart != nil {
+		hook := r.OnGetCart
+		r.OnGetCart = nil
+		hook()
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.cartLocked(c), nil
@@ -243,6 +251,60 @@ func (r *Repo) RequestPaymentAgain(_ context.Context, id uuid.UUID, ev messaging
 	return true, nil
 }
 
+func (r *Repo) refundStep(id uuid.UUID, ev messaging.Envelope, from domain.RefundState) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	o, ok := r.Orders[id]
+	if !ok || o.Status != domain.StatusCancelled || o.RefundState != from {
+		return false, nil
+	}
+	o.RefundState = domain.RefundRequested
+	o.RefundRequests++
+	o.UpdatedAt = r.now()
+	r.Outbox = append(r.Outbox, ev)
+	return true, nil
+}
+
+func (r *Repo) RequestRefund(_ context.Context, id uuid.UUID, ev messaging.Envelope) (bool, error) {
+	if err := r.fail("RequestRefund"); err != nil {
+		return false, err
+	}
+	return r.refundStep(id, ev, domain.RefundNone)
+}
+
+func (r *Repo) RequestRefundAgain(_ context.Context, id uuid.UUID, ev messaging.Envelope) (bool, error) {
+	return r.refundStep(id, ev, domain.RefundRequested)
+}
+
+func (r *Repo) MarkRefunded(_ context.Context, id uuid.UUID) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	o, ok := r.Orders[id]
+	if !ok || o.Status != domain.StatusCancelled || o.RefundState != domain.RefundRequested {
+		return false, nil
+	}
+	o.RefundState = domain.RefundRefunded
+	o.UpdatedAt = r.now()
+	return true, nil
+}
+
+func (r *Repo) RestoreCart(_ context.Context, customerID uuid.UUID, items []domain.CartItem) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.carts[customerID] == nil {
+		r.carts[customerID] = map[uuid.UUID]int{}
+	}
+	for _, it := range items {
+		if len(r.carts[customerID]) >= domain.MaxCartLines {
+			break
+		}
+		if _, have := r.carts[customerID][it.VariantID]; !have {
+			r.carts[customerID][it.VariantID] = it.Quantity
+		}
+	}
+	return nil
+}
+
 func (r *Repo) Touch(_ context.Context, id uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -258,7 +320,8 @@ func (r *Repo) Unfinished(_ context.Context, olderThan time.Time, limit int) ([]
 	var out []domain.Order
 	for _, o := range r.Orders {
 		unfinished := o.Status == domain.StatusPending || o.Status == domain.StatusAwaitingPayment || o.Status == domain.StatusPaid ||
-			(o.Status == domain.StatusCancelled && o.ReservationState == domain.ReservationHeld)
+			(o.Status == domain.StatusCancelled && (o.ReservationState == domain.ReservationHeld ||
+				(o.RefundState == domain.RefundRequested && o.RefundRequests < domain.MaxRefundRequests)))
 		if unfinished && o.UpdatedAt.Before(olderThan) {
 			out = append(out, *o)
 		}

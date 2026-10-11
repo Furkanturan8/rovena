@@ -90,7 +90,7 @@ func (h *harness) newOrder(customer uuid.UUID, key string, cart []domain.CartIte
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	o := &domain.Order{
 		ID: id, CustomerID: customer, Status: domain.StatusPending, TotalCents: 3000, Currency: "TRY",
-		IdempotencyKey: key, PaymentMethod: "tok_visa", ReservationState: domain.ReservationNone,
+		IdempotencyKey: key, PaymentMethod: "tok_visa", ReservationState: domain.ReservationNone, RefundState: domain.RefundNone,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	for _, c := range cart {
@@ -715,5 +715,210 @@ func TestSaga_ConcurrentCheckoutRetriesWithOneKeyReserveOnce(t *testing.T) {
 	o := h.get(t, first)
 	if o.Status != domain.StatusAwaitingPayment || h.outboxCount(t, o, events.PaymentRequested) != 1 {
 		t.Fatalf("status %s, payment requests queued %d", o.Status, h.outboxCount(t, o, events.PaymentRequested))
+	}
+}
+
+// ---------------------------------------------------------------- refunds and cart restore
+
+func (h *harness) refundRequested(t *testing.T, o *domain.Order) messaging.Envelope {
+	return h.event(t, o, events.RefundRequested, events.RefundRequestedPayload{OrderID: o.ID, CustomerID: o.CustomerID, Reason: "x"})
+}
+
+func (h *harness) cancelled(t *testing.T) *domain.Order {
+	t.Helper()
+	o, _ := h.placed(t)
+	if _, err := h.repo.Cancel(h.ctx, o.ID, []domain.Status{domain.StatusAwaitingPayment}, "payment_timeout", "x", h.cancelledEvent(t, o)); err != nil {
+		t.Fatal(err)
+	}
+	return h.get(t, o.ID)
+}
+
+func TestRequestRefund_OnlyForACancelledOrderAndOnlyOnce(t *testing.T) {
+	h := setup(t)
+	live, _ := h.placed(t)
+	if changed, err := h.repo.RequestRefund(h.ctx, live.ID, h.refundRequested(t, live)); err != nil || changed {
+		t.Fatalf("an order that is not cancelled has nothing to refund: changed=%v err=%v", changed, err)
+	}
+	if h.outboxCount(t, live, events.RefundRequested) != 0 {
+		t.Fatal("no event may be queued when nothing changed")
+	}
+
+	o := h.cancelled(t)
+	if changed, err := h.repo.RequestRefund(h.ctx, o.ID, h.refundRequested(t, o)); err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	got := h.get(t, o.ID)
+	if got.RefundState != domain.RefundRequested || got.RefundRequests != 1 || got.Status != domain.StatusCancelled {
+		t.Fatalf("order = %+v", got)
+	}
+	if changed, _ := h.repo.RequestRefund(h.ctx, o.ID, h.refundRequested(t, o)); changed {
+		t.Fatal("the first request is the only one")
+	}
+	if h.outboxCount(t, o, events.RefundRequested) != 1 {
+		t.Fatal("exactly one RefundRequested expected")
+	}
+}
+
+func TestConcurrentRefundRequestsQueueOneEvent(t *testing.T) {
+	h := setup(t)
+	o := h.cancelled(t)
+	var changedCount atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ch, err := h.repo.RequestRefund(h.ctx, o.ID, h.refundRequested(t, o))
+			if err != nil {
+				t.Error(err)
+			}
+			if ch {
+				changedCount.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if changedCount.Load() != 1 || h.outboxCount(t, o, events.RefundRequested) != 1 {
+		t.Fatalf("%d requests applied, %d events", changedCount.Load(), h.outboxCount(t, o, events.RefundRequested))
+	}
+}
+
+func TestRefundAgainAndMarkRefunded(t *testing.T) {
+	h := setup(t)
+	o := h.cancelled(t)
+	if changed, _ := h.repo.RequestRefundAgain(h.ctx, o.ID, h.refundRequested(t, o)); changed {
+		t.Fatal("asking again needs a first request")
+	}
+	if changed, _ := h.repo.MarkRefunded(h.ctx, o.ID); changed {
+		t.Fatal("nothing was requested, so nothing can be refunded")
+	}
+	if _, err := h.repo.RequestRefund(h.ctx, o.ID, h.refundRequested(t, o)); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := h.repo.RequestRefundAgain(h.ctx, o.ID, h.refundRequested(t, o)); err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	if got := h.get(t, o.ID); got.RefundRequests != 2 || h.outboxCount(t, o, events.RefundRequested) != 2 {
+		t.Fatalf("requests %d, events %d", got.RefundRequests, h.outboxCount(t, o, events.RefundRequested))
+	}
+	if changed, err := h.repo.MarkRefunded(h.ctx, o.ID); err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	if changed, _ := h.repo.MarkRefunded(h.ctx, o.ID); changed {
+		t.Fatal("refunding twice must apply once")
+	}
+	if changed, _ := h.repo.RequestRefundAgain(h.ctx, o.ID, h.refundRequested(t, o)); changed {
+		t.Fatal("a refunded order is not asked about again")
+	}
+	hist, _ := h.repo.History(h.ctx, o.ID)
+	if last := hist[len(hist)-1]; last.Reason != "money refunded" {
+		t.Fatalf("history = %+v", hist)
+	}
+}
+
+func TestUnfinishedIncludesOutstandingRefundsUntilTheLimit(t *testing.T) {
+	h := setup(t)
+	o := h.cancelled(t)
+	has := func() bool {
+		list, err := h.repo.Unfinished(h.ctx, time.Now().Add(time.Hour), 1000)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, x := range list {
+			if x.ID == o.ID {
+				return true
+			}
+		}
+		return false
+	}
+	// cancelled and released-or-not: this one still holds its reservation
+	if !has() {
+		t.Fatal("setup: a cancelled order that still holds stock is unfinished")
+	}
+	if _, err := h.repo.MarkReleased(h.ctx, o.ID); err != nil {
+		t.Fatal(err)
+	}
+	if has() {
+		t.Fatal("released and nothing to refund: finished")
+	}
+	if _, err := h.repo.RequestRefund(h.ctx, o.ID, h.refundRequested(t, o)); err != nil {
+		t.Fatal(err)
+	}
+	if !has() {
+		t.Fatal("an outstanding refund is unfinished business")
+	}
+	for i := 1; i < domain.MaxRefundRequests; i++ {
+		if _, err := h.repo.RequestRefundAgain(h.ctx, o.ID, h.refundRequested(t, o)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if has() {
+		t.Fatal("after the last allowed request the recovery job must leave it alone")
+	}
+}
+
+func TestDatabaseRefusesARefundOnAnOrderThatIsNotCancelled(t *testing.T) {
+	h := setup(t)
+	o, _ := h.placed(t)
+	for name, sql := range map[string]string{
+		"refund requested on a live order": "UPDATE orders SET refund_state = 'requested' WHERE id = ?",
+		"unknown refund state":             "UPDATE orders SET refund_state = 'maybe' WHERE id = ?",
+		"negative request count":           "UPDATE orders SET refund_requests = -1 WHERE id = ?",
+	} {
+		if _, err := h.db.ExecContext(h.ctx, sql, o.ID); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
+
+func TestRestoreCart_AddsMissingLinesKeepsNewerChoicesAndRespectsTheLimit(t *testing.T) {
+	h := setup(t)
+	c := h.customer()
+	kept, added := uuid.New(), uuid.New()
+	if err := h.repo.SetCartItem(h.ctx, c, domain.CartItem{VariantID: kept, Quantity: 7}); err != nil {
+		t.Fatal(err)
+	}
+	err := h.repo.RestoreCart(h.ctx, c, []domain.CartItem{{VariantID: kept, Quantity: 1}, {VariantID: added, Quantity: 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, _ := h.repo.GetCart(h.ctx, c)
+	got := map[uuid.UUID]int{}
+	for _, it := range items {
+		got[it.VariantID] = it.Quantity
+	}
+	if got[kept] != 7 || got[added] != 2 || len(got) != 2 {
+		t.Fatalf("cart = %v", got)
+	}
+
+	// A nearly full cart takes only what fits.
+	full := h.customer()
+	h.fillCart(t, full, domain.MaxCartLines-1)
+	var many []domain.CartItem
+	for i := 0; i < 5; i++ {
+		many = append(many, domain.CartItem{VariantID: uuid.New(), Quantity: 1})
+	}
+	if err := h.repo.RestoreCart(h.ctx, full, many); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := h.repo.GetCart(h.ctx, full); len(items) != domain.MaxCartLines {
+		t.Fatalf("cart has %d lines, the limit is %d", len(items), domain.MaxCartLines)
+	}
+
+	// An empty list changes nothing, also for a customer who never had a cart.
+	if err := h.repo.RestoreCart(h.ctx, h.customer(), nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRestoreCart_WorksForACustomerWhoseCartRowIsGone(t *testing.T) {
+	h := setup(t)
+	c := h.customer()
+	v := uuid.New()
+	if err := h.repo.RestoreCart(h.ctx, c, []domain.CartItem{{VariantID: v, Quantity: 3}}); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := h.repo.GetCart(h.ctx, c); len(items) != 1 || items[0].Quantity != 3 {
+		t.Fatalf("items = %+v", items)
 	}
 }

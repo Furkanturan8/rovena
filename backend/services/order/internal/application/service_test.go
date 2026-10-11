@@ -512,7 +512,7 @@ func TestPaymentSucceeded_CommitOutageKeepsTheOrderPaidUntilRetried(t *testing.T
 	}
 }
 
-func TestPaymentSucceeded_ReservationExpiredBeforePaymentCancelsAndFlagsRefund(t *testing.T) {
+func TestPaymentSucceeded_ReservationExpiredBeforePaymentCancelsAndRefunds(t *testing.T) {
 	h := newHarness(t)
 	o := h.placed()
 	h.inv.commitErr = ErrReservationGone
@@ -524,8 +524,17 @@ func TestPaymentSucceeded_ReservationExpiredBeforePaymentCancelsAndFlagsRefund(t
 	if got.Status != domain.StatusCancelled || got.FailureCode != domain.CodeReservationLost || got.ReservationState != domain.ReservationReleased {
 		t.Fatalf("order = %+v", got)
 	}
-	if !strings.Contains(h.logs.String(), "REFUND NEEDED") {
-		t.Fatal("money was taken for an order that can not be fulfilled; that must be logged for follow-up")
+	if got.RefundState != domain.RefundRequested || h.repo.CountEvents(events.RefundRequested) != 1 {
+		t.Fatalf("money was taken for an order that can not be fulfilled; it must be given back: refund=%s events=%v", got.RefundState, h.repo.Events())
+	}
+	var req events.RefundRequestedPayload
+	for _, e := range h.repo.Outbox {
+		if e.Type == events.RefundRequested {
+			_ = e.DecodePayload(&req)
+		}
+	}
+	if req.OrderID != o.ID || req.CustomerID != o.CustomerID || req.Reason != domain.CodeReservationLost {
+		t.Fatalf("refund request = %+v", req)
 	}
 }
 
@@ -559,7 +568,7 @@ func TestPaymentSucceeded_UnknownOrderIsPermanent(t *testing.T) {
 	}
 }
 
-func TestPaymentSucceeded_ForACancelledOrderFlagsRefundAndChangesNothing(t *testing.T) {
+func TestPaymentSucceeded_ForACancelledOrderRefundsAndKeepsItCancelled(t *testing.T) {
 	h := newHarness(t)
 	o := h.placed()
 	if err := h.svc.OnPaymentFailed(context.Background(), failed(o, "payment_timeout")); err != nil {
@@ -572,8 +581,36 @@ func TestPaymentSucceeded_ForACancelledOrderFlagsRefundAndChangesNothing(t *test
 	if got := h.order(o.ID); got.Status != domain.StatusCancelled {
 		t.Fatalf("a cancelled order must stay cancelled, status = %s", got.Status)
 	}
-	if !strings.Contains(h.logs.String(), "REFUND NEEDED") || h.inv.commitCalls != 0 {
-		t.Fatal("a late success for a cancelled order needs a refund and must not commit stock")
+	got := h.order(o.ID)
+	if got.RefundState != domain.RefundRequested || h.repo.CountEvents(events.RefundRequested) != 1 || h.inv.commitCalls != 0 {
+		t.Fatalf("a late success for a cancelled order needs a refund and must not commit stock: %+v, commits %d", got, h.inv.commitCalls)
+	}
+
+	// Redelivered, it must not ask twice.
+	for i := 0; i < 2; i++ {
+		if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if h.repo.CountEvents(events.RefundRequested) != 1 {
+		t.Fatalf("refund requested %d times", h.repo.CountEvents(events.RefundRequested))
+	}
+}
+
+func TestRefundRequestFailureIsReportedSoTheMessageIsRetried(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	_ = h.svc.OnPaymentFailed(context.Background(), failed(o, "payment_timeout"))
+	h.repo.FailNext["RequestRefund"] = errBoom
+
+	if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); !errors.Is(err, errBoom) {
+		t.Fatalf("err = %v", err)
+	}
+	if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); err != nil {
+		t.Fatal(err)
+	}
+	if h.order(o.ID).RefundState != domain.RefundRequested {
+		t.Fatal("the retry must request the refund")
 	}
 }
 
@@ -798,5 +835,337 @@ func TestQuery_AnotherCustomersOrderIsNotFound(t *testing.T) {
 	d, err := q.GetForCustomer(context.Background(), o.ID, h.customer)
 	if err != nil || d.Order.ID != o.ID || len(d.History) < 2 {
 		t.Fatalf("detail = %+v, err = %v", d, err)
+	}
+}
+
+// ---------------------------------------------------------------- refunds
+
+func refunded(o *domain.Order) events.PaymentRefundedPayload {
+	return events.PaymentRefundedPayload{PaymentID: uuid.New(), OrderID: o.ID, AmountCents: o.TotalCents, Currency: o.Currency, RefundRef: "rf_1"}
+}
+
+// cancelledWithRefund returns an order that was paid after it was cancelled, so a refund is outstanding.
+func (h *harness) cancelledWithRefund() *domain.Order {
+	h.t.Helper()
+	o := h.placed()
+	if err := h.svc.OnPaymentFailed(context.Background(), failed(o, "payment_timeout")); err != nil {
+		h.t.Fatal(err)
+	}
+	if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); err != nil {
+		h.t.Fatal(err)
+	}
+	return h.order(o.ID)
+}
+
+func TestPaymentRefunded_CompletesTheRefund(t *testing.T) {
+	h := newHarness(t)
+	o := h.cancelledWithRefund()
+
+	if err := h.svc.OnPaymentRefunded(context.Background(), refunded(o)); err != nil {
+		t.Fatal(err)
+	}
+	got := h.order(o.ID)
+	if got.RefundState != domain.RefundRefunded || got.Status != domain.StatusCancelled {
+		t.Fatalf("order = %+v", got)
+	}
+	if err := h.svc.OnPaymentRefunded(context.Background(), refunded(o)); err != nil { // redelivery
+		t.Fatal(err)
+	}
+	if h.order(o.ID).RefundState != domain.RefundRefunded {
+		t.Fatal("a repeated PaymentRefunded must change nothing")
+	}
+}
+
+func TestPaymentRefunded_WrongAmountAndUnknownOrderAreRefused(t *testing.T) {
+	h := newHarness(t)
+	o := h.cancelledWithRefund()
+	bad := refunded(o)
+	bad.AmountCents++
+	if err := h.svc.OnPaymentRefunded(context.Background(), bad); !errors.Is(err, ErrUnexpectedEvent) {
+		t.Fatalf("wrong amount: %v", err)
+	}
+	if h.order(o.ID).RefundState != domain.RefundRequested {
+		t.Fatal("a refund of the wrong amount must not close the case")
+	}
+	unknown := refunded(o)
+	unknown.OrderID = uuid.New()
+	if err := h.svc.OnPaymentRefunded(context.Background(), unknown); !errors.Is(err, ErrUnexpectedEvent) {
+		t.Fatalf("unknown order: %v", err)
+	}
+}
+
+// Payment refunds a duplicate charge by itself and does not publish PaymentRefunded for it, but a
+// refunded payment that is asked for again does. Neither may disturb an order that never asked.
+func TestPaymentRefunded_ForAnOrderThatDidNotAskChangesNothing(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	if err := h.svc.OnPaymentRefunded(context.Background(), refunded(o)); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.order(o.ID); got.Status != domain.StatusAwaitingPayment || got.RefundState != domain.RefundNone {
+		t.Fatalf("order = %+v", got)
+	}
+}
+
+func TestRecovery_AsksAgainForARefundThatIsNotAnswered(t *testing.T) {
+	h := newHarness(t)
+	o := h.cancelledWithRefund()
+	ctx := context.Background()
+
+	h.clk.Advance(time.Minute) // stuck, but inside the payment timeout
+	_, _ = h.svc.Recover(ctx)
+	if h.repo.CountEvents(events.RefundRequested) != 1 {
+		t.Fatal("must wait for the timeout before asking again")
+	}
+
+	for want := 2; want <= domain.MaxRefundRequests; want++ {
+		h.clk.Advance(3 * time.Minute)
+		if _, err := h.svc.Recover(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if got := h.order(o.ID); got.RefundRequests != want {
+			t.Fatalf("round %d: refund requests = %d", want, got.RefundRequests)
+		}
+	}
+	if !strings.Contains(h.logs.String(), "REFUND STUCK") {
+		t.Fatal("the last request must raise the alarm for a person")
+	}
+
+	h.clk.Advance(10 * time.Minute)
+	_, _ = h.svc.Recover(ctx)
+	if h.repo.CountEvents(events.RefundRequested) != domain.MaxRefundRequests {
+		t.Fatalf("recovery must stop asking, requests = %d", h.repo.CountEvents(events.RefundRequested))
+	}
+}
+
+// The repository already leaves orders at the limit out of the recovery job's list; the service
+// checks it as well, so a repository that did not would still not ask forever.
+func TestRecovery_NeverAsksBeyondTheLimitEvenIfTheRepositoryHandsTheOrderOver(t *testing.T) {
+	h := newHarness(t)
+	o := h.cancelledWithRefund()
+	exhausted := *h.order(o.ID)
+	exhausted.RefundRequests = domain.MaxRefundRequests
+	exhausted.UpdatedAt = h.clk.Now().Add(-time.Hour)
+
+	h.svc.recoverOne(context.Background(), &exhausted, h.clk.Now())
+	if h.repo.CountEvents(events.RefundRequested) != 1 {
+		t.Fatalf("a refund asked for %d times must not be asked for again", domain.MaxRefundRequests)
+	}
+}
+
+func TestRecovery_StopsAskingOnceTheMoneyIsBack(t *testing.T) {
+	h := newHarness(t)
+	o := h.cancelledWithRefund()
+	_ = h.svc.OnPaymentRefunded(context.Background(), refunded(o))
+	h.clk.Advance(10 * time.Minute)
+	_, _ = h.svc.Recover(context.Background())
+	if h.repo.CountEvents(events.RefundRequested) != 1 {
+		t.Fatal("a refunded order must not be asked about again")
+	}
+}
+
+// ---------------------------------------------------------------- cancelling by the customer
+
+func TestCancelByCustomer_ReleasesStockAndLeavesTheCartEmpty(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+
+	got, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusCancelled || got.FailureCode != domain.CodeCancelledByCustomer || got.ReservationState != domain.ReservationReleased {
+		t.Fatalf("order = %+v", got)
+	}
+	if h.inv.releaseCalls != 1 || h.repo.CountEvents(events.OrderCancelled) != 1 {
+		t.Fatalf("releases %d, events %v", h.inv.releaseCalls, h.repo.Events())
+	}
+	if cart, _ := h.repo.GetCart(context.Background(), h.customer); len(cart) != 0 {
+		t.Fatal("the customer chose to cancel: the cart stays empty")
+	}
+}
+
+func TestCancelByCustomer_IsIdempotentAndReportsOtherCancellationsAsTheyAre(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	for i := 0; i < 3; i++ {
+		if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if h.inv.releaseCalls != 1 || h.repo.CountEvents(events.OrderCancelled) != 1 {
+		t.Fatalf("cancelling three times must act once: releases %d, events %d", h.inv.releaseCalls, h.repo.CountEvents(events.OrderCancelled))
+	}
+
+	declined := h.placed()
+	_ = h.svc.OnPaymentFailed(context.Background(), failed(declined, "card_declined"))
+	got, err := h.svc.CancelByCustomer(context.Background(), declined.ID, h.customer)
+	if err != nil || got.FailureCode != "card_declined" {
+		t.Fatalf("an order cancelled for another reason keeps its reason: %+v, %v", got, err)
+	}
+}
+
+func TestCancelByCustomer_RefusesPaidAndConfirmedOrders(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	h.inv.commitErr = errBoom
+	_ = h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)) // paid, commit pending
+	if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer); !errors.Is(err, domain.ErrCannotCancel) {
+		t.Fatalf("paid: %v", err)
+	}
+	h.inv.commitErr = nil
+	_ = h.svc.OnPaymentSucceeded(context.Background(), succeeded(o))
+	if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer); !errors.Is(err, domain.ErrCannotCancel) {
+		t.Fatalf("confirmed: %v", err)
+	}
+	if h.order(o.ID).Status != domain.StatusConfirmed {
+		t.Fatal("a refused cancellation must not touch the order")
+	}
+}
+
+func TestCancelByCustomer_OnlyTheOwnerCan(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, uuid.New()); !errors.Is(err, domain.ErrOrderNotFound) {
+		t.Fatalf("err = %v", err)
+	}
+	if h.order(o.ID).Status != domain.StatusAwaitingPayment {
+		t.Fatal("somebody else's request must not cancel the order")
+	}
+}
+
+func TestCancelByCustomer_ThenThePaymentSucceedsIsRefunded(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer); err != nil {
+		t.Fatal(err)
+	}
+	// The charge was already on its way.
+	if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); err != nil {
+		t.Fatal(err)
+	}
+	got := h.order(o.ID)
+	if got.Status != domain.StatusCancelled || got.RefundState != domain.RefundRequested || h.inv.commitCalls != 0 {
+		t.Fatalf("order = %+v, commits %d", got, h.inv.commitCalls)
+	}
+}
+
+func TestCancelByCustomer_InventoryOutageIsLeftToRecovery(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	h.inv.releaseErr = errBoom
+	got, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer)
+	if err != nil || got.Status != domain.StatusCancelled || got.ReservationState != domain.ReservationHeld {
+		t.Fatalf("the customer's request must not fail because of Inventory: %+v, %v", got, err)
+	}
+	h.inv.releaseErr = nil
+	h.clk.Advance(time.Minute)
+	_, _ = h.svc.Recover(context.Background())
+	if h.order(o.ID).ReservationState != domain.ReservationReleased {
+		t.Fatal("recovery must release the stock")
+	}
+}
+
+func TestCancelByCustomer_PendingOrderThatGetsItsStockLaterReleasesIt(t *testing.T) {
+	h := newHarness(t)
+	h.put(h.catalog.add("Shirt", 1000), 1)
+	h.inv.reserveErr = errBoom
+	o, _, _ := h.checkout("k")
+	if o.Status != domain.StatusPending {
+		t.Fatal("setup")
+	}
+	if _, err := h.svc.CancelByCustomer(context.Background(), o.ID, h.customer); err != nil {
+		t.Fatal(err)
+	}
+	h.inv.reserveErr = nil
+	h.clk.Advance(time.Minute)
+	_, _ = h.svc.Recover(context.Background())
+	if got := h.order(o.ID); got.Status != domain.StatusCancelled || h.repo.CountEvents(events.PaymentRequested) != 0 {
+		t.Fatalf("a cancelled order must not be revived by the recovery job: %+v", got)
+	}
+}
+
+// ---------------------------------------------------------------- the cart after a cancellation
+
+func cartLines(h *harness) map[uuid.UUID]int {
+	items, _ := h.repo.GetCart(context.Background(), h.customer)
+	out := map[uuid.UUID]int{}
+	for _, it := range items {
+		out[it.VariantID] = it.Quantity
+	}
+	return out
+}
+
+func TestCartComesBackAfterOutOfStock(t *testing.T) {
+	h := newHarness(t)
+	v := h.catalog.add("Shirt", 1000)
+	h.put(v, 3)
+	h.inv.shortage = &StockShortage{VariantID: v, Requested: 3, Available: 1}
+
+	if o, _, err := h.checkout("k"); err != nil || o.Status != domain.StatusCancelled {
+		t.Fatalf("setup: %+v %v", o, err)
+	}
+	if got := cartLines(h); got[v] != 3 || len(got) != 1 {
+		t.Fatalf("cart after a failed checkout = %v", got)
+	}
+}
+
+func TestCartComesBackAfterADeclinedCard(t *testing.T) {
+	h := newHarness(t)
+	v := h.catalog.add("Shirt", 1000)
+	h.put(v, 2)
+	o, _, _ := h.checkout("k")
+	if len(cartLines(h)) != 0 {
+		t.Fatal("while the payment is open the cart is empty")
+	}
+	_ = h.svc.OnPaymentFailed(context.Background(), failed(o, "card_declined"))
+	if got := cartLines(h); got[v] != 2 {
+		t.Fatalf("cart after a declined card = %v", got)
+	}
+}
+
+func TestRestoringTheCartNeverOverridesWhatTheCustomerDidMeanwhile(t *testing.T) {
+	h := newHarness(t)
+	v := h.catalog.add("Shirt", 1000)
+	h.put(v, 2)
+	o, _, _ := h.checkout("k")
+	h.put(v, 7) // the customer started a new cart while the payment was open
+	_ = h.svc.OnPaymentFailed(context.Background(), failed(o, "card_declined"))
+	if got := cartLines(h); got[v] != 7 {
+		t.Fatalf("the newer choice must win, cart = %v", got)
+	}
+}
+
+func TestCartComesBackWhenTheOrderTimesOut(t *testing.T) {
+	h := newHarness(t)
+	v := h.catalog.add("Shirt", 1000)
+	h.put(v, 1)
+	h.inv.reserveErr = errBoom
+	h.checkout("k")
+	h.clk.Advance(6 * time.Minute)
+	_, _ = h.svc.Recover(context.Background())
+	if got := cartLines(h); got[v] != 1 {
+		t.Fatalf("cart after a checkout timeout = %v", got)
+	}
+}
+
+// The key check and the cart read are separate steps: a request with the same key can commit in
+// between, leaving a cart that is empty because the order was just made from it.
+func TestCheckout_ARetryThatSeesTheCartEmptiedByItsTwinGetsTheTwinsOrder(t *testing.T) {
+	h := newHarness(t)
+	h.put(h.catalog.add("Shirt", 1000), 1)
+	var first *domain.Order
+	h.repo.OnGetCart = func() { first, _, _ = h.checkout("k") }
+
+	second, created, err := h.checkout("k")
+	if err != nil {
+		t.Fatalf("the retry must not fail with an empty cart: %v", err)
+	}
+	if created || first == nil || second.ID != first.ID || len(h.repo.Orders) != 1 {
+		t.Fatalf("created=%v orders=%d", created, len(h.repo.Orders))
+	}
+	// A cart that is really empty is still refused.
+	if _, _, err := h.checkout("another"); !errors.Is(err, domain.ErrCartEmpty) {
+		t.Fatalf("err = %v", err)
 	}
 }

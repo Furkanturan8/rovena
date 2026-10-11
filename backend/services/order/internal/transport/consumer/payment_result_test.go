@@ -109,6 +109,10 @@ func TestUnfixableMessagesAreDeadLettered(t *testing.T) {
 		"unknown order":         envelope(t, events.PaymentSucceeded, 1, unknownOrder),
 		"wrong amount":          envelope(t, events.PaymentSucceeded, 1, wrongAmount),
 		"failed for no order":   envelope(t, events.PaymentFailed, 1, events.PaymentFailedPayload{OrderID: uuid.New()}),
+		"refund for no order":   envelope(t, events.PaymentRefunded, 1, events.PaymentRefundedPayload{OrderID: uuid.New()}),
+		"refund future version": envelope(t, events.PaymentRefunded, 9, events.PaymentRefundedPayload{OrderID: f.order.ID}),
+		"refund wrong amount": envelope(t, events.PaymentRefunded, 1, events.PaymentRefundedPayload{
+			OrderID: f.order.ID, AmountCents: f.order.TotalCents + 1, Currency: "TRY"}),
 	}
 	for name, env := range cases {
 		err := f.handler.Handle(context.Background(), env)
@@ -138,7 +142,29 @@ func TestInventoryOutageIsRetried(t *testing.T) {
 
 func TestSubscriptionListensToBothResults(t *testing.T) {
 	sub := consumer.Subscription(time.Second)
-	if sub.Queue != consumer.Queue || len(sub.Types) != 2 || sub.MaxRetries < 1 {
+	if sub.Queue != consumer.Queue || len(sub.Types) != 3 || sub.MaxRetries < 1 {
 		t.Fatalf("subscription = %+v", sub)
+	}
+}
+
+func TestRefundedClosesTheRefundOfACancelledOrder(t *testing.T) {
+	f := newFixture(t, inventory{})
+	ctx := context.Background()
+	// the order is cancelled, then the payment succeeds anyway, which requests the refund
+	if err := f.handler.Handle(ctx, envelope(t, events.PaymentFailed, 1, events.PaymentFailedPayload{
+		PaymentID: uuid.New(), OrderID: f.order.ID, AmountCents: f.order.TotalCents, Currency: "TRY", FailureCode: "payment_timeout"})); err != nil {
+		t.Fatal(err)
+	}
+	ok := events.PaymentSucceededPayload{PaymentID: uuid.New(), OrderID: f.order.ID, AmountCents: f.order.TotalCents, Currency: "TRY", ProviderRef: "r"}
+	if err := f.handler.Handle(ctx, envelope(t, events.PaymentSucceeded, 1, ok)); err != nil {
+		t.Fatal(err)
+	}
+	refund := events.PaymentRefundedPayload{PaymentID: uuid.New(), OrderID: f.order.ID, AmountCents: f.order.TotalCents, Currency: "TRY", RefundRef: "rf"}
+	if err := f.handler.Handle(ctx, envelope(t, events.PaymentRefunded, 1, refund)); err != nil {
+		t.Fatal(err)
+	}
+	o, _ := f.repo.GetByID(ctx, f.order.ID)
+	if o.Status != domain.StatusCancelled || o.RefundState != domain.RefundRefunded {
+		t.Fatalf("order = %+v", o)
 	}
 }
