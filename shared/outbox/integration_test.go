@@ -362,11 +362,15 @@ func TestRelayCrashAfterPublishDeliversTwiceButHandlesOnce(t *testing.T) {
 	}
 	var deliveries atomic.Int32
 	inbox := outbox.NewInbox(db, "effects")
-	handler := inbox.Handler(func(ctx context.Context, tx bun.Tx, env messaging.Envelope) error {
-		deliveries.Add(1)
+	idempotent := inbox.Handler(func(ctx context.Context, tx bun.Tx, env messaging.Envelope) error {
 		_, err := tx.ExecContext(ctx, "INSERT INTO effects VALUES (?)", env.ID)
 		return err
 	})
+	// Counted outside the inbox, so duplicates that the inbox skips are still seen.
+	handler := func(ctx context.Context, env messaging.Envelope) error {
+		deliveries.Add(1)
+		return idempotent(ctx, env)
+	}
 	cctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() { defer close(done); broker.Consume(cctx, sub, handler) }()

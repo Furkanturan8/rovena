@@ -100,7 +100,7 @@ func (r *Relay) publishBatch(ctx context.Context) (sent int, more bool, err erro
 		if err := tx.NewSelect().Model(&rows).
 			Where("published_at IS NULL").
 			OrderExpr("seq").
-			Limit(r.batch).
+			Limit(int64(r.batch)).
 			For("UPDATE SKIP LOCKED").
 			Scan(ctx); err != nil {
 			return err

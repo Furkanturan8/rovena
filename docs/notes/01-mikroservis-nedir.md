@@ -34,7 +34,7 @@ Bu projede mikroservis seçilmesinin sebebi, bu zorlukları öğrenmektir. Gerç
 
 **Senkron (REST/HTTP):** "Bunu yap ve cevabını bekliyorum." Örnek: tarayıcı `GET /api/v1/users/me` der ve cevabı bekler.
 
-**Asenkron (RabbitMQ mesajları):** "Şu oldu, ilgilenen bakar." Örnek: Order servisi "OrderCreated" olayını yayınlar; Inventory servisi bunu alıp stok ayırır. Gönderen cevabı beklemez. Bu iletişim Order servisi ile birlikte eklenecek.
+**Asenkron (RabbitMQ mesajları):** "Şu oldu, ilgilenen bakar." Örnek: Order servisi "OrderCreated" olayını yayınlar; Inventory servisi bunu alıp stok ayırır. Gönderen cevabı beklemez. Altyapısı hazır ([12](12-mesajlasma.md)); ilk kullanıcıları Payment ve Order servisleri olacak.
 
 ## En zor konu: dağıtık tutarlılık
 

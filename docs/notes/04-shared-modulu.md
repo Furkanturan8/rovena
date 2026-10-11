@@ -51,6 +51,14 @@ Burada kritik fikir: **Token'ı yalnızca Identity üretir, ama her servis tek b
 
 Yapılandırılmış (JSON) log açar: `{"time":..., "level":"INFO", "service":"identity", "msg":...}`. Her satıra servis adı eklenir. JSON log, log toplama araçlarında aranabilir ve filtrelenebilir.
 
+### `messaging/` ve `outbox/`: Olaylar ve güvenilir yayın
+
+RabbitMQ ile konuşmanın ortak kodu: olay zarfı, bağlantı ve yayın, tüketici döngüsü (retry, DLQ), Transactional Outbox ve idempotent Inbox. Bunlar da yalnızca teknik altyapıdır; hangi olayların var olduğu ve payload'ları ilgili servisin işidir. Ayrıntı: [12](12-mesajlasma.md).
+
+`outbox/schema.sql` bir Go dosyası değil, servislerin kendi `migrations/` klasörüne kopyaladığı SQL şablonudur: her servisin outbox tablosu kendi veritabanında durur.
+
 ## Testler
 
 `auth/verifier_test.go`: geçerli token kabul, yanlış secret, süresi geçmiş, yanlış yayıncı, eksik alanlar ve `alg: none` gibi saldırı senaryolarının reddi.
+
+`messaging/event_test.go`: zarf birim testleri. `messaging/integration_test.go` ve `outbox/integration_test.go`: gerçek RabbitMQ ve PostgreSQL ile retry, DLQ, outbox ve idempotency senaryoları (`make test-integration`).

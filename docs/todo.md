@@ -10,14 +10,14 @@
 - [x] OpenAPI şemaları (3 servis) ve sözleşme testi
 - [x] Hibrit checkout kararı: stok rezervasyonu REST, ödeme RabbitMQ (`architecture.md` bölüm 7)
 
-## Faz 1: Mesajlaşma altyapısı (`shared/`)
+## Faz 1: Mesajlaşma altyapısı (`shared/`) (bitti)
 
-- [ ] Olay zarfı: `event_id`, tip, sürüm, zaman, `correlation_id` (+ request id taşıma)
-- [ ] RabbitMQ bağlantısı ve topoloji: exchange, kuyruklar, retry (gecikmeli) kuyruğu, dead-letter kuyruğu
-- [ ] Transactional Outbox: outbox tablosu şablonu + yayıncı (yayınlanmamışları gönderir, işaretler)
-- [ ] Idempotent tüketici: `processed_events` kaydı, tekrar teslimde tek etki
-- [ ] Testler: gerçek RabbitMQ ile (yayın, tekrar teslim, zehirli mesaj DLQ'ya düşer, yayıncı çökmesi)
-- [ ] Not bölümü: mesajlaşma, outbox, idempotent tüketici
+- [x] Olay zarfı: `event_id`, tip, sürüm, zaman, `correlation_id` (+ request id taşıma)
+- [x] RabbitMQ bağlantısı ve topoloji: exchange, kuyruklar, retry (gecikmeli) kuyruğu, dead-letter kuyruğu
+- [x] Transactional Outbox: outbox tablosu şablonu + yayıncı (yayınlanmamışları gönderir, işaretler)
+- [x] Idempotent tüketici: `processed_events` kaydı, tekrar teslimde tek etki
+- [x] Testler: gerçek RabbitMQ ile (yayın, tekrar teslim, zehirli mesaj DLQ'ya düşer, yayıncı çökmesi)
+- [x] Not bölümü: mesajlaşma, outbox, idempotent tüketici
 
 ## Faz 2: Payment servisi
 
@@ -55,6 +55,7 @@
 - [ ] Gateway: 404 ve 502/504 için de JSON hata gövdesi
 - [ ] `shared/httpx` ve `shared/auth` middleware için kendi birim testleri
 - [ ] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? (olay ile) Karar ver
+- [ ] Outbox/Inbox temizliği: yayınlanmış `outbox_events` ve eski `processed_events` satırlarını periyodik sil
 - [ ] Servisler arası JWT: HS256 yerine asimetrik imza (RS256/EdDSA) değerlendir
 - [ ] Sonra: React frontend (ayrı plan)
 

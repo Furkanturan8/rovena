@@ -62,5 +62,17 @@
 | **Ledger (hareket defteri)** | Değişiklikleri üzerine yazmak yerine art arda ekleyen kayıt; "sayı neden bu" sorusu sonradan cevaplanabilir |
 | **Telafi işlemi (compensating action)** | Geri alınamayan bir adımın etkisini tersine çeviren işlem (rezervasyonu bırakmak gibi) |
 | **Saga** | Servisler arası işlemi adım adım yapıp hata olursa telafi eden kalıp (ileride) |
-| **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da kaydedip sonra güvenle yayınlama kalıbı (ileride) |
-| **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı (ileride) |
+| **Transactional Outbox** | Olayı iş verisiyle aynı transaction'da bir tabloya yazıp sonra ayrı bir süreçle güvenle yayınlama kalıbı |
+| **Relay (yayıncı)** | Outbox tablosundaki yayınlanmamış olayları RabbitMQ'ya gönderip işaretleyen arka plan işi |
+| **Inbox (`processed_events`)** | Hangi olayların işlendiğini tutan tablo; tekrar teslim edilen olayı tanıyıp atlamayı sağlar |
+| **Mesaj kuyruğu (RabbitMQ)** | Servisler arası asenkron mesaj taşıyan aracı |
+| **Exchange** | RabbitMQ'da mesajı alıp bağlı kuyruklara yönlendiren giriş noktası |
+| **Routing key / bind** | Bir mesajın hangi kuyruğa gideceğini belirleyen anahtar / kuyruğun hangi anahtarları istediğini bağlaması |
+| **Olay zarfı (envelope)** | Her olayın ortak dış kabı: kimlik, tip, sürüm, zaman, correlation id |
+| **Correlation ID** | Tek bir iş akışının tüm olaylarını ve loglarını birbirine bağlayan kimlik |
+| **At-least-once (en az bir kez)** | Mesajın kaybolmayacağı ama iki kez gelebileceği teslimat garantisi |
+| **Retry kuyruğu** | Hata alan mesajın belli süre bekleyip yeniden denendiği kuyruk |
+| **DLQ (dead-letter queue)** | İşlenemeyen mesajların insan incelemesi için biriktiği kuyruk |
+| **Zehirli mesaj (poison message)** | Her denemede hata veren, tekrar denemekle düzelmeyen mesaj |
+| **Publisher confirm** | Broker'ın mesajı kalıcı olarak aldığını yayıncıya bildirmesi |
+| **Ack / nack** | Tüketicinin mesajı "işledim" / "işleyemedim, geri ver" diye bildirmesi |

@@ -33,7 +33,7 @@ type row struct {
 	Seq         int64      `bun:",pk,autoincrement"`
 	ID          uuid.UUID  `bun:"id,type:uuid"`
 	Type        string     `bun:"type"`
-	Envelope    string     `bun:"envelope,type:jsonb"`
+	Envelope    string     `bun:"envelope"`
 	CreatedAt   time.Time  `bun:"created_at,nullzero,default:now()"`
 	PublishedAt *time.Time `bun:"published_at"`
 	Attempts    int        `bun:"attempts"`

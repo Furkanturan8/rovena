@@ -13,7 +13,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | Servis | Ne yapar | Dışarıya açık port |
 | --- | --- | --- |
 | `postgres` | PostgreSQL 17 veritabanı sunucusu | 127.0.0.1:5433 (yalnızca kendi bilgisayarın) |
-| `rabbitmq` | Mesaj kuyruğu (henüz kullanılmıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
+| `rabbitmq` | Mesaj kuyruğu (altyapı kodu `shared/messaging`'te hazır, servisler henüz kullanmıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
 | `identity` | Identity API sunucusu | 127.0.0.1:8081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
