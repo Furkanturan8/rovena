@@ -164,6 +164,43 @@ services:
       catalog:
         condition: service_started
 
+  payment-migrate:
+    build:
+      context: .
+      dockerfile: services/payment/Dockerfile
+    entrypoint: ["/app/migrate", "-action", "up"]
+    environment:
+      DATABASE_URL: postgres://payment:${PAYMENT_DB_PASSWORD}@postgres:5432/payment?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Consumes PaymentRequested from RabbitMQ and publishes PaymentSucceeded/PaymentFailed.
+  # The HTTP port serves read endpoints only; there is no way to create a payment over HTTP.
+  payment:
+    build:
+      context: .
+      dockerfile: services/payment/Dockerfile
+    environment:
+      APP_ENV: development
+      HTTP_PORT: "8085"
+      DATABASE_URL: postgres://payment:${PAYMENT_DB_PASSWORD}@postgres:5432/payment?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set in .env}
+      PAYMENT_MAX_ATTEMPTS: "3"
+      PAYMENT_CHARGE_TIMEOUT: 10s
+      PAYMENT_RETRY_DELAY: 5s
+      FAKE_PROVIDER_LATENCY: 300ms
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+    depends_on:
+      payment-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8085:8085"
+
   gateway:
     image: nginx:1.27-alpine
     volumes:
@@ -175,6 +212,7 @@ services:
       - identity
       - catalog
       - inventory
+      - payment
 
 volumes:
   postgres-data:

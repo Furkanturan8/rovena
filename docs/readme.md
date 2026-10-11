@@ -61,7 +61,7 @@ The development environment runs locally with Docker Compose.
 
 ```bash
 cp .env.example .env      # fill in every value; JWT_SECRET: openssl rand -base64 48
-make up                   # postgres, rabbitmq, identity, catalog and inventory (+ migrations), nginx gateway
+make up                   # postgres, rabbitmq, identity, catalog, inventory and payment (+ migrations), nginx gateway
 make seed-admin           # creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD
 make seed-catalog         # loads demo categories and products
 make seed-inventory       # gives every demo variant an opening stock
@@ -104,7 +104,21 @@ never resolved expire after `RESERVATION_TTL` (default 15 minutes).
 
 OpenAPI schemas for every service live in [`docs/openapi/`](openapi/README.md) (import them into Postman/Insomnia/Bruno to try the API).
 
-Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`).
+**Payment**
+
+Payments are created only by `PaymentRequested` events (RabbitMQ); the HTTP API reads them. There is no endpoint
+that creates or changes a payment.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/api/v1/payments/by-order/:orderId` | signed-in user, own payments only |
+| GET | `/api/v1/admin/payments[/:id]` (`status`, `order_id`, `page`, `page_size`) | admin |
+| GET | `/api/v1/internal/payments/by-order/:orderId` | internal key, not routed by the gateway |
+
+The provider is a fake whose answer is chosen by the test card token (`tok_visa`, `tok_declined`, `tok_flaky`, ...);
+see [`docs/openapi/payment.yaml`](openapi/payment.yaml) for the events and the full list.
+
+Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`).
 
 ## Project Goals
 

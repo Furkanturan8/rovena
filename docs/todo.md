@@ -19,13 +19,13 @@
 - [x] Testler: gerçek RabbitMQ ile (yayın, tekrar teslim, zehirli mesaj DLQ'ya düşer, yayıncı çökmesi)
 - [x] Not bölümü: mesajlaşma, outbox, idempotent tüketici
 
-## Faz 2: Payment servisi
+## Faz 2: Payment servisi (bitti)
 
-- [ ] Alan modeli: ödeme denemesi ve durumları; `PaymentRequested` tüketir, `PaymentSucceeded/Failed` yayınlar (outbox)
-- [ ] Sahte sağlayıcı arayüzü: tutar/test kartına göre başarı, hata, gecikme (gerçek sağlayıcı ileride takılabilir)
-- [ ] Idempotency anahtarı: aynı istek iki kez gelirse tek ödeme
-- [ ] Okuma uçları (sipariş/ödeme durumu), admin listesi; OpenAPI + sözleşme testi
-- [ ] Testler (birim, HTTP, entegrasyon) + mutasyon kontrolü + not bölümü
+- [x] Alan modeli: ödeme denemesi ve durumları; `PaymentRequested` tüketir, `PaymentSucceeded/Failed` yayınlar (outbox)
+- [x] Sahte sağlayıcı arayüzü: tutar/test kartına göre başarı, hata, gecikme (gerçek sağlayıcı ileride takılabilir)
+- [x] Idempotency anahtarı: aynı istek iki kez gelirse tek ödeme
+- [x] Okuma uçları (sipariş/ödeme durumu), admin listesi; OpenAPI + sözleşme testi
+- [x] Testler (birim, HTTP, entegrasyon) + mutasyon kontrolü + not bölümü
 
 ## Faz 3: Order servisi ve checkout Saga
 
@@ -34,7 +34,7 @@
 - [ ] Saga: Inventory'de rezerve et (REST) → `PaymentRequested` (outbox) → sonuca göre commit/release → onay/iptal
 - [ ] Sipariş durum geçmişi; müşteri uçları (kendi siparişleri) ve admin uçları
 - [ ] Kurtarma işi: takılı kalan siparişi bul, eksik adımı tekrar dene ya da iptal edip rezervasyonu bırak
-- [ ] Gateway'e Order/Payment rotaları; OpenAPI + sözleşme testi
+- [ ] Gateway'e Order rotaları (Payment rotaları Faz 2'de eklendi); OpenAPI + sözleşme testi
 - [ ] Testler (birim, HTTP, entegrasyon, eşzamanlılık) + mutasyon kontrolü + not bölümü
 
 ## Faz 4: Uçtan uca dayanıklılık
@@ -55,6 +55,7 @@
 - [ ] Gateway: 404 ve 502/504 için de JSON hata gövdesi
 - [ ] `shared/httpx` ve `shared/auth` middleware için kendi birim testleri
 - [ ] Yeni Catalog varyantı için Inventory'de stok kaydı otomatik açılsın mı? (olay ile) Karar ver
+- [ ] Payment: eşzamanlı çift çekim durumunda iade akışı (şimdilik yalnızca loglanır, DLQ'ya düşer); sağlayıcıdan gerçek iade
 - [ ] Outbox/Inbox temizliği: yayınlanmış `outbox_events` ve eski `processed_events` satırlarını periyodik sil
 - [ ] Servisler arası JWT: HS256 yerine asimetrik imza (RS256/EdDSA) değerlendir
 - [ ] Sonra: React frontend (ayrı plan)

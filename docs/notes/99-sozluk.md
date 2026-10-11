@@ -75,4 +75,10 @@
 | **DLQ (dead-letter queue)** | İşlenemeyen mesajların insan incelemesi için biriktiği kuyruk |
 | **Zehirli mesaj (poison message)** | Her denemede hata veren, tekrar denemekle düzelmeyen mesaj |
 | **Publisher confirm** | Broker'ın mesajı kalıcı olarak aldığını yayıncıya bildirmesi |
+| **Idempotency key** | İstemcinin bir işlem niyetini tanımlayan anahtar; aynı anahtarla tekrar gelen istek işlemi bir daha yapmaz |
+| **Ödeme sağlayıcısı (PSP)** | Kart ödemesini gerçekten çeken dış sistem (banka, iyzico/Stripe gibi); projede sahte bir uygulaması var |
+| **Token (kart)** | Gerçek kart numarası yerine sağlayıcının verdiği, tek başına işe yaramayan temsil; sisteme kart numarası hiç girmez |
+| **Çift çekim (double charge)** | Aynı ödemenin iki kez çekilmesi; ödeme sistemlerinin kaçınması gereken en kötü hata |
+| **Telafi / iade (refund)** | Çekilmiş parayı müşteriye geri vermek |
+| **Olay sözleşmesi (event contract)** | Bir olayın adı, sürümü ve payload şekli; yayıncı ve tüketicilerin ortak anlaşması (`shared/events`) |
 | **Ack / nack** | Tüketicinin mesajı "işledim" / "işleyemedim, geri ver" diye bildirmesi |

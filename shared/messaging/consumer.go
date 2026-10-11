@@ -38,7 +38,8 @@ func Permanent(err error) error {
 	return permanentError{err: err}
 }
 
-func isPermanent(err error) bool {
+// IsPermanent reports whether err was marked with Permanent.
+func IsPermanent(err error) bool {
 	var p permanentError
 	return errors.As(err, &p)
 }
@@ -122,7 +123,7 @@ func (b *Broker) handle(ctx context.Context, sub Subscription, h Handler, d amqp
 	b.log.WarnContext(ctx, "event handler failed",
 		"queue", sub.Queue, "event_id", env.ID, "type", env.Type,
 		"correlation_id", env.CorrelationID, "error", err)
-	b.settle(ctx, sub, d, err, isPermanent(err))
+	b.settle(ctx, sub, d, err, IsPermanent(err))
 }
 
 // run calls the handler and turns a panic into an error, so one bad message cannot

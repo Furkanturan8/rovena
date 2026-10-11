@@ -26,9 +26,9 @@ Bu projede mikroservis seçilmesinin sebebi, bu zorlukları öğrenmektir. Gerç
 | --- | --- | --- |
 | Identity | Kullanıcı kaydı, giriş, roller | Yazıldı |
 | Catalog | Ürünler, kategoriler, varyantlar | Yazıldı |
-| Inventory | Stok, rezervasyon | Planlı |
+| Inventory | Stok, rezervasyon | Yazıldı |
 | Order | Sepet, sipariş, checkout akışı | Planlı |
-| Payment | Ödeme (sahte sağlayıcı) | Planlı |
+| Payment | Ödeme (sahte sağlayıcı) | Yazıldı |
 
 ## İki tür iletişim
 

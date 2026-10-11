@@ -94,10 +94,10 @@ func TestContextForRestoresIDs(t *testing.T) {
 func TestPermanentWrapsAndUnwraps(t *testing.T) {
 	base := errors.New("bad payload")
 	err := Permanent(base)
-	if !isPermanent(err) || !errors.Is(err, base) {
+	if !IsPermanent(err) || !errors.Is(err, base) {
 		t.Fatal("Permanent must be detectable and keep the cause")
 	}
-	if isPermanent(base) {
+	if IsPermanent(base) {
 		t.Fatal("a plain error is not permanent")
 	}
 	if Permanent(nil) != nil {

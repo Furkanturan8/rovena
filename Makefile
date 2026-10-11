@@ -1,4 +1,4 @@
-SERVICES := identity catalog inventory
+SERVICES := identity catalog inventory payment
 
 .PHONY: up down logs test test-integration vet seed-admin seed-catalog seed-inventory
 
@@ -26,7 +26,10 @@ test-integration:
 	(cd services/identity && IDENTITY_TEST_DATABASE_URL="postgres://identity:$$IDENTITY_DB_PASSWORD@localhost:5433/identity?sslmode=disable" \
 		go test -tags integration -count=1 ./internal/repository/postgres) && \
 	(cd services/inventory && INVENTORY_TEST_DATABASE_URL="postgres://inventory:$$INVENTORY_DB_PASSWORD@localhost:5433/inventory?sslmode=disable" \
-		go test -tags integration -count=1 ./internal/repository/postgres)
+		go test -tags integration -count=1 ./internal/repository/postgres) && \
+	(cd services/payment && PAYMENT_TEST_DATABASE_URL="postgres://payment:$$PAYMENT_DB_PASSWORD@localhost:5433/payment?sslmode=disable" \
+		ROVENA_TEST_AMQP_URL="amqp://$$RABBITMQ_USER:$$RABBITMQ_PASSWORD@localhost:5672/" \
+		go test -tags integration -count=1 ./internal/repository/postgres ./internal/transport/consumer)
 
 vet:
 	cd shared && go vet ./...

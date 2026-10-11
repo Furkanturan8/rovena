@@ -1,0 +1,335 @@
+openapi: 3.0.3
+info:
+  title: Rovena Payment API
+  version: 1.0.0
+  description: |
+    Read access to payments. **There is no endpoint that creates, changes or deletes a payment.**
+    A payment comes into being when the Order service publishes a `PaymentRequested` event to
+    RabbitMQ, and its outcome is announced with a `PaymentSucceeded` or `PaymentFailed` event.
+    This API only lets people and services look at the result.
+
+    | Group | Path | Who calls it | Access |
+    | --- | --- | --- | --- |
+    | Customer | `/api/v1/payments/...` | the customer's own app | `Authorization: Bearer <access_token>` of any user |
+    | Admin | `/api/v1/admin/payments/...` | admins | `Authorization: Bearer <access_token>` of an admin |
+    | Internal | `/api/v1/internal/...` | other services (Order's recovery job) | `X-Internal-Key` header (value of `INTERNAL_API_KEY` in `.env`) |
+
+    Customer and admin endpoints go through the gateway on port 8080. The **internal endpoint is not
+    routed by the gateway**: call it on the service port, `http://localhost:8085`.
+
+    **Payment states.** `pending` (the provider has not given a final answer yet) -> `succeeded` (money
+    taken) or `failed` (nothing taken). A finished payment never changes again. A customer who fails
+    and retries gets a **new** payment (new attempt) for the same order; `by-order` returns the newest.
+    An order can have at most one `succeeded` payment.
+
+    **Failure codes** (`failure_code`, stable and machine-readable): `card_declined`, `insufficient_funds`,
+    `expired_card`, `invalid_payment_method`, `amount_limit_exceeded`, `provider_unavailable`,
+    `order_already_paid`. `failure_message` is safe to show to the customer.
+
+    **Money** is an integer in minor units: `459900` = 4.599,00 TRY. Only `TRY` is supported.
+
+    ## Events (RabbitMQ)
+
+    Events travel in the envelope `{event_id, type, version, occurred_at, correlation_id, request_id, payload}`
+    on the topic exchange `rovena.events`, with the event type as routing key.
+
+    **`PaymentRequested` v1** (consumed from Order, queue `payment.requests`):
+    `order_id`, `customer_id`, `idempotency_key`, `amount_cents`, `currency`, `payment_method`.
+    The `idempotency_key` identifies the customer's *intent to pay*: repeating the request with the same key
+    never charges twice, it makes Payment publish the stored result again. Reusing a key with a different
+    order, customer, amount or currency is rejected (the message goes to the dead-letter queue).
+
+    **`PaymentSucceeded` v1**: `payment_id`, `order_id`, `amount_cents`, `currency`, `provider_ref`.
+
+    **`PaymentFailed` v1**: `payment_id`, `order_id`, `amount_cents`, `currency`, `failure_code`, `failure_message`.
+
+    Exactly one result event per payment is the rule, but a repeated `PaymentRequested` publishes it again
+    (new `event_id`, same payload), so consumers must treat results idempotently.
+
+    **Test payment methods** (the provider is a fake until a real one is plugged in):
+
+    | `payment_method` | Result |
+    | --- | --- |
+    | `tok_visa` | approved |
+    | `tok_declined` | `card_declined` |
+    | `tok_insufficient_funds` | `insufficient_funds` |
+    | `tok_expired` | `expired_card` |
+    | `tok_provider_error` | provider never answers: retried, then `provider_unavailable` |
+    | `tok_flaky` | provider fails twice, then approves |
+    | `tok_slow` | provider hangs: cut off by the timeout, retried, then `provider_unavailable` |
+    | anything else | `invalid_payment_method` |
+
+    Amounts above 10,000,000 (100,000 TRY) are declined with `amount_limit_exceeded`.
+
+    **Response envelope.** Success: `{"success": true, "data": ...}`.
+    Error: `{"success": false, "message": "...", "fields": {...}}`.
+servers:
+  - url: http://localhost:8080
+    description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 429 with the usual JSON error and a `Retry-After` header.
+tags:
+  - name: Payments
+    description: A customer reads their own payment
+  - name: Payments (admin)
+    description: Requires the `admin` role
+  - name: Payments (internal)
+    description: Service-to-service; requires the internal key; not available through the gateway
+  - name: Health
+    description: Only on the service port, not through the gateway
+paths:
+  /api/v1/payments/by-order/{orderId}:
+    get:
+      tags: [Payments]
+      summary: Latest payment attempt of my order
+      description: |
+        Returns the newest payment attempt for the order. A payment that belongs to someone else answers
+        **404**, exactly like an order that has no payment, so the endpoint does not reveal which order ids exist.
+        An order that was just placed may not have a payment yet for a moment (the request is asynchronous): 404 then.
+      operationId: getMyPaymentByOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The payment
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/PaymentNotFound'}
+  /api/v1/admin/payments:
+    get:
+      tags: [Payments (admin)]
+      summary: List payments
+      description: Newest first.
+      operationId: adminListPayments
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: status
+          in: query
+          schema: {type: string, enum: [pending, succeeded, failed]}
+        - name: order_id
+          in: query
+          schema: {type: string, format: uuid}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: One page of payments
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminPaymentPageEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /api/v1/admin/payments/{id}:
+    get:
+      tags: [Payments (admin)]
+      summary: Get a payment
+      operationId: adminGetPayment
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: The payment, with operational detail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminPaymentEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/PaymentNotFound'}
+  /api/v1/internal/payments/by-order/{orderId}:
+    servers: [{url: 'http://localhost:8085', description: Payment service port}]
+    get:
+      tags: [Payments (internal)]
+      summary: Latest payment attempt of any order
+      description: |
+        For other services, for example Order's recovery job asking "what happened to the payment of this
+        stuck order?". Returns the same detail as the admin view.
+      operationId: internalGetPaymentByOrder
+      security: [{internalKey: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The payment
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminPaymentEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/InternalUnauthorized'}
+        '404': {$ref: '#/components/responses/PaymentNotFound'}
+  /healthz:
+    servers: [{url: 'http://localhost:8085', description: Payment service port}]
+    get:
+      tags: [Health]
+      summary: Liveness
+      operationId: healthz
+      responses:
+        '200':
+          description: Process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: {type: string, example: ok}
+  /readyz:
+    servers: [{url: 'http://localhost:8085', description: Payment service port}]
+    get:
+      tags: [Health]
+      summary: Readiness (database reachable)
+      operationId: readyz
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+        '503':
+          description: A dependency is unavailable
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Readiness'}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token issued by the Identity API. The admin endpoints need an admin's token.
+    internalKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Key
+      description: Shared service-to-service key; the value of `INTERNAL_API_KEY` in `.env`. Never expose it to browsers.
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+      description: Values below 1 are treated as 1.
+    PageSize:
+      name: page_size
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: Values above 100 are clamped to 100.
+  responses:
+    BadRequest:
+      description: Invalid id or invalid query parameter
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid orderId}
+    Unauthorized:
+      description: Missing, malformed, expired or invalidly signed access token
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Invalid or expired access token}
+    InternalUnauthorized:
+      description: The `X-Internal-Key` header is missing or wrong
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Missing or invalid internal API key}
+    Forbidden:
+      description: The token is valid but the user is not an admin
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Forbidden}
+    PaymentNotFound:
+      description: No such payment (or, for customers, not theirs)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+          example: {success: false, message: Payment not found}
+  schemas:
+    Error:
+      type: object
+      required: [success, message]
+      properties:
+        success: {type: boolean, example: false}
+        message: {type: string}
+        fields:
+          type: object
+          additionalProperties: {type: string}
+    Readiness:
+      type: object
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, enum: [ok, unavailable]}
+    Payment:
+      type: object
+      description: What a customer sees. Operational detail is only in the admin view.
+      required: [id, order_id, status, amount_cents, currency, failure_code, failure_message, created_at, completed_at]
+      properties:
+        id: {type: string, format: uuid}
+        order_id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, succeeded, failed]}
+        amount_cents: {type: integer, format: int64, example: 459900}
+        currency: {type: string, example: TRY}
+        failure_code: {type: string, description: 'Empty unless the payment failed', example: ''}
+        failure_message: {type: string, description: 'Empty unless the payment failed', example: ''}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true, description: Null while pending}
+    PaymentEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Payment'}
+    AdminPayment:
+      type: object
+      required: [id, order_id, status, amount_cents, currency, failure_code, failure_message, created_at, completed_at, customer_id, idempotency_key, payment_method, attempts, provider_ref, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        order_id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, succeeded, failed]}
+        amount_cents: {type: integer, format: int64, example: 459900}
+        currency: {type: string, example: TRY}
+        failure_code: {type: string, example: ''}
+        failure_message: {type: string, example: ''}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true}
+        customer_id: {type: string, format: uuid}
+        idempotency_key: {type: string}
+        payment_method: {type: string, description: 'Provider token for the card, never a card number', example: tok_visa}
+        attempts: {type: integer, description: How many times the provider was called}
+        provider_ref: {type: string, description: "Provider's reference for a successful charge; empty otherwise"}
+        updated_at: {type: string, format: date-time}
+    AdminPaymentEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AdminPayment'}
+    AdminPaymentPage:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/AdminPayment'}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    AdminPaymentPageEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AdminPaymentPage'}

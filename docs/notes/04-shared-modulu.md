@@ -51,6 +51,10 @@ Burada kritik fikir: **Token'ı yalnızca Identity üretir, ama her servis tek b
 
 Yapılandırılmış (JSON) log açar: `{"time":..., "level":"INFO", "service":"identity", "msg":...}`. Her satıra servis adı eklenir. JSON log, log toplama araçlarında aranabilir ve filtrelenebilir.
 
+### `events/payment.go`: Olay sözleşmeleri
+
+Servisler arası olayların adları, sürümleri ve payload yapıları. Davranış içermez, yalnızca veri şekli: yayıncı ve tüm tüketiciler aynı tanımı okur, böylece sessizce birbirinden uzaklaşamazlar. Mantık içermediği için "shared'e iş mantığı girmez" kuralını bozmaz. Bedeli: bir olayın şeklini değiştirmek hem yayıncıyı hem tüketiciyi etkiler, bu yüzden değişiklik yeni bir `version` ile yapılır. Ayrıntı: [13](13-payment-servisi.md).
+
 ### `messaging/` ve `outbox/`: Olaylar ve güvenilir yayın
 
 RabbitMQ ile konuşmanın ortak kodu: olay zarfı, bağlantı ve yayın, tüketici döngüsü (retry, DLQ), Transactional Outbox ve idempotent Inbox. Bunlar da yalnızca teknik altyapıdır; hangi olayların var olduğu ve payload'ları ilgili servisin işidir. Ayrıntı: [12](12-mesajlasma.md).

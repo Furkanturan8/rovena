@@ -5,6 +5,7 @@
 | [identity.yaml](identity.yaml) | Identity | kayıt, giriş, refresh, logout, profil, admin kullanıcı yönetimi |
 | [catalog.yaml](catalog.yaml) | Catalog | kategoriler, ürün arama/filtre, admin ürün/varyant/kategori yönetimi |
 | [inventory.yaml](inventory.yaml) | Inventory | stok sorgusu (herkese açık), admin depo yönetimi, Order servisi için **dahili** rezervasyon uçları |
+| [payment.yaml](payment.yaml) | Payment | ödeme okuma uçları (müşteri, admin, **dahili**) ve `PaymentRequested` / `PaymentSucceeded` / `PaymentFailed` olay sözleşmeleri, test kartı token'ları |
 
 Her şema koddaki DTO, doğrulama etiketleri ve hata eşlemeleriyle uyumlu yazıldı ve çalışan API'ye karşı doğrulandı (aşağıya bak). Tüm istekler **gateway** üzerinden gider: `http://localhost:8080`. Yeni servis eklendikçe buraya yeni bir dosya eklenir.
 
@@ -20,14 +21,14 @@ make seed-inventory  # demo ürünlerin stokları
 1. Şemayı bir istemciye aktar. Postman, Insomnia, Bruno ve Hoppscotch `.yaml` dosyasını doğrudan içe aktarır (Import > dosyayı seç). Her uç, açıklama ve örnek gövdeyle gelir.
 2. `POST /api/v1/auth/login` ile giriş yap, cevaptaki `data.tokens.access_token` değerini kopyala.
 3. Korumalı uçlar için `Authorization: Bearer <access_token>` ekle (istemcide "Auth > Bearer Token"). `/admin/...` uçları için admin hesabının token'ı gerekir.
-4. **Inventory'nin `/internal/...` uçları** (rezervasyon) gateway'den geçmez ve JWT istemez. Servis portuna (`http://localhost:8083`) `X-Internal-Key: <INTERNAL_API_KEY>` başlığıyla istek atılır; anahtar `.env` içindedir. Şemada bu uçların kendi sunucusu ve `internalKey` güvenlik şeması tanımlıdır; Postman'de başlığı elle eklemen gerekir. Bu anahtar yalnızca servisler arası çağrılar içindir, tarayıcıya asla verilmez.
+4. **Inventory'nin `/internal/...` uçları** (rezervasyon) gateway'den geçmez ve JWT istemez. Servis portuna (Inventory `http://localhost:8083`, Payment `http://localhost:8085`) `X-Internal-Key: <INTERNAL_API_KEY>` başlığıyla istek atılır; anahtar `.env` içindedir. Şemada bu uçların kendi sunucusu ve `internalKey` güvenlik şeması tanımlıdır; Postman'de başlığı elle eklemen gerekir. Bu anahtar yalnızca servisler arası çağrılar içindir, tarayıcıya asla verilmez.
 5. Access token 15 dakika geçerlidir; dolunca `POST /api/v1/auth/refresh` ile yenile. Her refresh token **tek kullanımlıktır** (tekrar kullanılırsa tüm oturumlar kapanır).
 
 Swagger UI ile bakmak istersen (tarayıcıdan "Try it out" için CORS izni gerekir):
 
 ```bash
 docker run --rm -p 8090:8080 -v "$PWD/docs/openapi:/usr/share/nginx/html/specs" \
-  -e URLS='[{"url":"/specs/identity.yaml","name":"Identity"},{"url":"/specs/catalog.yaml","name":"Catalog"},{"url":"/specs/inventory.yaml","name":"Inventory"}]' \
+  -e URLS='[{"url":"/specs/identity.yaml","name":"Identity"},{"url":"/specs/catalog.yaml","name":"Catalog"},{"url":"/specs/inventory.yaml","name":"Inventory"},{"url":"/specs/payment.yaml","name":"Payment"}]' \
   swaggerapi/swagger-ui
 ```
 
@@ -38,7 +39,7 @@ Servisler varsayılan olarak yalnızca `http://localhost:5173` kaynağına CORS 
 - **Cevap zarfı:** başarı `{"success": true, "data": ...}`, hata `{"success": false, "message": "...", "fields": {...}}`. `fields` yalnızca 422'de gelir ve `variants[0].price_cents` gibi alan yolları içerir.
 - **Para** kuruş cinsinden tam sayıdır: `459900` = 4.599,00 TL.
 - **Limitler:** `/auth/*` için IP başına dakikada 20 istek (aşılınca 429). Gateway IP başına saniyede 30 istek (burst 60) izin verir; aşılırsa JSON zarflı **429** ve `Retry-After: 1` döner (ayrıca `/auth/*` kendi 429'unu servisten alır). Betikle çok hızlı istek atarsan bunu görürsün.
-- `/healthz` ve `/readyz` gateway'den geçmez; servis portlarındadır (Identity 8081, Catalog 8082, Inventory 8083).
+- `/healthz` ve `/readyz` gateway'den geçmez; servis portlarındadır (Identity 8081, Catalog 8082, Inventory 8083, Payment 8085).
 - Stok sorgusu (`GET /stock`) `Cache-Control: no-store` döner: stok saniyeler içinde değişir, önbellekteki cevap olmayan stoğu vaat ederdi.
 - Public katalog uçları `Cache-Control: public, max-age=60` döner; arka arkaya aynı isteği atıp eski veri görürsen istemci önbelleğindendir.
 
@@ -52,4 +53,4 @@ python3 -m venv .venv && .venv/bin/pip install openapi-spec-validator jsonschema
 
 `check_contract.py` çalışan yığına gerçek istekler atar. Her yanıt için durum kodunun şemada belgelenmiş olduğunu, gövdenin şemaya uyduğunu ve **belgelenmemiş alan** bulunmadığını doğrular; spec içindeki tüm örnekleri kendi şemalarına karşı sınar; her korumalı uç için tokensız (401) ve customer token'lı (403) çağrı yapar. Kendi oluşturduğu test kayıtlarını (`speccheck...` ürün/kullanıcılar, `SPC-...` stok kalemleri) betik çökse bile sonda siler.
 
-Inventory'nin dahili uçları için çalışan **inventory konteynerinin başlatıldığı** anahtar gerekir. Genelde `.env` içindeki değerdir; konteyner farklı bir anahtarla başlatıldıysa (ör. kabuk ortamından) aynı değeri `INTERNAL_API_KEY` ortam değişkeniyle ver, ya da `docker compose up -d inventory` ile servisi `.env` değeriyle yeniden oluştur. Hem spec hem API değiştikçe çalıştırmak, ikisinin birbirinden sessizce uzaklaşmasını önler. Kimlik uçlarından yaklaşık 12 istek harcadığı için bir dakika içinde iki kez çalıştırma.
+Inventory'nin ve Payment'ın dahili uçları için çalışan **konteynerlerin başlatıldığı** anahtar gerekir. Payment bölümü ödemeleri gerçekten üretmek için RabbitMQ yönetim API'siyle (`localhost:15672`) `PaymentRequested` yayınlar ve çalışan `payment` servisinin işlemesini bekler; bu yüzden yığın ve `payment` ayakta olmalı. Genelde `.env` içindeki değerdir; konteyner farklı bir anahtarla başlatıldıysa (ör. kabuk ortamından) aynı değeri `INTERNAL_API_KEY` ortam değişkeniyle ver, ya da `docker compose up -d inventory` ile servisi `.env` değeriyle yeniden oluştur. Hem spec hem API değiştikçe çalıştırmak, ikisinin birbirinden sessizce uzaklaşmasını önler. Kimlik uçlarından yaklaşık 12 istek harcadığı için bir dakika içinde iki kez çalıştırma.

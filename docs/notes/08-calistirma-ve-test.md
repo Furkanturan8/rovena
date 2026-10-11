@@ -74,7 +74,7 @@ curl -s -X POST localhost:8083/api/v1/internal/reservations \
 
 Aynı `order_id` ile ikinci istek 201 yerine **200** ve aynı rezervasyonu döner; stok iki kez tutulmaz. Stok yetmezse 409 ve `fields` içinde hangi varyantta kaç adet kaldığı gelir.
 
-Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory) → `{"checks":{"postgres":"ok"},"ready":true}`.
+Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
 Veritabanına bakmak için (parolayı `.env` içinden al):
 
@@ -87,8 +87,8 @@ docker compose exec postgres psql -U identity -d identity -c 'select email, role
 ## Testler
 
 ```bash
-make test               # shared + identity + catalog + inventory, HTTP testleri dahil (veritabanı gerekmez)
-make test-integration   # gerçek Postgres'e karşı Catalog, Identity ve Inventory testleri (önce make up)
+make test               # shared + identity + catalog + inventory + payment, HTTP testleri dahil (veritabanı gerekmez)
+make test-integration   # gerçek Postgres ve RabbitMQ'ya karşı shared (mesajlaşma), Catalog, Identity, Inventory ve Payment testleri (önce make up)
 make vet     # statik analiz
 ```
 
@@ -110,6 +110,11 @@ make vet     # statik analiz
 | `inventory/.../transport/http/http_test.go` | Üç ayrı yetki kuralı (herkese açık / internal anahtar / admin JWT), 201-vs-200 tekrar davranışı, `no-store`, hata eşleme |
 | `inventory/.../transport/http/security_test.go` | Dahili anahtar benzerleri, anahtarın admin yetkisi vermemesi, `alg: none`, log hijyeni, CORS, bilinmeyen yol/metot, gövde sınırı |
 | `inventory/.../postgres/integration_test.go` | (Gerçek Postgres) tek adet stoğa sekiz eşzamanlı sipariş, aynı siparişin eşzamanlı tekrarı, ters sıralı kalemlerde deadlock olmaması, transaction geri alma, süpürme |
+| `payment/internal/application/service_test.go` | Ödeme kuralları: onay/ret, tekrar eden istek tek çekim ve sonucu yeniden yayınlama, yeniden kullanılan anahtar, sağlayıcı kesintisi ve deneme sınırı, zaman aşımı, çökme sonrası devam, ödenmiş siparişe ikinci ödeme, eşzamanlı istekler |
+| `payment/.../transport/http/http_test.go` | Müşteri yalnızca kendi ödemesini görür, admin listesi, internal anahtar, yazma ucu olmaması |
+| `payment/.../postgres/integration_test.go` | (Gerçek Postgres) eşzamanlı `Begin` tek satır, tek kazanan tamamlama, durum+olay atomikliği, sipariş başına tek başarı |
+| `payment/.../consumer/integration_test.go` | (Gerçek RabbitMQ + Postgres) `PaymentRequested` → sonuç olayı, tekrarlar, yeniden denemeler, DLQ |
+| `shared/messaging`, `shared/outbox` | Bkz. [12](12-mesajlasma.md) |
 
 ### Testlerin üç katmanı
 

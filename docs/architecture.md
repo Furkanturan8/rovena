@@ -152,6 +152,7 @@ Responsibilities:
 * Simulated payment success and failure
 * Idempotency and duplicate request protection
 * Publishing payment result events
+* Read-only payment status API (customer, admin, internal); payments are created only by `PaymentRequested` events, never over HTTP
 
 Owns:
 
@@ -159,7 +160,7 @@ Owns:
 * Payment state
 * Payment-related idempotency records
 
-The initial implementation uses a mock payment provider. No real payments are processed.
+The initial implementation uses a mock payment provider whose answer is selected by a test card token. No real payments are processed. A provider that fails to answer is retried a bounded number of times and then the payment fails with `provider_unavailable`, so the order always receives a definite result. An order can be paid at most once.
 
 The payment abstraction must allow a future provider adapter without coupling order business logic to a specific payment vendor.
 
@@ -255,7 +256,7 @@ Initial event examples:
 
 Stock reservation is intentionally not an event flow (see section 7 and the "Hybrid checkout" decision in section 13): Inventory exposes idempotent REST endpoints instead, so there are no `StockReserved` or `StockReservationFailed` events.
 
-Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
+Event payload contracts (type names, versions, fields) live in `shared/events`. Events should have a stable envelope containing an event ID, event type, schema version, timestamp, and relevant identifiers.
 
 Events represent facts that have occurred. Commands request that a service perform an action. These concepts must remain distinct.
 

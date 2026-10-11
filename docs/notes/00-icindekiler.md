@@ -18,6 +18,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 10 | [API sözleşmesi: OpenAPI](10-openapi.md) | OpenAPI dosyaları, nasıl okunur, sözleşme testi |
 | 11 | [Inventory servisi](11-inventory-servisi.md) | Stok, rezervasyon yaşam döngüsü, overselling'i engelleme, koşullu güncelleme ve kilitler |
 | 12 | [Mesajlaşma](12-mesajlasma.md) | Olay zarfı, RabbitMQ topolojisi (retry, DLQ), Transactional Outbox, idempotent tüketici |
+| 13 | [Payment servisi](13-payment-servisi.md) | Ödeme durumları, idempotency anahtarı, sağlayıcı arayüzü ve sahte sağlayıcı, sağlayıcı cevap vermezse ne olur, tek ödeme/sipariş |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -30,13 +31,13 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 
 | Aşama | Durum | Not |
 | --- | --- | --- |
-| Altyapı (Compose, Postgres, RabbitMQ, Nginx) | Tamamlandı | RabbitMQ henüz hiçbir servis tarafından kullanılmıyor (Faz 2'de Payment ile başlayacak) |
-| Shared modülü | Tamamlandı | errorx, response, httpx, auth, logging, messaging, outbox |
+| Altyapı (Compose, Postgres, RabbitMQ, Nginx) | Tamamlandı | RabbitMQ'yu Payment servisi kullanıyor; Order bağlanınca akış tamamlanacak |
+| Shared modülü | Tamamlandı | errorx, response, httpx, auth, logging, messaging, outbox, events |
 | Identity servisi | Tamamlandı | Kayıt, giriş, refresh, profil, admin rol yönetimi; birim, HTTP ve Postgres entegrasyon testleri |
 | Catalog servisi | Tamamlandı | Kategori, ürün, varyant, görsel; arama/filtre; admin yönetimi; aynı test seti |
 | API şemaları (OpenAPI) | Tamamlandı | Identity, Catalog ve Inventory; sözleşme testi |
 | Inventory servisi | Tamamlandı | Varyant bazlı stok, rezervasyon yaşam döngüsü, süre aşımı, hareket defteri; birim, HTTP ve eşzamanlılık testleri |
 | Mesajlaşma altyapısı (Faz 1) | Tamamlandı | Olay zarfı, RabbitMQ topolojisi (retry, DLQ), Transactional Outbox, idempotent Inbox; gerçek RabbitMQ ve Postgres ile entegrasyon testleri, mutasyon kontrolü |
 | Order servisi (Saga, Outbox) | Sırada | Rezervasyon uçları REST olarak hazır; RabbitMQ bu adımda devreye girecek |
-| Payment servisi | Planlı | |
+| Payment servisi (Faz 2) | Tamamlandı | `PaymentRequested` tüketir, `PaymentSucceeded/Failed` yayınlar; idempotency anahtarı, sahte sağlayıcı, okuma uçları; birim, HTTP, Postgres ve RabbitMQ entegrasyon testleri, mutasyon kontrolü |
 | Frontend | Planlı | Önce backend |

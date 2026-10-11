@@ -2,13 +2,16 @@
 
 For every call it verifies that the status code is documented, the JSON body matches the
 documented schema, and no undocumented fields appear. It creates rows whose names start with
-"speccheck" (Inventory: SKUs starting with "SPC-") and removes them at the end (psql inside the postgres container).
+"speccheck" (Inventory: SKUs starting with "SPC-", Payment: idempotency keys starting with "speccheck-") and removes
+them at the end (psql inside the postgres container).
 
     python3 -m venv .venv && .venv/bin/pip install openapi-spec-validator jsonschema pyyaml requests
     .venv/bin/python docs/openapi/check_contract.py
 
-Uses INTERNAL_API_KEY (environment variable, else .env) for the Inventory /internal endpoints (service port 8083).
-It must be the key the running inventory container was started with.
+Uses INTERNAL_API_KEY (environment variable, else .env) for the Inventory and Payment /internal endpoints (service ports
+8083 and 8085). It must be the key the running containers were started with.
+Payments are created the way production does it: a PaymentRequested event is published to RabbitMQ (through its
+management API on port 15672) and the running Payment service handles it.
 Uses ~12 of the 20 requests/minute that /auth/* allows per IP, so do not run it twice within a minute.
 """
 import atexit, json, os, sys, time, subprocess, uuid, yaml, requests
@@ -17,7 +20,9 @@ from openapi_schema_validator import OAS30Validator
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2])
 G = "http://localhost:8080"
 INTERNAL = "http://localhost:8083"  # inventory /internal/* is not routed by the gateway
-specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory")}
+PAYMENT = "http://localhost:8085"   # payment /internal/* neither
+INTERNALS = {"inventory": INTERNAL, "payment": PAYMENT}
+specs = {n: yaml.safe_load(open(f"{ROOT}/docs/openapi/{n}.yaml")) for n in ("identity", "catalog", "inventory", "payment")}
 problems, seen = [], set()
 
 def resolve(doc, node):
@@ -94,6 +99,9 @@ def cleanup():
         DELETE FROM stock_movements WHERE variant_id IN (SELECT variant_id FROM stock_items WHERE sku LIKE 'SPC-%');
         DELETE FROM reservations WHERE id IN (SELECT reservation_id FROM reservation_items WHERE variant_id IN (SELECT variant_id FROM stock_items WHERE sku LIKE 'SPC-%'));
         DELETE FROM stock_items WHERE sku LIKE 'SPC-%';""")
+    psql("payment", """
+        DELETE FROM outbox_events WHERE envelope->>'correlation_id' LIKE 'speccheck-%';
+        DELETE FROM payments WHERE idempotency_key LIKE 'speccheck-%';""")
 
 atexit.register(cleanup)
 
@@ -307,6 +315,66 @@ call(N, "POST", R + "/{id}/release", path=f"{R}/nope/release", base=INTERNAL, ke
 for hp in ("healthz", "readyz"):
     resp = requests.get(f"{INTERNAL}/{hp}"); check(N, "GET", f"/{hp}", resp)
 
+# ================================================================= payment
+P = "payment"
+RABBIT = "http://localhost:15672/api/exchanges/%2F/rovena.events/publish"
+RABBIT_AUTH = (env["RABBITMQ_USER"], env["RABBITMQ_PASSWORD"])
+
+def request_payment(order_id, customer_id, method, amount=459900):
+    """Publish PaymentRequested the way the Order service will; the running Payment service picks it up."""
+    envelope = {"event_id": str(uuid.uuid4()), "type": "PaymentRequested", "version": 1,
+                "occurred_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "correlation_id": f"speccheck-{tag}",
+                "payload": {"order_id": order_id, "customer_id": customer_id, "idempotency_key": f"speccheck-{order_id}",
+                            "amount_cents": amount, "currency": "TRY", "payment_method": method}}
+    r = requests.post(RABBIT, auth=RABBIT_AUTH, json={
+        "properties": {"delivery_mode": 2, "content_type": "application/json"}, "routing_key": "PaymentRequested",
+        "payload": json.dumps(envelope), "payload_encoding": "string"})
+    if not r.ok or not r.json().get("routed"):
+        sys.exit(f"could not publish PaymentRequested: {r.status_code} {r.text}")
+
+def wait_for_payment(order_id):
+    for _ in range(100):
+        r = requests.get(f"{PAYMENT}/api/v1/internal/payments/by-order/{order_id}", headers={"X-Internal-Key": KEY})
+        if r.status_code == 200 and r.json()["data"]["status"] != "pending":
+            return r.json()["data"]
+        time.sleep(0.1)
+    sys.exit(f"payment for order {order_id} did not finish in time; is the payment service running?")
+
+paid_order, declined_order, foreign_order = (str(uuid.uuid4()) for _ in range(3))
+request_payment(paid_order, user_id, "tok_visa")
+request_payment(declined_order, user_id, "tok_declined")
+request_payment(foreign_order, str(uuid.uuid4()), "tok_visa")
+paid = wait_for_payment(paid_order); declined = wait_for_payment(declined_order); wait_for_payment(foreign_order)
+
+B = "/api/v1/payments/by-order/{orderId}"
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}", token=me_tok)                                    # 200 succeeded
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{declined_order}", token=me_tok, note="(failed)")               # 200 failed
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{foreign_order}", token=me_tok, note="(not mine)")              # 404
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{uuid.uuid4()}", token=me_tok)                                  # 404
+call(P, "GET", B, path="/api/v1/payments/by-order/nope", token=me_tok)                                             # 400
+call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}")                                                  # 401
+
+A = "/api/v1/admin/payments"
+call(P, "GET", A, token=admin)                                                                                     # 200
+call(P, "GET", A, path=A + "?status=failed", token=admin, note="?status=failed")
+call(P, "GET", A, path=A + f"?order_id={paid_order}", token=admin, note="?order_id=")
+call(P, "GET", A, path=A + "?page=2&page_size=1", token=admin, note="?page=2&page_size=1")
+call(P, "GET", A, path=A + "?status=bogus", token=admin)                                                           # 400
+call(P, "GET", A, path=A + "?order_id=nope", token=admin)                                                          # 400
+call(P, "GET", A, token=me_tok)                                                                                    # 403
+call(P, "GET", A)                                                                                                  # 401
+call(P, "GET", A + "/{id}", path=f"{A}/{paid['id']}", token=admin)                                                 # 200
+call(P, "GET", A + "/{id}", path=f"{A}/{uuid.uuid4()}", token=admin)                                               # 404
+call(P, "GET", A + "/{id}", path=f"{A}/nope", token=admin)                                                         # 400
+
+IP = "/api/v1/internal/payments/by-order/{orderId}"
+call(P, "GET", IP, path=f"/api/v1/internal/payments/by-order/{paid_order}", base=PAYMENT, key=KEY)                 # 200
+call(P, "GET", IP, path=f"/api/v1/internal/payments/by-order/{uuid.uuid4()}", base=PAYMENT, key=KEY)               # 404
+call(P, "GET", IP, path="/api/v1/internal/payments/by-order/nope", base=PAYMENT, key=KEY)                          # 400
+call(P, "GET", IP, path=f"/api/v1/internal/payments/by-order/{paid_order}", base=PAYMENT, key="wrong-key", note="(wrong key)")  # 401
+for hp in ("healthz", "readyz"):
+    resp = requests.get(f"{PAYMENT}/{hp}"); check(P, "GET", f"/{hp}", resp)
+
 # ---- every protected operation: no token -> 401, customer token -> 403 (where documented)
 for api, doc in specs.items():
     for tpl, ops in doc["paths"].items():
@@ -317,7 +385,7 @@ for api, doc in specs.items():
             for name in ("id", "variantId", "orderId"):
                 path = path.replace("{" + name + "}", str(uuid.uuid4()))
             if op["security"] == [{"internalKey": []}]:
-                call(api, m.upper(), tpl, path=path, base=INTERNAL, json_body={} if m != "get" else None, note="(no key)")
+                call(api, m.upper(), tpl, path=path, base=INTERNALS[api], json_body={} if m != "get" else None, note="(no key)")
                 continue
             call(api, m.upper(), tpl, path=path, json_body={} if m != "get" else None, note="(no token)")
             if "403" in op["responses"]:

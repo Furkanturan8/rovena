@@ -13,7 +13,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | Servis | Ne yapar | Dışarıya açık port |
 | --- | --- | --- |
 | `postgres` | PostgreSQL 17 veritabanı sunucusu | 127.0.0.1:5433 (yalnızca kendi bilgisayarın) |
-| `rabbitmq` | Mesaj kuyruğu (altyapı kodu `shared/messaging`'te hazır, servisler henüz kullanmıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
+| `rabbitmq` | Mesaj kuyruğu (Payment kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
 | `identity` | Identity API sunucusu | 127.0.0.1:8081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
@@ -23,6 +23,8 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `inventory-migrate` | Inventory tablolarını kurar, işi bitince kapanır | yok |
 | `inventory` | Inventory API sunucusu (içinde rezervasyon süpürücüsü de çalışır) | 127.0.0.1:8083 |
 | `inventory-seed` | Demo varyantlara açılış stoğu yazar (`tools` profili) | yok |
+| `payment-migrate` | Payment tablolarını (ve outbox/inbox) kurar, işi bitince kapanır | yok |
+| `payment` | Payment servisi: RabbitMQ'dan `PaymentRequested` tüketir, sonuç olaylarını yayınlar; HTTP yalnızca okuma | 127.0.0.1:8085 |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:
@@ -61,6 +63,9 @@ Catalog:
 - `00002_add_search_text.sql` → aksan duyarsız arama sütunu
 - `00003_variants_price_index.sql` → fiyat sıralamasını hızlandıran kısmi indeks
 
+Payment:
+- `00001_create_payments.sql` → ödemeler (tutarsız durumları ve sipariş başına ikinci başarıyı engelleyen kısıtlarla) + `outbox_events` + `processed_events`
+
 Inventory:
 - `00001_create_inventory.sql` → stok kalemleri, rezervasyonlar, rezervasyon kalemleri, hareket defteri (stoğun söz verilenin altına düşmesini engelleyen `CHECK` kısıtlarıyla)
 
@@ -83,7 +88,7 @@ Her dosyada `-- +goose Up` (uygula) ve `-- +goose Down` (geri al) bölümü vard
 
 ## RabbitMQ
 
-Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşıyacak. Şu an çalışıyor ama hiçbir servis kullanmıyor; Order servisiyle birlikte devreye girecek. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `.env` içinde).
+Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşır (bkz. [12](12-mesajlasma.md)). Şu an yalnızca Payment kullanıyor: `payment.requests` kuyruğundan dinler. Order servisi gelince `PaymentRequested`'i gönderen taraf o olacak. Yönetim paneli: http://localhost:15672 (kullanıcı/parola `.env` içinde).
 
 ## `.env` ve gizli değerler
 
@@ -92,7 +97,7 @@ Mesaj kuyruğu sunucusu. Servisler arası asenkron olayları taşıyacak. Şu an
 - Veritabanı parolaları (servis başına ayrı)
 - `RABBITMQ_*`
 - `JWT_SECRET`: token imzalama anahtarı, en az 32 karakter, **tüm servislerde aynı** olmalı. Sızarsa herkes admin token'ı üretebilir.
-- `INTERNAL_API_KEY`: servisler arası çağrıların ortak anahtarı (en az 32 karakter). Şimdilik yalnızca Inventory'nin rezervasyon uçları ister; Order servisi geldiğinde onu gönderen taraf olacak.
+- `INTERNAL_API_KEY`: servisler arası çağrıların ortak anahtarı (en az 32 karakter). Şimdilik Inventory'nin rezervasyon uçları ve Payment'ın dahili okuma ucu ister; Order servisi geldiğinde onu gönderen taraf olacak.
 - `ADMIN_EMAIL`, `ADMIN_PASSWORD`: `make seed-admin` ile oluşturulacak ilk admin.
 
 Compose bu değerleri konteynerlere ortam değişkeni olarak verir; servis kodu `internal/infrastructure/config` paketiyle okur.
