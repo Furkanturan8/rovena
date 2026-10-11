@@ -53,3 +53,32 @@ type PaymentFailedPayload struct {
 	// FailureMessage is safe to show to the customer.
 	FailureMessage string `json:"failure_message"`
 }
+
+const (
+	// RefundRequested is a command from Order to Payment: give the money for this order back.
+	RefundRequested = "RefundRequested"
+	// PaymentRefunded is the fact that the money was given back.
+	PaymentRefunded = "PaymentRefunded"
+)
+
+const (
+	RefundRequestedVersion = 1
+	PaymentRefundedVersion = 1
+)
+
+// RefundRequestedPayload asks Payment to refund the succeeded payment of an order. Asking again
+// for the same order is safe: a payment is refunded once and the stored result is published again.
+type RefundRequestedPayload struct {
+	OrderID    uuid.UUID `json:"order_id"`
+	CustomerID uuid.UUID `json:"customer_id"`
+	// Reason is for people reading logs and the admin view (payment_timeout, reservation_lost, ...).
+	Reason string `json:"reason"`
+}
+
+type PaymentRefundedPayload struct {
+	PaymentID   uuid.UUID `json:"payment_id"`
+	OrderID     uuid.UUID `json:"order_id"`
+	AmountCents int64     `json:"amount_cents"`
+	Currency    string    `json:"currency"`
+	RefundRef   string    `json:"refund_ref"`
+}

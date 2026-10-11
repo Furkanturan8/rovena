@@ -17,6 +17,8 @@ CREATE TABLE outbox_events (
 );
 -- Partial index: the relay only ever looks for rows that are still unsent.
 CREATE INDEX outbox_events_pending_idx ON outbox_events (seq) WHERE published_at IS NULL;
+-- ...and the cleaner only ever looks for rows that were sent long ago.
+CREATE INDEX outbox_events_published_idx ON outbox_events (published_at) WHERE published_at IS NOT NULL;
 
 -- One row per (consumer, event) already handled. The primary key is what turns a
 -- redelivered event into a no-op.
@@ -26,6 +28,7 @@ CREATE TABLE processed_events (
     processed_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (consumer, event_id)
 );
+CREATE INDEX processed_events_age_idx ON processed_events (processed_at);
 
 -- +goose Down
 DROP TABLE processed_events;

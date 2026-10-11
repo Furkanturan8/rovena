@@ -442,3 +442,85 @@ func TestBacklogIsVisibleInMetrics(t *testing.T) {
 		t.Fatalf("expected an empty backlog after publishing, metric line: %q", line)
 	}
 }
+
+// ---------------------------------------------------------------- cleanup
+
+func TestCleanerDeletesOldPublishedRowsAndOldMarkersOnly(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	cleaner := outbox.NewCleaner(db, nil, 7*24*time.Hour)
+
+	oldSent := emit(t, db, "OldSent")
+	recentSent := emit(t, db, "RecentSent")
+	oldUnsent := emit(t, db, "OldUnsent")
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := db.ExecContext(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec("UPDATE outbox_events SET published_at = now() - interval '8 days' WHERE id = ?", oldSent.ID)
+	exec("UPDATE outbox_events SET published_at = now() - interval '1 day' WHERE id = ?", recentSent.ID)
+	exec("UPDATE outbox_events SET created_at = now() - interval '30 days' WHERE id = ?", oldUnsent.ID) // never sent
+	exec("INSERT INTO processed_events (consumer, event_id, processed_at) VALUES ('q', ?, now() - interval '8 days')", uuid.New())
+	exec("INSERT INTO processed_events (consumer, event_id, processed_at) VALUES ('q', ?, now() - interval '1 day')", uuid.New())
+
+	out, in, err := cleaner.RunOnce(ctx)
+	if err != nil || out != 1 || in != 1 {
+		t.Fatalf("deleted outbox=%d inbox=%d err=%v, want 1 and 1", out, in, err)
+	}
+	left := func(id uuid.UUID) int { return count(t, db, "id = '"+id.String()+"'") }
+	if left(oldSent.ID) != 0 || left(recentSent.ID) != 1 || left(oldUnsent.ID) != 1 {
+		t.Fatalf("old sent=%d recent sent=%d old unsent=%d", left(oldSent.ID), left(recentSent.ID), left(oldUnsent.ID))
+	}
+	var markers int
+	if err := db.NewRaw("SELECT count(*) FROM processed_events").Scan(ctx, &markers); err != nil || markers != 1 {
+		t.Fatalf("markers = %d, %v", markers, err)
+	}
+
+	out, in, _ = cleaner.RunOnce(ctx)
+	if out != 0 || in != 0 {
+		t.Fatalf("a second pass must find nothing, got %d/%d", out, in)
+	}
+}
+
+func TestCleanerHandlesMoreRowsThanOneBatch(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	if _, err := db.ExecContext(ctx, `INSERT INTO outbox_events (id, type, envelope, created_at, published_at)
+		SELECT gen_random_uuid(), 'T', '{}', now() - interval '20 days', now() - interval '20 days' FROM generate_series(1, 2500)`); err != nil {
+		t.Fatal(err)
+	}
+	keep := emit(t, db, "Keep")
+
+	out, _, err := outbox.NewCleaner(db, nil, 24*time.Hour).RunOnce(ctx)
+	if err != nil || out != 2500 {
+		t.Fatalf("deleted %d, %v", out, err)
+	}
+	if count(t, db, "true") != 1 || count(t, db, "id = '"+keep.ID.String()+"'") != 1 {
+		t.Fatal("only the unsent event may remain")
+	}
+}
+
+// The relay must keep working while old rows are being removed.
+func TestCleanerAndRelayCanRunTogether(t *testing.T) {
+	ctx := context.Background()
+	db := newDB(t)
+	pub := &fakePublisher{}
+	relay := outbox.NewRelay(db, pub, nil)
+	cleaner := outbox.NewCleaner(db, nil, 0) // retention zero: everything published is "old"
+
+	for i := 0; i < 20; i++ {
+		emit(t, db, "E")
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); _, _ = relay.RunOnce(ctx) }()
+	go func() { defer wg.Done(); _, _, _ = cleaner.RunOnce(ctx) }()
+	wg.Wait()
+	_, _ = relay.RunOnce(ctx)
+
+	if len(pub.types()) != 20 {
+		t.Fatalf("published %d of 20 events", len(pub.types()))
+	}
+}
