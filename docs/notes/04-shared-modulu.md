@@ -51,6 +51,10 @@ Burada kritik fikir: **Token'ı yalnızca Identity üretir, ama her servis tek b
 
 Yapılandırılmış (JSON) log açar: `{"time":..., "level":"INFO", "service":"identity", "msg":...}`. Her satıra servis adı eklenir. JSON log, log toplama araçlarında aranabilir ve filtrelenebilir.
 
+### `telemetry/`: İz ve metrik kurulumu
+
+OpenTelemetry'nin tek kurulum noktası: iz sağlayıcı, metrik sağlayıcı (Prometheus biçiminde), `traceparent` taşıma yardımcıları ve `/metrics` işleyicisi. Her servis `main` içinde bir kez `telemetry.Setup` çağırır. `httpx.Tracing()` HTTP isteklerini, `messaging` mesajları izler. Ayrıntı: [16](16-gozlemlenebilirlik-ve-ci.md).
+
 ### `events/`: Olay sözleşmeleri (`payment.go`, `order.go`)
 
 Servisler arası olayların adları, sürümleri ve payload yapıları. Davranış içermez, yalnızca veri şekli: yayıncı ve tüm tüketiciler aynı tanımı okur, böylece sessizce birbirinden uzaklaşamazlar. Mantık içermediği için "shared'e iş mantığı girmez" kuralını bozmaz. Bedeli: bir olayın şeklini değiştirmek hem yayıncıyı hem tüketiciyi etkiler, bu yüzden değişiklik yeni bir `version` ile yapılır. `payment.go` ödeme olaylarını, `order.go` `OrderConfirmed` ve `OrderCancelled`'ı tanımlar. Ayrıntı: [13](13-payment-servisi.md), [14](14-order-servisi-ve-saga.md).

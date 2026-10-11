@@ -3,6 +3,7 @@ package clients
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,7 +16,7 @@ import (
 type Inventory struct{ base }
 
 func NewInventory(url, internalKey string, timeout time.Duration) *Inventory {
-	return &Inventory{newBase(url, internalKey, timeout)}
+	return &Inventory{newBase("inventory", url, internalKey, timeout)}
 }
 
 var _ application.Inventory = (*Inventory)(nil)
@@ -50,8 +51,11 @@ func (i *Inventory) Reserve(ctx context.Context, orderID uuid.UUID, lines []appl
 				ExpiresAt time.Time `json:"expires_at"`
 			} `json:"data"`
 		}
-		if err := json.Unmarshal(body, &env); err != nil || env.Data.ID == uuid.Nil {
-			return nil, fmt.Errorf("inventory sent an unreadable reservation: %v", err)
+		if err := json.Unmarshal(body, &env); err != nil {
+			return nil, fmt.Errorf("inventory sent an unreadable reservation: %w", err)
+		}
+		if env.Data.ID == uuid.Nil {
+			return nil, errors.New("inventory sent a reservation without an id")
 		}
 		return &application.Reservation{ID: env.Data.ID, ExpiresAt: env.Data.ExpiresAt}, nil
 	case http.StatusConflict, http.StatusNotFound:

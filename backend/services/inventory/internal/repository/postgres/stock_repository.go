@@ -91,7 +91,7 @@ func (r *StockRepository) Availability(ctx context.Context, variantIDs []uuid.UU
 	err := r.db.NewSelect().Model((*stockItemRow)(nil)).
 		Column("s.variant_id", "s.sku").
 		ColumnExpr(availableExpr+" AS available").
-		Where("s.variant_id IN (?)", bun.In(variantIDs)).
+		Where("s.variant_id IN (?)", bun.List(variantIDs)).
 		Scan(ctx, &rows)
 	if err != nil {
 		return nil, err

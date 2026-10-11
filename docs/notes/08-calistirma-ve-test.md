@@ -92,6 +92,9 @@ make test-integration   # gerçek Postgres ve RabbitMQ'ya karşı shared (mesajl
 make e2e                # uçtan uca ve hata enjeksiyonu senaryoları (konteynerleri durdurup başlatır, ~3 dk), bkz. [15](15-uctan-uca-testler.md)
 make test-env           # (test-integration bunu kendisi çağırır) yalıtılmış test ortamı: orders_test ve payment_test veritabanları + RabbitMQ'da `test` vhost'u
 make vet     # statik analiz
+make lint    # golangci-lint, 6 modül (brew install golangci-lint)
+make tidy-check  # go.mod/go.sum tidy mi, indirilen modüller bozulmamış mı
+make build   # tüm modülleri derle
 ```
 
 ### Mevcut testler

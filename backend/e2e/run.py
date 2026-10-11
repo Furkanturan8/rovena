@@ -42,7 +42,9 @@ def until(fn, timeout, what, every=0.3):
             last = fn()
             if last:
                 return last
-        except requests.RequestException:
+        except (requests.RequestException, ValueError):
+            # A service that is being stopped or started answers with errors or an HTML 502 from the
+            # gateway; during fault injection that means "not yet", not "failed".
             pass
         time.sleep(every)
     raise AssertionError(f"timed out after {timeout}s waiting for: {what} (last: {last})")

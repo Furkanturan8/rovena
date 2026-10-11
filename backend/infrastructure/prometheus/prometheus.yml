@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  # Every service serves /metrics on its own port (not routed by the gateway).
+  - job_name: identity
+    static_configs: [{targets: ['identity:8081']}]
+  - job_name: catalog
+    static_configs: [{targets: ['catalog:8082']}]
+  - job_name: inventory
+    static_configs: [{targets: ['inventory:8083']}]
+  - job_name: payment
+    static_configs: [{targets: ['payment:8085']}]
+  - job_name: order
+    static_configs: [{targets: ['order:8086']}]
+
+  # Queue depth: messages waiting (ready), being processed (unacked), per queue.
+  - job_name: rabbitmq
+    metrics_path: /metrics/detailed
+    params:
+      family: [queue_coarse_metrics]
+    static_configs: [{targets: ['rabbitmq:15692']}]

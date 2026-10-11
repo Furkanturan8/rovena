@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -24,8 +25,12 @@ type Envelope struct {
 	CorrelationID string `json:"correlation_id"`
 	// RequestID is the X-Request-ID of the HTTP request that started the flow, so a
 	// log search can cross from the API call into the asynchronous part.
-	RequestID string          `json:"request_id,omitempty"`
-	Payload   json.RawMessage `json:"payload"`
+	RequestID string `json:"request_id,omitempty"`
+	// Traceparent is the W3C trace context of the span that created the event. An event can
+	// wait in the outbox for a while before it is published, so the trace has to travel with
+	// it instead of being picked up from whatever happens to be running when it is sent.
+	Traceparent string          `json:"traceparent,omitempty"`
+	Payload     json.RawMessage `json:"payload"`
 }
 
 // NewEnvelope wraps payload as an event of the given type and version. Correlation and
@@ -51,6 +56,7 @@ func NewEnvelope(ctx context.Context, eventType string, version int, payload any
 		OccurredAt:    time.Now().UTC(),
 		CorrelationID: correlationID,
 		RequestID:     RequestID(ctx),
+		Traceparent:   telemetry.Traceparent(ctx),
 		Payload:       body,
 	}, nil
 }

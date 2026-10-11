@@ -176,7 +176,7 @@ func (e *env) do(method, path string, u *user, headers map[string]string, body a
 	if err != nil {
 		e.t.Fatalf("%s %s: %v", method, path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	res := result{Status: resp.StatusCode, Raw: raw}
 	_ = json.Unmarshal(raw, &res.Body)

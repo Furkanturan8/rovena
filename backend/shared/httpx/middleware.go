@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"log/slog"
 	"time"
 
@@ -42,14 +43,18 @@ func AccessLog(log *slog.Logger) fiber.Handler {
 				_ = c.SendStatus(fiber.StatusInternalServerError)
 			}
 		}
-		log.Info("http request",
+		attrs := []any{
 			"method", c.Method(),
 			"path", c.Path(),
 			"status", c.Response().StatusCode(),
 			"duration_ms", time.Since(start).Milliseconds(),
 			"ip", c.IP(),
 			"request_id", RequestID(c),
-		)
+		}
+		if id := telemetry.TraceID(c.UserContext()); id != "" {
+			attrs = append(attrs, "trace_id", id)
+		}
+		log.Info("http request", attrs...)
 		return nil
 	}
 }

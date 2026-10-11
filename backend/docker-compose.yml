@@ -32,6 +32,7 @@ services:
     ports:
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"
+      - "127.0.0.1:15692:15692" # Prometheus metrics (rabbitmq_prometheus plugin)
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -55,6 +56,7 @@ services:
       dockerfile: services/identity/Dockerfile
     environment:
       APP_ENV: development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       HTTP_PORT: "8081"
       DATABASE_URL: postgres://identity:${IDENTITY_DB_PASSWORD}@postgres:5432/identity?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?set in .env}
@@ -98,6 +100,7 @@ services:
       dockerfile: services/catalog/Dockerfile
     environment:
       APP_ENV: development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       HTTP_PORT: "8082"
       DATABASE_URL: postgres://catalog:${CATALOG_DB_PASSWORD}@postgres:5432/catalog?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?set in .env}
@@ -138,6 +141,7 @@ services:
       dockerfile: services/inventory/Dockerfile
     environment:
       APP_ENV: development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       HTTP_PORT: "8083"
       DATABASE_URL: postgres://inventory:${INVENTORY_DB_PASSWORD}@postgres:5432/inventory?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?set in .env}
@@ -184,6 +188,7 @@ services:
       dockerfile: services/payment/Dockerfile
     environment:
       APP_ENV: development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       HTTP_PORT: "8085"
       DATABASE_URL: postgres://payment:${PAYMENT_DB_PASSWORD}@postgres:5432/payment?sslmode=disable
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
@@ -221,6 +226,7 @@ services:
       dockerfile: services/order/Dockerfile
     environment:
       APP_ENV: development
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
       HTTP_PORT: "8086"
       DATABASE_URL: postgres://orders:${ORDER_DB_PASSWORD}@postgres:5432/orders?sslmode=disable
       RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
@@ -244,6 +250,22 @@ services:
         condition: service_started
     ports:
       - "127.0.0.1:8086:8086"
+
+  # Traces: UI on http://localhost:16686. In-memory storage, traces are gone after a restart.
+  jaeger:
+    image: jaegertracing/jaeger:2.4.0
+    ports:
+      - "127.0.0.1:16686:16686"
+
+  # Metrics: UI on http://localhost:9090 (try `rate(http_server_request_duration_seconds_count[1m])`).
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - rabbitmq
 
   gateway:
     image: nginx:1.27-alpine

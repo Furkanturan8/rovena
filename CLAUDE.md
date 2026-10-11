@@ -27,6 +27,9 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 
 - `make up` / `make down` → compose
 - `make test` → tüm modüllerde `go test ./...`
+- `make lint` / `make tidy-check` / `make build` → golangci-lint, go.mod denetimi, derleme (CI ile aynı)
+- `make test-integration`, `make e2e` → gerçek Postgres/RabbitMQ testleri, uçtan uca ve hata enjeksiyonu senaryoları
+- Gözlemlenebilirlik: Jaeger `localhost:16686`, Prometheus `localhost:9090`, her servisin `/metrics` yolu (bkz. `docs/notes/16`)
 - `make seed-admin` / `make seed-catalog` → ilk admin / demo ürünler
 
 ## Öğrenme notları

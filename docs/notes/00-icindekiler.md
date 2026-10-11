@@ -21,6 +21,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 13 | [Payment servisi](13-payment-servisi.md) | Ödeme durumları, idempotency anahtarı, sağlayıcı arayüzü ve sahte sağlayıcı, sağlayıcı cevap vermezse ne olur, tek ödeme/sipariş |
 | 14 | [Order servisi ve checkout Saga](14-order-servisi-ve-saga.md) | Sepet, fiyatı sunucuda belirleme, checkout idempotency, Saga adımları ve telafi, korumalı geçişler, takılan siparişi kurtarma |
 | 15 | [Uçtan uca testler](15-uctan-uca-testler.md) | `make e2e`: gerçek siparişler, konteyner durdurma/yeniden başlatma, RabbitMQ kesintisi, kayıp mesaj, beklenen sonuçlar |
+| 16 | [Gözlemlenebilirlik ve CI](16-gozlemlenebilirlik-ve-ci.md) | Trace (servisler ve mesajlar arası), metrikler, Jaeger/Prometheus, CI iş akışı, linter, bağımlılık denetimi |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -43,4 +44,5 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 | Payment servisi (Faz 2) | Tamamlandı | `PaymentRequested` tüketir, `PaymentSucceeded/Failed` yayınlar; idempotency anahtarı, sahte sağlayıcı, okuma uçları; birim, HTTP, Postgres ve RabbitMQ entegrasyon testleri, mutasyon kontrolü |
 | Order servisi ve checkout Saga (Faz 3) | Tamamlandı | Sepet, checkout (Idempotency-Key), Catalog/Inventory REST + Payment olayları, korumalı durum geçişleri, kurtarma işi; birim, HTTP, Postgres entegrasyon testleri, mutasyon kontrolü, gerçek yığında uçtan uca deneme |
 | Uçtan uca dayanıklılık (Faz 4) | Tamamlandı | `make e2e`: 13 senaryo (başarılı sipariş, yetersiz stok, ret, sağlayıcı kesintisi, çift istek, tekrar olay, servis yeniden başlatma, RabbitMQ/Inventory/Payment kesintisi, kayıp mesaj, sessiz ödeme) |
+| Gözlemlenebilirlik ve CI (Faz 5) | Tamamlandı | OpenTelemetry (HTTP + mesaj izi, outbox üzerinden), Prometheus metrikleri, Jaeger; GitHub Actions (build, vet, lint, govulncheck, test, entegrasyon, e2e); `golangci-lint`, `go mod tidy` denetimi |
 | Frontend | Planlı | Önce backend |

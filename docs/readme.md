@@ -146,6 +146,11 @@ until it is `confirmed` or `cancelled`. Repeating a checkout with the same `Idem
 A recovery job repairs orders that get stuck between saga steps. See [`docs/openapi/order.yaml`](openapi/order.yaml)
 and [`docs/notes/14-order-servisi-ve-saga.md`](notes/14-order-servisi-ve-saga.md).
 
+**Observability.** Every service continues the caller's W3C trace (HTTP headers and, through the outbox, event envelopes)
+and serves Prometheus metrics at `/metrics` on its own port. `make up` also starts Jaeger (traces,
+`http://localhost:16686`) and Prometheus (`http://localhost:9090`). See
+[`docs/notes/16-gozlemlenebilirlik-ve-ci.md`](notes/16-gozlemlenebilirlik-ve-ci.md).
+
 Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`, order: `8086`).
 
 ## Project Goals

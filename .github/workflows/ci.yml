@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  static:
+    name: build, vet, dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/shared/go.mod
+          cache-dependency-path: backend/**/go.sum
+      - run: make build
+      - run: make vet
+      - name: go.mod and go.sum are tidy, downloaded modules are intact
+        run: make tidy-check
+      - name: gofmt
+        run: test -z "$(gofmt -l shared services)" || (gofmt -l shared services; exit 1)
+
+  lint:
+    name: lint (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [shared, services/identity, services/catalog, services/inventory, services/payment, services/order]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/shared/go.mod
+          cache-dependency-path: backend/**/go.sum
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
+          working-directory: backend/${{ matrix.module }}
+          args: --config=${{ github.workspace }}/backend/.golangci.yml
+
+  vulncheck:
+    name: known vulnerabilities in dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/shared/go.mod
+          cache-dependency-path: backend/**/go.sum
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: |
+          for m in shared services/identity services/catalog services/inventory services/payment services/order; do
+            echo "== $m"; (cd $m && govulncheck ./...) || exit 1
+          done
+
+  unit:
+    name: unit and HTTP tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/shared/go.mod
+          cache-dependency-path: backend/**/go.sum
+      - run: go test -race -count=1 ./... 
+        working-directory: backend/shared
+      - name: services
+        run: for s in identity catalog inventory payment order; do (cd services/$s && go test -race -count=1 ./...) || exit 1; done
+
+  integration:
+    name: integration (real Postgres and RabbitMQ)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/shared/go.mod
+          cache-dependency-path: backend/**/go.sum
+      # The compose file is the single definition of the test infrastructure, so CI and a laptop use the same one.
+      - run: scripts/ci-env.sh
+      - run: docker compose up -d --wait postgres rabbitmq
+      - run: scripts/migrate-local.sh
+      - run: make test-integration
+      - if: failure()
+        run: docker compose logs --no-color postgres rabbitmq | tail -200
+
+  openapi:
+    name: OpenAPI documents are valid
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install openapi-spec-validator
+      - run: openapi-spec-validator docs/openapi/*.yaml
+
+  e2e:
+    name: end-to-end scenarios
+    runs-on: ubuntu-latest
+    needs: [unit, integration]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/ci-env.sh
+      - run: make up
+      - name: wait for the gateway
+        run: |
+          for i in $(seq 1 60); do curl -fs localhost:8086/readyz && curl -fs localhost:8083/readyz && break; sleep 2; done
+      - run: make seed-admin seed-catalog
+      - run: make e2e
+      - if: failure()
+        run: docker compose logs --no-color | tail -400

@@ -44,6 +44,7 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	})
 
 	app.Use(httpx.RequestIDMiddleware())
+	app.Use(httpx.Tracing())
 	app.Use(recover.New(recover.Config{EnableStackTrace: true}))
 	app.Use(httpx.AccessLog(opts.Logger))
 	app.Use(helmet.New())
@@ -55,6 +56,7 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	}))
 
 	httpx.RegisterHealth(app, opts.Readiness)
+	httpx.RegisterMetrics(app) // for Prometheus; the gateway does not route it
 
 	stock := NewStockHandler(svc.Stock)
 	reservations := NewReservationHandler(svc.Reservations)

@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/Furkanturan8/rovena/shared/messaging"
 	"github.com/Furkanturan8/rovena/shared/outbox"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/uptrace/bun"
@@ -341,7 +343,7 @@ func TestRelayCrashAfterPublishDeliversTwiceButHandlesOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer broker.Close()
+	defer func() { _ = broker.Close() }()
 
 	id := uuid.NewString()[:8]
 	typ := "test.outbox." + id
@@ -405,5 +407,38 @@ func TestRelayCrashAfterPublishDeliversTwiceButHandlesOnce(t *testing.T) {
 	db.NewRaw("SELECT count(*) FROM effects").Scan(ctx, &effects)
 	if effects != 1 {
 		t.Fatalf("the duplicate delivery caused %d effects", effects)
+	}
+}
+
+func TestBacklogIsVisibleInMetrics(t *testing.T) {
+	if _, err := telemetry.Setup(context.Background(), "outbox-test", nil); err != nil {
+		t.Fatal(err)
+	}
+	db := newDB(t)
+	relay := outbox.NewRelay(db, &fakePublisher{}, nil)
+	emit(t, db, "A")
+	emit(t, db, "B")
+	emit(t, db, "C")
+
+	read := func() string {
+		rec := httptest.NewRecorder()
+		telemetry.MetricsHandler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+		for _, line := range strings.Split(rec.Body.String(), "\n") {
+			if strings.HasPrefix(line, "outbox_pending_events") {
+				return line
+			}
+		}
+		return ""
+	}
+	// Other tests' relays share the process-wide registry; only this schema's database matters
+	// for the callback that was registered last, which is ours.
+	if line := read(); !strings.HasSuffix(line, " 3") {
+		t.Fatalf("expected 3 pending events, metric line: %q", line)
+	}
+	if _, err := relay.RunOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if line := read(); !strings.HasSuffix(line, " 0") {
+		t.Fatalf("expected an empty backlog after publishing, metric line: %q", line)
 	}
 }

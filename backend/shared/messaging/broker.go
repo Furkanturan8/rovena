@@ -9,8 +9,22 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var (
+	published = telemetry.Counter("messaging.events.published", "Events handed to the broker, by type and result")
+	consumed  = telemetry.Counter("messaging.events.consumed", "Events taken from a queue, by queue, type and result (ok, retried, dead_lettered)")
+	handled   = telemetry.DurationHistogram("messaging.handler.duration", "Time a handler needed for one event, by queue and type")
+)
+
+// headerTraceparent carries the trace context in the AMQP message headers.
+const headerTraceparent = "traceparent"
 
 // Exchange is the single topic exchange every event is published to. The routing key
 // is the event type, so a queue chooses what it receives by binding to event types.
@@ -70,14 +84,37 @@ func (b *Broker) Publish(ctx context.Context, env Envelope) error {
 	if err != nil {
 		return fmt.Errorf("marshal envelope: %w", err)
 	}
-	return b.publish(ctx, Exchange, env.Type, amqp.Publishing{
+
+	// The relay publishes long after the request that created the event ended, so the span
+	// continues the trace stored in the envelope, not the (empty) context of the relay.
+	ctx, span := telemetry.Tracer().Start(telemetry.WithTraceparent(ctx, env.Traceparent), "publish "+env.Type,
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "rabbitmq"),
+			attribute.String("messaging.destination.name", Exchange),
+			attribute.String("messaging.rabbitmq.destination.routing_key", env.Type),
+			attribute.String("messaging.message.id", env.ID.String()),
+		))
+	defer span.End()
+
+	err = b.publish(ctx, Exchange, env.Type, amqp.Publishing{
 		ContentType:  "application/json",
 		DeliveryMode: amqp.Persistent,
 		MessageId:    env.ID.String(),
 		Type:         env.Type,
 		Timestamp:    env.OccurredAt,
-		Body:         body,
+		// The consumer's span becomes a child of this publish span.
+		Headers: amqp.Table{headerTraceparent: telemetry.Traceparent(ctx)},
+		Body:    body,
 	})
+	result := "ok"
+	if err != nil {
+		result = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+	published.Add(ctx, 1, metric.WithAttributes(attribute.String("type", env.Type), attribute.String("result", result)))
+	return err
 }
 
 func (b *Broker) publish(ctx context.Context, exchange, key string, msg amqp.Publishing) error {
@@ -148,11 +185,11 @@ func (b *Broker) publisherLocked(ctx context.Context) (*amqp.Channel, error) {
 		return nil, fmt.Errorf("open publish channel: %w", err)
 	}
 	if err := declareExchange(ch); err != nil {
-		ch.Close()
+		_ = ch.Close()
 		return nil, err
 	}
 	if err := ch.Confirm(false); err != nil {
-		ch.Close()
+		_ = ch.Close()
 		return nil, fmt.Errorf("enable publisher confirms: %w", err)
 	}
 	b.pubCh = ch
@@ -162,7 +199,7 @@ func (b *Broker) publisherLocked(ctx context.Context) (*amqp.Channel, error) {
 // dropPublisherLocked discards the channel after a failure; the next publish opens a fresh one.
 func (b *Broker) dropPublisherLocked() {
 	if b.pubCh != nil {
-		b.pubCh.Close()
+		_ = b.pubCh.Close()
 		b.pubCh = nil
 	}
 }

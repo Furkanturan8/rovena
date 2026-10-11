@@ -37,7 +37,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := postgres.NewUserRepository(db)
 	email := application.NormalizeEmail(cfg.AdminEmail)

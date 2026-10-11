@@ -112,7 +112,7 @@ func (e *env) do(r request) result {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	out := result{status: res.StatusCode}
 	raw, err := io.ReadAll(res.Body)
@@ -211,7 +211,7 @@ func TestAvailabilityIsNotCached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if got := res.Header.Get(fiber.HeaderCacheControl); got != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", got)
 	}

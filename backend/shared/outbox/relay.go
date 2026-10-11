@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/Furkanturan8/rovena/shared/messaging"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/uptrace/bun"
+	"go.opentelemetry.io/otel/metric"
 )
 
 const (
@@ -40,7 +42,38 @@ func NewRelay(db *bun.DB, pub Publisher, log *slog.Logger) *Relay {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Relay{db: db, pub: pub, log: log, interval: defaultInterval, batch: defaultBatch}
+	r := &Relay{db: db, pub: pub, log: log, interval: defaultInterval, batch: defaultBatch}
+	r.observeBacklog()
+	return r
+}
+
+// observeBacklog exposes how many events wait in the outbox and how long the oldest has waited.
+// A growing backlog means the broker is unreachable or the relay is stuck: events are safe in the
+// database but nobody downstream hears about them.
+func (r *Relay) observeBacklog() {
+	meter := telemetry.Meter()
+	pending, err1 := meter.Int64ObservableGauge("outbox.pending.events", metric.WithDescription("Events written to the outbox and not yet published"))
+	oldest, err2 := meter.Float64ObservableGauge("outbox.oldest.pending.age", metric.WithUnit("s"), metric.WithDescription("Age of the oldest unpublished event"))
+	if err1 != nil || err2 != nil {
+		return
+	}
+	_, _ = meter.RegisterCallback(func(ctx context.Context, o metric.Observer) error {
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		var count int64
+		var age float64
+		err := r.db.NewSelect().TableExpr("outbox_events").
+			ColumnExpr("count(*)").
+			ColumnExpr("coalesce(extract(epoch from now() - min(created_at)), 0)").
+			Where("published_at IS NULL").
+			Scan(ctx, &count, &age)
+		if err != nil {
+			return nil // a scrape must not fail because the database is busy; the gauge keeps no value
+		}
+		o.ObserveInt64(pending, count)
+		o.ObserveFloat64(oldest, age)
+		return nil
+	}, pending, oldest)
 }
 
 // WithInterval sets how often the outbox is polled.

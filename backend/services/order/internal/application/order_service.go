@@ -12,7 +12,10 @@ import (
 	"github.com/Furkanturan8/rovena/services/order/internal/repository"
 	"github.com/Furkanturan8/rovena/shared/events"
 	"github.com/Furkanturan8/rovena/shared/messaging"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // ErrUnexpectedEvent marks an event that cannot be handled however often it is
@@ -61,6 +64,15 @@ func (c Config) withDefaults() Config {
 		c.RecoveryBatch = 50
 	}
 	return c
+}
+
+var (
+	ordersFinished  = telemetry.Counter("orders.finished", "Orders that reached a final status, by status and cancellation code")
+	recoveryActions = telemetry.Counter("saga.recovery.actions", "Repairs made by the recovery job, by action")
+)
+
+func countRecovery(ctx context.Context, action string) {
+	recoveryActions.Add(ctx, 1, metric.WithAttributes(attribute.String("action", action)))
 }
 
 // OrderService runs the checkout saga: it places orders, reacts to payment outcomes
@@ -270,6 +282,7 @@ func (s *OrderService) cancel(ctx context.Context, o *domain.Order, from []domai
 		return false
 	}
 	if changed {
+		ordersFinished.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "cancelled"), attribute.String("code", code)))
 		s.log.InfoContext(ctx, "order cancelled", "order_id", o.ID, "code", code)
 	}
 	return changed

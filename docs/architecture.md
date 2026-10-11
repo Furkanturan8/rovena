@@ -428,6 +428,13 @@ New infrastructure should be introduced only when a clear requirement justifies 
 
 Service boundaries may evolve as domain knowledge grows. Splitting a service further requires a concrete business, scaling, ownership, or reliability benefit.
 
+## 12a. Observability
+
+* **Traces:** OpenTelemetry. The W3C `traceparent` travels in HTTP headers and in the event envelope, so a trace survives the outbox (an event is published long after the request that created it) and continues in the consumer and in the events the consumer publishes.
+* **Metrics:** Prometheus format on each service's `/metrics` (not routed by the gateway): request count and latency by route template, outgoing call latency, events published/consumed (with retry and dead-letter results), handler duration, outbox backlog size and age, queue depth (RabbitMQ plugin), orders and payments by outcome, recovery actions.
+* **Logs:** structured JSON; lines written with a request context carry `trace_id`.
+* Labels never contain ids or raw URLs.
+
 ## 13. Architecture Decisions
 
 * **Microservices over a single monolith:** Chosen to learn independent service boundaries, distributed communication, and failure handling.

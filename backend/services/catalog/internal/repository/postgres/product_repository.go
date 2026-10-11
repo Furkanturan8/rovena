@@ -193,7 +193,7 @@ func (r *ProductRepository) thumbnails(ctx context.Context, ids []uuid.UUID) (ma
 	var rows []imageRow
 	err := r.db.NewSelect().Model(&rows).
 		DistinctOn("i.product_id").
-		Where("i.product_id IN (?)", bun.In(ids)).
+		Where("i.product_id IN (?)", bun.List(ids)).
 		OrderExpr("i.product_id, i.position").
 		Scan(ctx)
 	if err != nil {

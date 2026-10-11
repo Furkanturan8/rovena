@@ -44,12 +44,6 @@ func (s *store) seed(onHand int) uuid.UUID {
 	return variantID
 }
 
-func (s *store) item(variantID uuid.UUID) domain.StockItem {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return *s.items[variantID]
-}
-
 type stockRepo struct{ s *store }
 
 func (f stockRepo) Create(_ context.Context, item *domain.StockItem, reason string) error {

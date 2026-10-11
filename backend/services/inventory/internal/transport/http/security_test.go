@@ -68,7 +68,7 @@ func (e *env) raw(req *http.Request) (int, http.Header, string) {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(res.Body)
 	return res.StatusCode, res.Header, string(body)
 }
@@ -335,9 +335,14 @@ func TestRequestBodyLimit(t *testing.T) {
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			// The server may close the connection while an oversized body is still being written;
+			// that is a rejection just as much as a 413 is.
+			if len(body) > 60*1024 {
+				return http.StatusRequestEntityTooLarge
+			}
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return resp.StatusCode
 	}
 	huge := `{"reason":"` + strings.Repeat("a", 70*1024) + `"}`

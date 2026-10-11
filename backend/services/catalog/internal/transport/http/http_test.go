@@ -130,7 +130,7 @@ func (e *env) send(req *http.Request) result {
 	if err != nil {
 		e.t.Fatalf("%s %s: %v", req.Method, req.URL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(resp.Body)
 	res := result{Status: resp.StatusCode, Header: resp.Header, Raw: raw}
 	_ = json.Unmarshal(raw, &res.Body)
@@ -513,22 +513,24 @@ func TestRequestBodyLimit(t *testing.T) {
 	go func() { _ = e.app.Listener(ln) }()
 	t.Cleanup(func() { _ = e.app.Shutdown() })
 
-	post := func(body string) int {
+	// A server that rejects an oversized body may close the connection while the client is still
+	// writing it; the client then sees a write error instead of the 413. Both mean "rejected".
+	post := func(body string) (status int, err error) {
 		req, _ := http.NewRequest("POST", "http://"+ln.Addr().String()+"/api/v1/admin/products", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+adminToken(t))
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			t.Fatal(err)
+			return 0, err
 		}
-		defer resp.Body.Close()
-		return resp.StatusCode
+		defer func() { _ = resp.Body.Close() }()
+		return resp.StatusCode, nil
 	}
-	if got := post(`{"name":"` + strings.Repeat("a", 300*1024) + `"}`); got != http.StatusRequestEntityTooLarge {
-		t.Errorf("oversized body status = %d, want 413", got)
+	if got, err := post(`{"name":"` + strings.Repeat("a", 300*1024) + `"}`); err == nil && got != http.StatusRequestEntityTooLarge {
+		t.Errorf("oversized body status = %d, want 413 (or a closed connection)", got)
 	}
-	if got := post(`{}`); got != http.StatusUnprocessableEntity {
-		t.Errorf("small body status = %d, want 422", got)
+	if got, err := post(`{}`); err != nil || got != http.StatusUnprocessableEntity {
+		t.Errorf("small body status = %d, err = %v, want 422", got, err)
 	}
 }
 

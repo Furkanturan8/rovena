@@ -45,9 +45,9 @@
 
 ## Faz 5: Gözlemlenebilirlik ve CI
 
-- [ ] OpenTelemetry: HTTP ve mesaj başlıklarında trace taşıma, temel metrikler (gecikme, hata, kuyruk birikimi, yeniden deneme)
-- [ ] CI (GitHub Actions): build, vet, test; entegrasyon testleri Testcontainers ile kendi kendine yeten hale
-- [ ] Linter (`golangci-lint`) ve `go.mod` bağımlılık kontrolü
+- [x] OpenTelemetry: HTTP ve mesaj başlıklarında trace taşıma, temel metrikler (gecikme, hata, kuyruk birikimi, yeniden deneme)
+- [x] CI (GitHub Actions): build, vet, test; entegrasyon testleri Compose'taki Postgres/RabbitMQ ile kendi kendine yeten hale (Testcontainers yerine, bkz. not 16)
+- [x] Linter (`golangci-lint`) ve `go.mod` bağımlılık kontrolü
 
 ## Faz 6: Cilalama ve borçlar
 
@@ -60,6 +60,8 @@
 - [ ] Order: müşterinin `awaiting_payment` siparişi kendisinin iptal edebilmesi (ödeme ile yarışı düşünülerek)
 - [ ] Order: `payment_timeout` / `reservation_lost` iptalinden sonra gelen başarılı ödeme için otomatik iade (şimdilik `REFUND NEEDED` loglanır)
 - [ ] Outbox/Inbox temizliği: yayınlanmış `outbox_events` ve eski `processed_events` satırlarını periyodik sil
+- [ ] Gözlemlenebilirlik: Grafana panoları, uyarı kuralları (outbox birikimi, DLQ), veritabanı span'ları, trace örnekleme oranı
+- [ ] CI iş akışını GitHub'da ilk kez çalıştırıp düzelt (yerelde denenemedi)
 - [ ] Servisler arası JWT: HS256 yerine asimetrik imza (RS256/EdDSA) değerlendir
 - [ ] Sonra: React frontend (ayrı plan)
 

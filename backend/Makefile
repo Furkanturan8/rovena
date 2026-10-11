@@ -1,6 +1,6 @@
 SERVICES := identity catalog inventory payment order
 
-.PHONY: up down logs e2e test test-env test-integration vet seed-admin seed-catalog seed-inventory
+.PHONY: up down logs build lint tidy-check deps e2e test test-env test-integration vet seed-admin seed-catalog seed-inventory
 
 up:
 	docker compose up -d --build
@@ -10,6 +10,23 @@ down:
 
 logs:
 	docker compose logs -f
+
+MODULES := shared $(addprefix services/,$(SERVICES))
+
+build:
+	@for m in $(MODULES); do (cd $$m && go build ./...) || exit 1; done
+
+# Needs golangci-lint v2 (brew install golangci-lint). Config: .golangci.yml
+lint:
+	@for m in $(MODULES); do echo "== $$m"; (cd $$m && golangci-lint run ./...) || exit 1; done
+
+# Fails when a go.mod/go.sum is not exactly what `go mod tidy` would write, and checks downloaded modules
+tidy-check:
+	@for m in $(MODULES); do echo "== $$m"; (cd $$m && go mod tidy -diff && go mod verify) || exit 1; done
+
+# Brings go.mod/go.sum of every module up to date after dependencies of shared/ changed.
+deps:
+	@for m in $(MODULES); do (cd $$m && go mod tidy) || exit 1; done
 
 # End-to-end and fault-injection scenarios (about 8 minutes). Starts the Order service with the short recovery
 # timings of docker-compose.e2e.yml and puts the normal ones back afterwards. Stops and starts containers.

@@ -27,7 +27,7 @@ func run(action string) error {
 		return err
 	}
 	db := database.SQLDB(cfg.DatabaseURL)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	goose.SetBaseFS(migrations.FS)
 	if err := goose.SetDialect("postgres"); err != nil {

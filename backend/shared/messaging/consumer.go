@@ -7,7 +7,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -74,7 +79,7 @@ func (b *Broker) consumeOnce(ctx context.Context, sub Subscription, h Handler) e
 	if err != nil {
 		return fmt.Errorf("open consumer channel: %w", err)
 	}
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	if err := sub.declare(ch); err != nil {
 		return err
@@ -101,29 +106,52 @@ func (b *Broker) consumeOnce(ctx context.Context, sub Subscription, h Handler) e
 func (b *Broker) handle(ctx context.Context, sub Subscription, h Handler, d amqp.Delivery) {
 	var env Envelope
 	if err := json.Unmarshal(d.Body, &env); err != nil {
-		b.settle(ctx, sub, d, fmt.Errorf("malformed envelope: %w", err), true)
+		b.settle(ctx, sub, d, "unknown", fmt.Errorf("malformed envelope: %w", err), true)
 		return
 	}
 	if err := env.Validate(); err != nil {
-		b.settle(ctx, sub, d, err, true)
+		b.settle(ctx, sub, d, env.Type, err, true)
 		return
 	}
 
-	err := b.run(ContextFor(ctx, env), h, env)
+	// Continue the trace of the publish span (header), falling back to the one in the envelope.
+	parent, _ := d.Headers[headerTraceparent].(string)
+	if parent == "" {
+		parent = env.Traceparent
+	}
+	spanCtx, span := telemetry.Tracer().Start(telemetry.WithTraceparent(ctx, parent), "process "+sub.Queue,
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("messaging.system", "rabbitmq"),
+			attribute.String("messaging.destination.name", sub.Queue),
+			attribute.String("messaging.message.id", env.ID.String()),
+			attribute.String("event.type", env.Type),
+			attribute.String("correlation_id", env.CorrelationID),
+			attribute.Int("messaging.retry_count", retryCount(d.Headers)),
+		))
+	defer span.End()
+
+	started := time.Now()
+	err := b.run(ContextFor(spanCtx, env), h, env)
+	handled.Record(ctx, time.Since(started).Seconds(),
+		metric.WithAttributes(attribute.String("queue", sub.Queue), attribute.String("type", env.Type)))
 	if err == nil {
+		consumed.Add(ctx, 1, metric.WithAttributes(attribute.String("queue", sub.Queue), attribute.String("type", env.Type), attribute.String("result", "ok")))
 		b.ack(ctx, sub, d)
 		return
 	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 	if ctx.Err() != nil {
 		// Shutting down: the failure is probably the cancelled context, not the message.
 		// Hand it back without spending a retry.
-		d.Nack(false, true)
+		_ = d.Nack(false, true)
 		return
 	}
 	b.log.WarnContext(ctx, "event handler failed",
 		"queue", sub.Queue, "event_id", env.ID, "type", env.Type,
 		"correlation_id", env.CorrelationID, "error", err)
-	b.settle(ctx, sub, d, err, IsPermanent(err))
+	b.settle(spanCtx, sub, d, env.Type, err, IsPermanent(err))
 }
 
 // run calls the handler and turns a panic into an error, so one bad message cannot
@@ -139,7 +167,7 @@ func (b *Broker) run(ctx context.Context, h Handler, env Envelope) (err error) {
 
 // settle moves a failed message to the retry queue or the DLQ and only then acknowledges
 // the original, so a failure here cannot lose the message: it is requeued instead.
-func (b *Broker) settle(ctx context.Context, sub Subscription, d amqp.Delivery, cause error, permanent bool) {
+func (b *Broker) settle(ctx context.Context, sub Subscription, d amqp.Delivery, eventType string, cause error, permanent bool) {
 	attempts := retryCount(d.Headers)
 	key := sub.dlqQueue()
 	if !permanent && attempts < sub.MaxRetries {
@@ -169,13 +197,16 @@ func (b *Broker) settle(ctx context.Context, sub Subscription, d amqp.Delivery, 
 	if err != nil {
 		b.log.ErrorContext(ctx, "could not move failed message, requeueing",
 			"queue", sub.Queue, "target", key, "error", err)
-		d.Nack(false, true)
+		_ = d.Nack(false, true)
 		return
 	}
+	result := "retried"
 	if key == sub.dlqQueue() {
+		result = "dead_lettered"
 		b.log.ErrorContext(ctx, "message moved to dead-letter queue",
 			"queue", sub.Queue, "message_id", d.MessageId, "error", cause)
 	}
+	consumed.Add(ctx, 1, metric.WithAttributes(attribute.String("queue", sub.Queue), attribute.String("type", eventType), attribute.String("result", result)))
 	b.ack(ctx, sub, d)
 }
 

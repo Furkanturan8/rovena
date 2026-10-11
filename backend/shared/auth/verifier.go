@@ -28,7 +28,7 @@ func (v *Verifier) Verify(raw string) (*Claims, error) {
 		jwt.WithExpirationRequired(),
 	)
 	if err != nil || !token.Valid || claims.Subject == "" {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidToken, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 	return claims, nil
 }

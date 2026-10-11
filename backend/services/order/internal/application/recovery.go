@@ -54,8 +54,10 @@ func (s *OrderService) recoverOne(ctx context.Context, o *domain.Order, now time
 		if now.Sub(o.CreatedAt) > s.cfg.PendingMaxAge {
 			s.cancel(ctx, o, []domain.Status{domain.StatusPending}, domain.CodeCheckoutTimeout,
 				"We could not reserve your items in time")
+			countRecovery(ctx, "checkout_timeout")
 			return true
 		}
+		countRecovery(ctx, "reserve_again")
 		s.advance(ctx, o)
 		if cur, err := s.repo.GetByID(ctx, o.ID); err == nil && cur.Status == domain.StatusPending {
 			_ = s.repo.Touch(ctx, o.ID)
@@ -71,8 +73,10 @@ func (s *OrderService) recoverOne(ctx context.Context, o *domain.Order, now time
 				"The payment did not complete in time") {
 				s.settleOrLog(ctx, o)
 			}
+			countRecovery(ctx, "payment_timeout")
 			return true
 		}
+		countRecovery(ctx, "payment_requested_again")
 		ev, err := s.paymentRequested(ctx, o)
 		if err != nil {
 			s.log.ErrorContext(ctx, "build PaymentRequested", "order_id", o.ID, "error", err)
@@ -84,6 +88,7 @@ func (s *OrderService) recoverOne(ctx context.Context, o *domain.Order, now time
 		return true
 
 	case domain.StatusPaid, domain.StatusCancelled:
+		countRecovery(ctx, "settle_reservation")
 		s.settleOrLog(ctx, o)
 		return true
 	}

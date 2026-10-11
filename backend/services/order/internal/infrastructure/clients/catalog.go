@@ -15,7 +15,7 @@ import (
 type Catalog struct{ base }
 
 func NewCatalog(url, internalKey string, timeout time.Duration) *Catalog {
-	return &Catalog{newBase(url, internalKey, timeout)}
+	return &Catalog{newBase("catalog", url, internalKey, timeout)}
 }
 
 var _ application.Catalog = (*Catalog)(nil)
@@ -39,16 +39,16 @@ func (c *Catalog) Lookup(ctx context.Context, variantIDs []uuid.UUID) ([]applica
 	}
 	status, body, err := c.do(ctx, http.MethodPost, "/api/v1/internal/variants/lookup", map[string]any{"variant_ids": ids})
 	if err != nil {
-		return nil, fmt.Errorf("%w: catalog: %v", domain.ErrDependencyUnavailable, err)
+		return nil, fmt.Errorf("%w: catalog: %w", domain.ErrDependencyUnavailable, err)
 	}
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("%w: %v", domain.ErrDependencyUnavailable, unexpected("catalog", status, body))
+		return nil, fmt.Errorf("%w: %w", domain.ErrDependencyUnavailable, unexpected("catalog", status, body))
 	}
 	var env struct {
 		Data []variantDTO `json:"data"`
 	}
 	if err := json.Unmarshal(body, &env); err != nil {
-		return nil, fmt.Errorf("%w: catalog sent unreadable data: %v", domain.ErrDependencyUnavailable, err)
+		return nil, fmt.Errorf("%w: catalog sent unreadable data: %w", domain.ErrDependencyUnavailable, err)
 	}
 	out := make([]application.VariantInfo, len(env.Data))
 	for i, v := range env.Data {

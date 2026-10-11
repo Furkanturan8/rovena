@@ -9,12 +9,16 @@ package messaging_test
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"os"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/Furkanturan8/rovena/shared/messaging"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -297,5 +301,97 @@ func TestEventsPublishedBeforeTheConsumerStartsAreKept(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("event published while the consumer was down was lost")
+	}
+}
+
+var telemetryOnce sync.Once
+
+func setupTelemetry(t *testing.T) {
+	t.Helper()
+	telemetryOnce.Do(func() {
+		if _, err := telemetry.Setup(context.Background(), "messaging-test", nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+// The relay publishes with a context that knows nothing about the request, and the consumer is
+// another process. The trace still has to run request -> publish -> handler -> the next event.
+func TestTraceSurvivesTheOutboxTheBrokerAndTheNextHop(t *testing.T) {
+	setupTelemetry(t)
+	h := setup(t, 0)
+	type seen struct{ trace, next string }
+	got := make(chan seen, 1)
+	h.consume(t, func(ctx context.Context, env messaging.Envelope) error {
+		follow, err := messaging.NewEnvelope(ctx, h.typ+".next", 1, struct{}{})
+		if err != nil {
+			return err
+		}
+		got <- seen{trace: telemetry.TraceID(ctx), next: follow.Traceparent}
+		return nil
+	})
+
+	reqCtx, span := telemetry.Tracer().Start(h.ctx, "POST /checkout")
+	env, err := messaging.NewEnvelope(reqCtx, h.typ, 1, struct{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	span.End() // the request is over long before the event is sent
+	if err := h.broker.Publish(context.Background(), env); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case s := <-got:
+		want := telemetry.TraceID(reqCtx)
+		if s.trace != want {
+			t.Fatalf("handler ran in trace %q, the request was %q", s.trace, want)
+		}
+		if !strings.Contains(s.next, want) {
+			t.Fatalf("the follow-up event left the trace: %q does not contain %q", s.next, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("event never arrived")
+	}
+}
+
+func TestConsumeMetricsCountEveryOutcome(t *testing.T) {
+	setupTelemetry(t)
+	h := setup(t, 1)
+	var calls atomic.Int32
+	h.consume(t, func(context.Context, messaging.Envelope) error {
+		if calls.Add(1) == 1 {
+			return errors.New("first time fails")
+		}
+		return nil
+	})
+	h.publish(t, struct{}{})
+	h.publish(t, struct{}{}) // handled fine
+	scrape := func() string {
+		rec := httptest.NewRecorder()
+		telemetry.MetricsHandler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+		return rec.Body.String()
+	}
+	has := func(out, result string) bool {
+		for _, line := range strings.Split(out, "\n") {
+			if strings.HasPrefix(line, "messaging_events_consumed_total") && strings.Contains(line, `queue="`+h.sub.Queue+`"`) && strings.Contains(line, `result="`+result+`"`) {
+				return true
+			}
+		}
+		return false
+	}
+	// Counters are updated just after the handler returns; give them a moment.
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) && (!has(scrape(), "ok") || !has(scrape(), "retried")) {
+		time.Sleep(100 * time.Millisecond)
+	}
+	out := scrape()
+	for _, result := range []string{"ok", "retried"} {
+		if !has(out, result) {
+			t.Errorf("no messaging_events_consumed_total for result=%s on %s", result, h.sub.Queue)
+		}
+	}
+	if !strings.Contains(out, "messaging_events_published_total") || !strings.Contains(out, "messaging_handler_duration_seconds_bucket") {
+		t.Error("publish counter or handler histogram missing")
 	}
 }

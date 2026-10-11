@@ -11,8 +11,13 @@ import (
 	"github.com/Furkanturan8/rovena/services/payment/internal/repository"
 	"github.com/Furkanturan8/rovena/shared/events"
 	"github.com/Furkanturan8/rovena/shared/messaging"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
+
+var paymentsCompleted = telemetry.Counter("payments.completed", "Payments that reached a final status, by status and failure code")
 
 // Provider is the payment gateway behind the service (a bank or PSP in production, a
 // scripted fake in development). It is defined here, where it is used, so a real
@@ -156,6 +161,8 @@ func (s *PaymentService) complete(ctx context.Context, p *domain.Payment, o doma
 		return err
 	}
 	if applied {
+		paymentsCompleted.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("status", string(o.Status)), attribute.String("failure_code", o.FailureCode)))
 		s.log.InfoContext(ctx, "payment completed",
 			"payment_id", p.ID, "order_id", p.OrderID, "status", o.Status, "failure_code", o.FailureCode)
 	}

@@ -46,6 +46,6 @@ func SearchWords(query string) []string { return searchWords(query) }
 func searchWords(s string) []string {
 	s = strings.ToLower(turkishReplacer.Replace(s))
 	return strings.FieldsFunc(s, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 	})
 }

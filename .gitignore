@@ -8,4 +8,5 @@ coverage.out
 node_modules/
 dist/
 .claude/
-claude.md.venv/
+claude.md
+.venv/

@@ -18,6 +18,7 @@ import (
 	"github.com/Furkanturan8/rovena/shared/auth"
 	"github.com/Furkanturan8/rovena/shared/httpx"
 	"github.com/Furkanturan8/rovena/shared/logging"
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 )
 
 func main() {
@@ -40,11 +41,21 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	shutdownTelemetry, err := telemetry.Setup(ctx, "catalog", log)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = shutdownTelemetry(flushCtx)
+	}()
+
 	db, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	app := transport.NewApp(transport.Options{
 		Logger:         log,

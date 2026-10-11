@@ -55,7 +55,7 @@ func (r *VariantRepository) Snapshots(ctx context.Context, ids []uuid.UUID) ([]d
 		ColumnExpr("v.*").
 		ColumnExpr("p.name AS product_name, p.status AS product_status").
 		Join("JOIN products AS p ON p.id = v.product_id").
-		Where("v.id IN (?)", bun.In(ids)).
+		Where("v.id IN (?)", bun.List(ids)).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (r *VariantRepository) Snapshots(ctx context.Context, ids []uuid.UUID) ([]d
 	out := make([]domain.VariantSnapshot, len(rows))
 	for i := range rows {
 		out[i] = domain.VariantSnapshot{
-			Variant:       *rows[i].variantRow.toDomain(),
+			Variant:       *rows[i].toDomain(),
 			ProductName:   rows[i].ProductName,
 			ProductStatus: domain.ProductStatus(rows[i].ProductStatus),
 		}

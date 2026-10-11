@@ -8,6 +8,8 @@ import (
 	"github.com/Furkanturan8/rovena/services/order/internal/domain"
 	"github.com/Furkanturan8/rovena/shared/events"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 // OnPaymentSucceeded handles PaymentSucceeded. It is safe to call any number of times
@@ -125,6 +127,7 @@ func (s *OrderService) settle(ctx context.Context, o *domain.Order) error {
 		}
 		changed, err := s.repo.Confirm(ctx, o.ID, ev)
 		if changed {
+			ordersFinished.Add(ctx, 1, metric.WithAttributes(attribute.String("status", "confirmed"), attribute.String("code", "")))
 			s.log.InfoContext(ctx, "order confirmed", "order_id", o.ID)
 		}
 		return err

@@ -185,7 +185,7 @@ func (r *OrderRepository) loadItems(ctx context.Context, orders []domain.Order) 
 		index[o.ID] = i
 	}
 	var rows []orderItemRow
-	if err := r.db.NewSelect().Model(&rows).Where("order_id IN (?)", bun.In(ids)).Order("product_name", "sku").Scan(ctx); err != nil {
+	if err := r.db.NewSelect().Model(&rows).Where("order_id IN (?)", bun.List(ids)).Order("product_name", "sku").Scan(ctx); err != nil {
 		return err
 	}
 	for _, row := range rows {
@@ -402,7 +402,7 @@ func (r *OrderRepository) Unfinished(ctx context.Context, olderThan time.Time, l
 	err := r.db.NewSelect().Model(&rows).
 		Where("o.updated_at < ?", olderThan).
 		WhereGroup(" AND ", func(q *bun.SelectQuery) *bun.SelectQuery {
-			return q.Where("o.status IN (?)", bun.In([]string{
+			return q.Where("o.status IN (?)", bun.List([]string{
 				string(domain.StatusPending), string(domain.StatusAwaitingPayment), string(domain.StatusPaid),
 			})).WhereOr("o.status = ? AND o.reservation_state = ?", string(domain.StatusCancelled), string(domain.ReservationHeld))
 		}).

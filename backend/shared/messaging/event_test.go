@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Furkanturan8/rovena/shared/telemetry"
 	"github.com/google/uuid"
 )
 
@@ -120,5 +121,33 @@ func TestSubscriptionValidation(t *testing.T) {
 		if s.validate() == nil {
 			t.Errorf("case %d: expected an error", i)
 		}
+	}
+}
+
+func TestEnvelopeCarriesTheTraceOfItsCreator(t *testing.T) {
+	if _, err := telemetry.Setup(context.Background(), "event-test", nil); err != nil {
+		t.Fatal(err)
+	}
+	ctx, span := telemetry.Tracer().Start(context.Background(), "request")
+	defer span.End()
+
+	env, _ := NewEnvelope(ctx, "T", 1, struct{}{})
+	if env.Traceparent == "" || telemetry.TraceID(telemetry.WithTraceparent(context.Background(), env.Traceparent)) != telemetry.TraceID(ctx) {
+		t.Fatalf("traceparent %q does not lead back to the request's trace", env.Traceparent)
+	}
+	raw, _ := json.Marshal(env)
+	var back Envelope
+	if err := json.Unmarshal(raw, &back); err != nil || back.Traceparent != env.Traceparent {
+		t.Fatalf("traceparent lost in JSON: %q, %v", back.Traceparent, err)
+	}
+
+	plain, _ := NewEnvelope(context.Background(), "T", 1, struct{}{})
+	if plain.Traceparent != "" {
+		t.Fatalf("no span, no traceparent; got %q", plain.Traceparent)
+	}
+	// An envelope from before tracing existed must still be valid.
+	plain.Traceparent = ""
+	if err := plain.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -13,7 +13,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | Servis | Ne yapar | Dışarıya açık port |
 | --- | --- | --- |
 | `postgres` | PostgreSQL 17 veritabanı sunucusu | 127.0.0.1:5433 (yalnızca kendi bilgisayarın) |
-| `rabbitmq` | Mesaj kuyruğu (Payment ve Order kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli) |
+| `rabbitmq` | Mesaj kuyruğu (Payment ve Order kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli), 15692 (Prometheus metrikleri) |
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
 | `identity` | Identity API sunucusu | 127.0.0.1:8081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
@@ -27,6 +27,8 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `payment` | Payment servisi: RabbitMQ'dan `PaymentRequested` tüketir, sonuç olaylarını yayınlar; HTTP yalnızca okuma | 127.0.0.1:8085 |
 | `order-migrate` | Order tablolarını (ve outbox/inbox) kurar, işi bitince kapanır | yok |
 | `order` | Order servisi: sepet, checkout, Saga; Catalog ve Inventory'yi REST ile çağırır, ödeme olaylarını dinler, kurtarma işini çalıştırır | 127.0.0.1:8086 |
+| `jaeger` | Trace arayüzü ve toplayıcısı (bellekte saklar); servisler OTLP ile iz gönderir | 127.0.0.1:16686 |
+| `prometheus` | Her servisin `/metrics` yolunu ve RabbitMQ kuyruk metriklerini 10 sn'de bir okur | 127.0.0.1:9090 |
 | `gateway` | Nginx, tek giriş kapısı | 8080 |
 
 Önemli ayrıntılar:

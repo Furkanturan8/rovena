@@ -186,7 +186,7 @@ func (e *env) send(method, path, bearer, internalKey string, body any) result {
 	if err != nil {
 		e.t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	out := result{status: res.StatusCode}
 	raw, _ := io.ReadAll(res.Body)
 	if len(raw) > 0 {

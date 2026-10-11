@@ -41,7 +41,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	stock := application.NewStockService(postgres.NewStockRepository(db))
 
@@ -157,7 +157,7 @@ func get[T any](ctx context.Context, client *http.Client, rawURL string) (T, err
 	if err != nil {
 		return zero, fmt.Errorf("call catalog: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return zero, fmt.Errorf("catalog returned %s for %s", res.Status, rawURL)
 	}

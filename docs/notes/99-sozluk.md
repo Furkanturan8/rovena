@@ -87,3 +87,13 @@
 | **Kurtarma işi (recovery job)** | Saga'nın iki adımı arasında takılan kayıtları bulup eksik adımı tekrar deneyen ya da kaydı iptal eden arka plan işi |
 | **Idempotency-Key (başlık)** | Checkout isteğinin tekrar gönderilmesini güvenli yapan, istemcinin seçtiği anahtar; aynı anahtar aynı siparişi döner |
 | **Orphan (sahipsiz) rezervasyon** | Sahibi olan sipariş ona haber verilmeden iptal edildiği için kimsenin bırakmayacağı rezervasyon |
+| **Trace (iz)** | Bir isteğin servisler arası yolculuğunun kaydı; span'lardan oluşan ağaç |
+| **Span** | Trace'in bir parçası: tek bir işlem ve süresi (bir HTTP isteği, bir mesajın yayını) |
+| **traceparent** | İz kimliğini servisler arası taşıyan W3C standardı başlık/alan |
+| **OpenTelemetry (OTel)** | Trace ve metrik üretmek için satıcıdan bağımsız standart ve kütüphane |
+| **Metrik** | Zamanla ölçülen sayı: istek sayısı, gecikme, kuyruktaki mesaj sayısı |
+| **Histogram** | Değerleri aralıklara dağıtıp sayan metrik türü; p95 gibi yüzdeliklerin hesabını sağlar |
+| **Cardinality (etiket çeşitliliği)** | Bir metriğin etiket kombinasyonu sayısı; sipariş id'si gibi sınırsız değerler yüzünden büyürse monitoring sistemini çökertir |
+| **Jaeger / Prometheus** | Trace'leri / metrikleri toplayıp gösteren araçlar |
+| **Linter** | Kodu çalıştırmadan inceleyip olası hataları ve stil sorunlarını bulan araç (`golangci-lint`) |
+| **CI (sürekli entegrasyon)** | Her değişiklikte derleme ve testlerin otomatik çalışması (GitHub Actions) |
