@@ -18,7 +18,7 @@ info:
     routed by the gateway**: call it on the service port, `http://localhost:8085`.
 
     **Payment states.** `pending` (the provider has not given a final answer yet) -> `succeeded` (money
-    taken) or `failed` (nothing taken). A finished payment never changes again. A customer who fails
+    taken) or `failed` (nothing taken). A `succeeded` payment can later become `refunded` (money given back). A finished payment never changes again. A customer who fails
     and retries gets a **new** payment (new attempt) for the same order; `by-order` returns the newest.
     An order can have at most one `succeeded` payment.
 
@@ -41,7 +41,16 @@ info:
 
     **`PaymentSucceeded` v1**: `payment_id`, `order_id`, `amount_cents`, `currency`, `provider_ref`.
 
+    **`RefundRequested` v1** (consumed from Order, same queue): `order_id`, `customer_id`, `reason`. Asks Payment to give
+    back the money of the order's succeeded payment. Repeating it is safe: a payment is refunded once and the stored
+    result is published again. An order without a paid payment is rejected (the message goes to the dead-letter queue).
+
+    **`PaymentRefunded` v1**: `payment_id`, `order_id`, `amount_cents`, `currency`, `refund_ref`.
+
     **`PaymentFailed` v1**: `payment_id`, `order_id`, `amount_cents`, `currency`, `failure_code`, `failure_message`.
+
+    **Refunds also happen on Payment's own initiative** in one case: if two payments for the same order raced and the
+    provider charged both, the second charge is refunded at once and that payment ends `failed` with `order_already_paid`.
 
     Exactly one result event per payment is the rule, but a repeated `PaymentRequested` publishes it again
     (new `event_id`, same payload), so consumers must treat results idempotently.
@@ -107,7 +116,7 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: {type: string, enum: [pending, succeeded, failed]}
+          schema: {type: string, enum: [pending, succeeded, failed, refunded]}
         - name: order_id
           in: query
           schema: {type: string, format: uuid}
@@ -279,7 +288,7 @@ components:
       properties:
         id: {type: string, format: uuid}
         order_id: {type: string, format: uuid}
-        status: {type: string, enum: [pending, succeeded, failed]}
+        status: {type: string, enum: [pending, succeeded, failed, refunded]}
         amount_cents: {type: integer, format: int64, example: 459900}
         currency: {type: string, example: TRY}
         failure_code: {type: string, description: 'Empty unless the payment failed', example: ''}
@@ -294,11 +303,11 @@ components:
         data: {$ref: '#/components/schemas/Payment'}
     AdminPayment:
       type: object
-      required: [id, order_id, status, amount_cents, currency, failure_code, failure_message, created_at, completed_at, customer_id, idempotency_key, payment_method, attempts, provider_ref, updated_at]
+      required: [id, order_id, status, amount_cents, currency, failure_code, failure_message, created_at, completed_at, customer_id, idempotency_key, payment_method, attempts, provider_ref, refund_ref, refunded_at, updated_at]
       properties:
         id: {type: string, format: uuid}
         order_id: {type: string, format: uuid}
-        status: {type: string, enum: [pending, succeeded, failed]}
+        status: {type: string, enum: [pending, succeeded, failed, refunded]}
         amount_cents: {type: integer, format: int64, example: 459900}
         currency: {type: string, example: TRY}
         failure_code: {type: string, example: ''}
@@ -310,6 +319,8 @@ components:
         payment_method: {type: string, description: 'Provider token for the card, never a card number', example: tok_visa}
         attempts: {type: integer, description: How many times the provider was called}
         provider_ref: {type: string, description: "Provider's reference for a successful charge; empty otherwise"}
+        refund_ref: {type: string, description: "Provider's reference for the refund; empty unless the payment is refunded"}
+        refunded_at: {type: string, format: date-time, nullable: true, description: Null unless the payment is refunded}
         updated_at: {type: string, format: date-time}
     AdminPaymentEnvelope:
       type: object

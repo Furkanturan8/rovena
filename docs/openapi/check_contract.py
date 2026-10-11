@@ -400,6 +400,31 @@ place(f"speccheck-{tag}-empty", "tok_visa", note="(cart is empty)")             
 done = wait_order(o_paid)
 if done["status"] != "confirmed": problems.append(f"order: paid order ended {done}")
 
+# cancelling by the customer: tok_flaky keeps the payment busy for about ten seconds, so the cancel comes
+# while it is in flight; the charge then goes through and must be refunded.
+put(o1, 1)
+flaky = place(f"speccheck-{tag}-5", "tok_flaky")                                                                       # 201
+o_cancel = flaky.json()["data"]["id"]
+if flaky.json()["data"]["status"] != "awaiting_payment": problems.append(f"order: unexpected status {flaky.json()['data']}")
+cc = call(O, "POST", "/api/v1/orders/{id}/cancel", path=f"/api/v1/orders/{o_cancel}/cancel", token=me_tok)           # 200
+if cc.json()["data"].get("failure_code") != "cancelled_by_customer": problems.append(f"order: cancel answered {cc.json()['data']}")
+call(O, "POST", "/api/v1/orders/{id}/cancel", path=f"/api/v1/orders/{o_cancel}/cancel", token=me_tok, note="(again)")  # 200
+call(O, "POST", "/api/v1/orders/{id}/cancel", path=f"/api/v1/orders/{o_cancel}/cancel", token=admin, note="(not the owner)")  # 404
+call(O, "POST", "/api/v1/orders/{id}/cancel", path=f"/api/v1/orders/{o_paid}/cancel", token=me_tok, note="(confirmed)")  # 409
+call(O, "POST", "/api/v1/orders/{id}/cancel", path=f"/api/v1/orders/{uuid.uuid4()}/cancel", token=me_tok)             # 404
+call(O, "POST", "/api/v1/orders/{id}/cancel", path="/api/v1/orders/nope/cancel", token=me_tok)                        # 400
+if requests.get(f"{G}/api/v1/cart", headers={"Authorization": f"Bearer {me_tok}"}).json()["data"]["items"]:
+    problems.append("order: the cart must stay empty after the customer's own cancellation")
+# the money must come back; the script waits so its cleanup does not delete the order under a running saga
+for _ in range(400):
+    cancelled_order = requests.get(f"{G}/api/v1/orders/{o_cancel}", headers={"Authorization": f"Bearer {me_tok}"}).json()["data"]
+    if cancelled_order.get("refund") == "refunded":
+        break
+    time.sleep(0.1)
+else:
+    problems.append(f"order: the refund of a cancelled order did not complete: {cancelled_order}")
+call(O, "GET", "/api/v1/orders/{id}", path=f"/api/v1/orders/{o_cancel}", token=me_tok, note="(refunded)")
+
 # a declined card, an unavailable item, and stock running out
 put(o1, 1)
 declined = place(f"speccheck-{tag}-2", "tok_declined")                                                                # 201
@@ -419,7 +444,7 @@ call(O, "DELETE", "/api/v1/cart", token=me_tok)                                 
 
 # reading orders
 mine = call(O, "GET", "/api/v1/orders", token=me_tok)                                                                # 200
-if mine.json()["data"]["total"] != 3: problems.append(f"order: expected 3 orders, got {mine.json()['data']['total']}")
+if mine.json()["data"]["total"] != 4: problems.append(f"order: expected 4 orders, got {mine.json()['data']['total']}")
 call(O, "GET", "/api/v1/orders", path="/api/v1/orders?status=confirmed&page=1&page_size=1", token=me_tok, note="?status")
 call(O, "GET", "/api/v1/orders", path="/api/v1/orders?status=bogus", token=me_tok)                                    # 400
 call(O, "GET", "/api/v1/orders/{id}", path=f"/api/v1/orders/{o_paid}", token=me_tok)                                  # 200
@@ -454,6 +479,8 @@ def wait_for_payment(order_id):
 
 paid_order, declined_order = o_paid, o_declined
 paid = wait_for_payment(paid_order); declined = wait_for_payment(declined_order)
+refunded = wait_for_payment(o_cancel)
+if refunded["status"] != "refunded": problems.append(f"payment: expected the cancelled order's payment to be refunded, got {refunded['status']}")
 
 B = "/api/v1/payments/by-order/{orderId}"
 call(P, "GET", B, path=f"/api/v1/payments/by-order/{paid_order}", token=me_tok)                                    # 200 succeeded
@@ -473,6 +500,8 @@ call(P, "GET", A, path=A + "?order_id=nope", token=admin)                       
 call(P, "GET", A, token=me_tok)                                                                                    # 403
 call(P, "GET", A)                                                                                                  # 401
 call(P, "GET", A + "/{id}", path=f"{A}/{paid['id']}", token=admin)                                                 # 200
+call(P, "GET", A + "/{id}", path=f"{A}/{refunded['id']}", token=admin, note="(refunded)")                          # 200
+call(P, "GET", A, path=A + "?status=refunded", token=admin, note="?status=refunded")
 call(P, "GET", A + "/{id}", path=f"{A}/{uuid.uuid4()}", token=admin)                                               # 404
 call(P, "GET", A + "/{id}", path=f"{A}/nope", token=admin)                                                         # 400
 

@@ -13,6 +13,8 @@ info:
     | Orders | `/api/v1/orders...` | the customer's app | same; a customer sees only their own orders |
     | Admin | `/api/v1/admin/orders...` | admins | token of an admin |
 
+    A customer can cancel an order that is not paid yet (`POST /orders/{id}/cancel`).
+
     There is no customer id in any path: it always comes from the token. Nothing here is routed to
     other services' data: the Order service never reads another service's tables, it asks over REST
     (Catalog for prices, Inventory for stock) or listens to events (Payment).
@@ -32,11 +34,20 @@ info:
     | `confirmed` | Final. Paid, stock committed. |
     | `cancelled` | Final. See `failure_code`. |
 
-    `failure_code` of a cancelled order: `out_of_stock`, `item_unavailable`, `checkout_timeout`,
+    `failure_code` of a cancelled order: `cancelled_by_customer`, `out_of_stock`, `item_unavailable`, `checkout_timeout`,
     `payment_timeout` (no answer after three payment requests), `reservation_lost` (the hold expired before
     the payment arrived), or the payment's own code: `card_declined`, `insufficient_funds`, `expired_card`,
     `invalid_payment_method`, `amount_limit_exceeded`, `provider_unavailable`. `failure_message` is safe to
     show to the customer.
+
+    **After a cancellation the cart is filled again** with the items of the order (except for
+    `cancelled_by_customer`: that was the customer's own choice). Lines the customer has meanwhile put back
+    themselves keep their newer quantity.
+
+    **Refunds.** If money was taken for an order that ended up cancelled (the customer cancelled while the
+    payment was in flight, the payment answered after `payment_timeout`, or the stock hold had expired by the
+    time the payment arrived), the Order service asks Payment to give it back. The order then shows
+    `refund: "pending"` and later `refund: "refunded"`. The field is absent when nothing was paid.
 
     **Checkout is asynchronous after its first step.** `POST /checkout` returns as soon as stock has been
     held and the payment has been *requested*; the payment itself finishes a moment later. Poll
@@ -53,10 +64,10 @@ info:
 
     Envelope and exchange are described in the Payment API document.
 
-    **Publishes** (through the outbox): `PaymentRequested` v1, `OrderConfirmed` v1
+    **Publishes** (through the outbox): `PaymentRequested` v1, `RefundRequested` v1 (`order_id`, `customer_id`, `reason`), `OrderConfirmed` v1
     (`order_id`, `customer_id`, `total_cents`, `currency`) and `OrderCancelled` v1
     (`order_id`, `customer_id`, `code`, `message`).
-    **Consumes** (queue `order.payment-results`): `PaymentSucceeded` and `PaymentFailed`.
+    **Consumes** (queue `order.payment-results`): `PaymentSucceeded`, `PaymentFailed` and `PaymentRefunded`.
 
     **Response envelope.** Success: `{"success": true, "data": ...}`.
     Error: `{"success": false, "message": "...", "fields": {...}}`.
@@ -247,6 +258,36 @@ paths:
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/OrderNotFound'}
+  /api/v1/orders/{id}/cancel:
+    post:
+      tags: [Orders]
+      summary: Cancel one of my orders
+      description: |
+        Works while the order is `pending` or `awaiting_payment`; the held stock is released. It is allowed
+        while the payment is still running on purpose: if the charge goes through anyway, the money is
+        refunded (`refund` on the order). Cancelling again, or an order that was cancelled for another
+        reason, answers 200 with the order as it is.
+
+        An order that is already paid (`paid`) or `confirmed` answers **409**. Somebody else's order answers **404**.
+      operationId: cancelMyOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The cancelled order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OrderEnvelope'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/OrderNotFound'}
+        '409':
+          description: The order is already paid and can no longer be cancelled
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+              example: {success: false, message: This order is already paid and can no longer be cancelled}
   /api/v1/admin/orders:
     get:
       tags: [Orders (admin)]
@@ -475,6 +516,10 @@ components:
           items: {$ref: '#/components/schemas/OrderItem'}
         failure_code: {type: string, description: Present only on a cancelled order}
         failure_message: {type: string, description: Present only on a cancelled order}
+        refund:
+          type: string
+          enum: [pending, refunded]
+          description: Present only on a cancelled order whose payment went through; absent when nothing was paid
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
     OrderEnvelope:
@@ -524,7 +569,7 @@ components:
       allOf:
         - $ref: '#/components/schemas/Order'
         - type: object
-          required: [customer_id, reservation_id, reservation_state, payment_requests]
+          required: [customer_id, reservation_id, reservation_state, payment_requests, refund_state, refund_requests]
           properties:
             customer_id: {type: string, format: uuid}
             reservation_id: {type: string, format: uuid, nullable: true}
@@ -533,6 +578,10 @@ components:
               enum: [none, held, committed, released]
               description: What the order believes about its stock reservation in Inventory
             payment_requests: {type: integer, description: How many times PaymentRequested was sent}
+            refund_state:
+              type: string
+              enum: [none, requested, refunded]
+            refund_requests: {type: integer, description: How many times RefundRequested was sent}
     AdminOrderPage:
       type: object
       required: [items, total, page, page_size]
