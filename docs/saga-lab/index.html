@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rovena Saga Lab</title>
+  <link rel="stylesheet" href="../observability-lab/css/lab.css">
+  <link rel="stylesheet" href="css/saga.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">S</span><div><b>Rovena Saga Lab</b><small>checkout Saga’sı · orchestration · outbox · telafi</small></div></div>
+    <nav class="modes" id="tabs">
+      <button data-tab="flow" class="on">Saga Flow</button>
+      <button data-tab="failure">Failure Lab</button>
+      <button data-tab="arch">Architecture Lab</button>
+      <button data-tab="code">Code Lab</button>
+      <button data-tab="testing">Testing Lab</button>
+      <button data-tab="obs">Observability Lab</button>
+    </nav>
+    <div class="honesty"><span class="tag real">GERÇEK</span> Rovena kodu, durumlar, olaylar &nbsp; <span class="tag sim">SİMÜLE</span> animasyon verisi &nbsp; <span class="tag sim">VARSAYIMSAL</span> Rovena’da olmayan akışlar</div>
+  </header>
+  <main>
+    <section id="tab-flow"></section>
+    <section id="tab-failure" hidden></section>
+    <section id="tab-arch" hidden></section>
+    <section id="tab-code" hidden></section>
+    <section id="tab-testing" hidden></section>
+    <section id="tab-obs" hidden></section>
+  </main>
+  <!-- Ortak: DOM/grafik yardımcıları, araç pencereleri ve senaryo motoru gözlem laboratuvarından -->
+  <script src="../observability-lab/js/util.js"></script>
+  <script src="../observability-lab/js/tools.js"></script>
+  <script src="../observability-lab/js/lab.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/code.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/flow.js"></script>
+  <script src="js/failure.js"></script>
+  <script src="js/arch.js"></script>
+  <script src="js/testing.js"></script>
+  <script src="js/obs.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

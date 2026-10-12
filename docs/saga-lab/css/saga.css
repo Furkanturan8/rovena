@@ -1,0 +1,53 @@
+/* Saga Lab'e özgü stiller (temel tema ../observability-lab/css/lab.css) */
+.logo{background:linear-gradient(135deg,#c792ea,#ffb454)}
+.player{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(320px,1fr);gap:12px;align-items:start;margin-top:10px}
+@media(max-width:1150px){.player{grid-template-columns:1fr}}
+.pl-stage{padding:10px}
+.pl-side .card+.card{margin-top:10px}
+svg.saga .txframe{fill:#0d131f;stroke:#263247;stroke-width:1.2;stroke-dasharray:6 4;transition:stroke .25s,fill .25s}
+svg.saga .frame-g.mq .txframe{fill:#14100a;stroke:#3a2c14}
+svg.saga .frame-g.txon .txframe{stroke:#6fd3c4;stroke-width:2.4;stroke-dasharray:none;fill:#0d1d1f}
+svg.saga .tx-badge{fill:#6fd3c4;font:700 10px var(--mono);opacity:0;transition:opacity .25s}
+svg.saga .frame-g.txon .tx-badge{opacity:1}
+svg.saga .frame-label{fill:#6b7588;font-size:10.5px}
+svg.saga .node text.sub{fill:#9aa6b8}
+svg.saga .node.timer rect{fill:#221d0c;stroke:#5c4a14}
+svg.saga .node.ext rect{fill:#151515;stroke:#555;stroke-dasharray:4 3}
+svg.saga .node.orch rect{fill:#1a1428;stroke:#6b4fa8}
+svg.saga .node.active rect{stroke:#fff;stroke-width:2}
+svg.saga .node.err rect{stroke:#ff6b6b;stroke-width:2.2;fill:#2a1316}
+svg.saga .caption{fill:#8b95a7;font-size:11px}
+svg.saga .edge{stroke:#26334a;stroke-width:1.2}
+.svgstate rect{fill:#1b2333;stroke:#3a475e}
+.svgstate text{fill:#fff;font:600 11px var(--sans)}
+.svgstate.st-running rect{fill:#13284a;stroke:#5ab0ff}
+.svgstate.st-completed rect{fill:#10301d;stroke:#7ee787}
+.svgstate.st-failed rect,.svgstate.st-manual rect{fill:#3a1418;stroke:#ff6b6b}
+.svgstate.st-comp rect{fill:#3a2a0c;stroke:#ffb454}
+.svgstate.st-compd rect{fill:#251a3a;stroke:#c792ea}
+.stchip{display:inline-block;font-size:11px;font-weight:600;padding:1px 9px;border-radius:999px;border:1px solid #3a475e;background:#1b2333;color:#cfd8e6;white-space:nowrap}
+.stchip.st-pending{color:#aab4c4}
+.stchip.st-running{border-color:#5ab0ff;color:#5ab0ff;background:#13284a}
+.stchip.st-completed{border-color:#7ee787;color:#7ee787;background:#10301d}
+.stchip.st-failed{border-color:#ff6b6b;color:#ff6b6b;background:#2a1316}
+.stchip.st-comp{border-color:#ffb454;color:#ffb454;background:#3a2a0c}
+.stchip.st-compd{border-color:#c792ea;color:#c792ea;background:#251a3a}
+.stchip.st-manual{border-color:#ff6b6b;color:#fff;background:#8a1f28}
+.legend-states{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.timeline{list-style:none;margin:0;padding:0;max-height:340px;overflow:auto;font-size:12.5px}
+.timeline li{display:grid;grid-template-columns:62px 12px 1fr;gap:6px;align-items:center;padding:4px 6px;border-radius:6px;cursor:pointer;color:var(--muted)}
+.timeline li:hover{background:#131c2e}
+.timeline li.done{color:#b9c4d6}
+.timeline li.cur{background:#16253a;color:#fff}
+.timeline li.k-fail span:last-child,.timeline li.k-manual span:last-child{color:#ff8a8a}
+.timeline li.k-comp span:last-child{color:#d7b0ff}
+.tl-t{font-size:10.5px;color:#6b7588}
+.tl-dot{width:9px;height:9px;border-radius:50%;background:#3a475e}
+.tl-dot.st-running{background:#5ab0ff}.tl-dot.st-completed{background:#7ee787}.tl-dot.st-failed,.tl-dot.st-manual{background:#ff6b6b}.tl-dot.st-comp{background:#ffb454}.tl-dot.st-compd{background:#c792ea}
+.stepdetail .kv{grid-template-columns:150px 1fr}
+.stepdetail .kv dd{font-family:var(--sans)}
+.snip pre{max-height:320px}
+pre.code.c-go{color:#d6deeb}
+.checks{display:grid;gap:6px;margin:8px 0}
+.checks label{cursor:pointer}
+table.tests td{vertical-align:middle}
