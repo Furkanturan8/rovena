@@ -1,7 +1,7 @@
 import "server-only";
 import type { ApiEnvelope } from "./types";
 
-const API_BASE_URL = (process.env.API_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, "");
+const API_BASE_URL = (process.env.API_BASE_URL ?? "http://localhost:18080").replace(/\/+$/, "");
 
 export class ApiError extends Error {
   constructor(

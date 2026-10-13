@@ -234,7 +234,7 @@ Aşağıdakiler [17](17-iade-iptal-ve-temizlik.md)'de anlatılır; burada yalnı
 ## Elle denemek
 
 ```bash
-G=localhost:8080
+G=localhost:18080
 EMAIL=deneme-$RANDOM@example.com; PW='Passw0rd!Passw0rd'
 curl -s -X POST $G/api/v1/auth/register -H 'content-type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PW\",\"first_name\":\"A\",\"last_name\":\"B\"}" >/dev/null

@@ -36,7 +36,7 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - `make test-integration`, `make e2e` → gerçek Postgres/RabbitMQ testleri, uçtan uca ve hata enjeksiyonu senaryoları
 - İade: iptal edilmiş siparişin parası otomatik iade edilir (Payment `RefundRequested` tüketir); müşteri `POST /orders/{id}/cancel` ile ödenmemiş siparişini iptal edebilir. Ayrıntı `docs/notes/17`.
 - Gözlemlenebilirlik: Jaeger `localhost:16686`, Prometheus `localhost:9090`, her servisin `/metrics` yolu (bkz. `docs/notes/16`)
-- Yayın: backend VPS'te `make prod-up` (gateway 127.0.0.1:8080; HTTPS'i sunucudaki nginx sağlar), frontend Vercel'de; adımlar `docs/deploy.md`
+- Yayın: backend VPS'te `make prod-up` (gateway 127.0.0.1:18080; HTTPS'i sunucudaki nginx sağlar), frontend Vercel'de; adımlar `docs/deploy.md`
 - `make seed-admin` / `make seed-catalog` → ilk admin / demo ürünler
 
 ## Öğrenme notları

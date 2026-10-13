@@ -7,7 +7,7 @@
 
   A.NODES = [
     { id: 'client', x: 60, y: 55, w: 100, h: 50, label: 'İstemci', sub: 'tarayıcı / mobil', cls: '' },
-    { id: 'gateway', x: 210, y: 55, w: 120, h: 50, label: 'Gateway', sub: 'Nginx :8080' },
+    { id: 'gateway', x: 210, y: 55, w: 120, h: 50, label: 'Gateway', sub: 'Nginx :18080' },
     { id: 'identity', x: 210, y: 160, w: 120, h: 44, label: 'Identity', sub: ':8081 · kimlik' },
     { id: 'order', x: 400, y: 55, w: 120, h: 50, label: 'Order', sub: ':8086 · Saga' },
     { id: 'catalog', x: 640, y: 20, w: 120, h: 44, label: 'Catalog', sub: ':8082' },
@@ -54,7 +54,7 @@
       focus: ['client', 'gateway'],
       state: { queues: Q0, outbox: 0, orderStatus: '–', metrics: [], spans: [], alerts: [] },
       qa: { look: 'İstemciden Gateway’e giden mavi HTTP paketi.', source: 'Veri tarayıcıdan geliyor. Rovena henüz hiçbir şey kaydetmedi.', meaning: 'Burada sayaç yok; ilk metrik ve ilk span Order isteği karşılayınca doğar.', next: 'Gateway bu isteği hangi servise gönderecek?' },
-      data: { title: 'Ağda giden veri (HTTP)', lang: 'c-http', body: 'POST /api/v1/checkout HTTP/1.1\nHost: localhost:8080\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIs…\nContent-Type: application/json' },
+      data: { title: 'Ağda giden veri (HTTP)', lang: 'c-http', body: 'POST /api/v1/checkout HTTP/1.1\nHost: localhost:18080\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIs…\nContent-Type: application/json' },
       where: 'Tarayıcı DevTools ▸ Network',
     },
     {
@@ -302,7 +302,7 @@
   /* ------------------------- Bileşen rehberi (tıklayınca) ------------------------- */
   A.INFO = {
     client: { t: 'İstemci', real: 'Henüz yok', role: 'Rovena’nın frontend’i henüz yazılmadı (docs/todo.md: “React frontend, ayrı plan”). İstekleri şimdilik curl/Postman/E2E testleri gönderir.', metrics: 'Yok', traces: 'İstemci tarafı trace’i yok; trace Order’da başlar.' },
-    gateway: { t: 'Gateway (Nginx)', real: ':8080', role: 'Tek giriş kapısı. URL’ye göre servise yönlendirir (identity, catalog, inventory, payment, order). Bilinmeyen yollarda JSON 404/502 döner. <code>/metrics</code> yolunu yönlendirmez.', metrics: 'Prometheus Nginx’i scrape etmez; gateway metriği yok.', traces: 'Trace başlatmaz; <code>traceparent</code> gibi bilinmeyen başlıkları geçirir.' },
+    gateway: { t: 'Gateway (Nginx)', real: ':18080', role: 'Tek giriş kapısı. URL’ye göre servise yönlendirir (identity, catalog, inventory, payment, order). Bilinmeyen yollarda JSON 404/502 döner. <code>/metrics</code> yolunu yönlendirmez.', metrics: 'Prometheus Nginx’i scrape etmez; gateway metriği yok.', traces: 'Trace başlatmaz; <code>traceparent</code> gibi bilinmeyen başlıkları geçirir.' },
     identity: { t: 'Identity', real: ':8081', role: 'Kayıt, giriş, JWT (HS256) ve refresh token. Diğer servisler JWT’yi <code>shared/auth</code> ile kendi başlarına doğrular; checkout sırasında Identity’ye çağrı yapılmaz.', metrics: '/metrics → Prometheus job “identity”.', traces: 'Kendi HTTP span’leri Jaeger’a gider.' },
     order: { t: 'Order', real: ':8086', role: 'Sepet, checkout ve Saga’nın yöneticisi. Catalog/Inventory’yi REST ile çağırır, ödemeyi RabbitMQ ile ister, takılı siparişleri kurtarma işiyle toparlar. Outbox relay ve sonuç consumer’ı da Order’dadır.', metrics: 'http_server/client_*, orders_finished_total, saga_recovery_actions_total, outbox_*, messaging_*', traces: 'Checkout’un kök span’i burada açılır.' },
     catalog: { t: 'Catalog', real: ':8082', role: 'Ürün/kategori/varyant verisi ve dahili fiyat arama ucu (<code>/internal/variants/lookup</code>).', metrics: 'http_server_request_duration_seconds, go_*', traces: 'HTTP ve DB sorgu span’leri.' },

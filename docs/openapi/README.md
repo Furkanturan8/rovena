@@ -8,7 +8,7 @@
 | [order.yaml](order.yaml) | Order | sepet, checkout (`Idempotency-Key`), müşterinin siparişleri, admin sipariş uçları, sipariş durumları ve olaylar |
 | [payment.yaml](payment.yaml) | Payment | ödeme okuma uçları (müşteri, admin, **dahili**) ve `PaymentRequested` / `PaymentSucceeded` / `PaymentFailed` olay sözleşmeleri, test kartı token'ları |
 
-Her şema koddaki DTO, doğrulama etiketleri ve hata eşlemeleriyle uyumlu yazıldı ve çalışan API'ye karşı doğrulandı (aşağıya bak). Tüm istekler **gateway** üzerinden gider: `http://localhost:8080`. Yeni servis eklendikçe buraya yeni bir dosya eklenir.
+Her şema koddaki DTO, doğrulama etiketleri ve hata eşlemeleriyle uyumlu yazıldı ve çalışan API'ye karşı doğrulandı (aşağıya bak). Tüm istekler **gateway** üzerinden gider: `http://localhost:18080`. Yeni servis eklendikçe buraya yeni bir dosya eklenir.
 
 ## Hızlı başlangıç: API'yi elle denemek
 

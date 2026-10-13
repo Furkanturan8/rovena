@@ -3,7 +3,7 @@
 Mimari: **backend** tek bir VPS'te Docker Compose ile çalışır (5 servis, Postgres, RabbitMQ, nginx gateway). HTTPS'i sunucudaki mevcut nginx sağlar. **Frontend** Vercel'de çalışır ve backend'i yalnızca Next'in sunucu tarafından çağırır (server action'lar, `rewrites`, `/api/orders/[id]`); tarayıcı backend'e doğrudan istek atmaz, bu yüzden CORS ayarı gerekmez.
 
 ```
-Tarayıcı ──► Vercel (Next.js) ──HTTPS──► VPS: nginx :443 ──► gateway :8080 ──► servisler
+Tarayıcı ──► Vercel (Next.js) ──HTTPS──► VPS: nginx :443 ──► gateway :18080 ──► servisler
                                                                    Postgres, RabbitMQ (dışarıya kapalı)
 ```
 
@@ -29,14 +29,14 @@ HTTPS gerekli (şifreler ve token'lar Vercel ile sunucu arasında dolaşır). Ö
 - **Kendi alan adın varsa:** `api.alanadin.com` için sunucu IP'sine bir `A` kaydı ekle.
 - **Alan adı yoksa:** `sslip.io` IP'yi alt alan adına çevirir; IP `203.0.113.10` ise `203-0-113-10.sslip.io`.
 
-HTTPS'i sunucudaki nginx sağlar. Gateway `127.0.0.1:8080`'de dinliyor; nginx'e yeni bir site ekle:
+HTTPS'i sunucudaki nginx sağlar. Gateway `127.0.0.1:18080`'de dinliyor (8080 ve 8081 başka işler tarafından sık kullanıldığı için bilerek 18080/18081 seçildi); nginx'e yeni bir site ekle:
 
 ```nginx
 # /etc/nginx/sites-available/rovena-api  (sites-enabled'a link ver)
 server {
     server_name api.alanadin.com;          # ya da 203-0-113-10.sslip.io
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:18080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Real-IP $remote_addr;
@@ -74,7 +74,7 @@ Ayrıca: `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ilk admin) ve `MEDIA_BASE_URL` (Supaba
 ```bash
 make prod-up        # build + migrate + servisler
 docker compose ps   # hepsi Up / migrate'ler Exited (0) olmalı
-curl localhost:8080/healthz          # ok (sunucu içinden)
+curl localhost:18080/healthz          # ok (sunucu içinden)
 curl https://<api-adın>/healthz      # ok (HTTPS kuruluysa, dışarıdan)
 ```
 

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { LOCALE_COOKIE, defaultLocale, isLocale, locales } from "@/lib/i18n/config";
 import { ACCESS_COOKIE, REFRESH_COOKIE, cookieOptions, type TokenCookies } from "@/lib/auth/cookies";
 
-const API_BASE_URL = (process.env.API_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, "");
+const API_BASE_URL = (process.env.API_BASE_URL ?? "http://localhost:18080").replace(/\/+$/, "");
 
 function preferredLocale(request: NextRequest) {
   const cookie = request.cookies.get(LOCALE_COOKIE)?.value;

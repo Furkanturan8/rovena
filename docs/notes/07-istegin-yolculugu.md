@@ -5,7 +5,7 @@
 ```mermaid
 sequenceDiagram
     participant B as Tarayıcı
-    participant N as Nginx (gateway :8080)
+    participant N as Nginx (gateway :18080)
     participant F as Fiber (identity :8081)
     participant H as UserHandler
     participant S as UserService

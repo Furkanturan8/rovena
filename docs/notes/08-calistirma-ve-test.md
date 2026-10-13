@@ -18,24 +18,24 @@ Başlatma sırası: `postgres` (sağlıklı olmalı) → `identity-migrate` (tab
 
 ## API'yi elle deneme
 
-Gateway `http://localhost:8080` üzerindedir.
+Gateway `http://localhost:18080` üzerindedir.
 
 ```bash
 # Kayıt
-curl -s -X POST localhost:8080/api/v1/auth/register \
+curl -s -X POST localhost:18080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"email":"jane@example.com","password":"s3cretpass1","first_name":"Jane"}'
 
 # Giriş (cevaptaki access_token ve refresh_token'ı not et)
-curl -s -X POST localhost:8080/api/v1/auth/login \
+curl -s -X POST localhost:18080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"jane@example.com","password":"s3cretpass1"}'
 
 # Kendi profilin
-curl -s localhost:8080/api/v1/users/me -H "Authorization: Bearer $ACCESS_TOKEN"
+curl -s localhost:18080/api/v1/users/me -H "Authorization: Bearer $ACCESS_TOKEN"
 
 # Token yenileme
-curl -s -X POST localhost:8080/api/v1/auth/refresh \
+curl -s -X POST localhost:18080/api/v1/auth/refresh \
   -H 'Content-Type: application/json' -d "{\"refresh_token\":\"$REFRESH_TOKEN\"}"
 ```
 
@@ -44,12 +44,12 @@ Beklenen hata durumları: aynı e-posta ile ikinci kayıt 409, yanlış parola 4
 Catalog'u deneme (önce `make seed-catalog`):
 
 ```bash
-curl -s 'localhost:8080/api/v1/products?q=canta'
-curl -s 'localhost:8080/api/v1/products?category=giyim&color=siyah&sort=price_asc'
-curl -s localhost:8080/api/v1/products/deri-ceket
+curl -s 'localhost:18080/api/v1/products?q=canta'
+curl -s 'localhost:18080/api/v1/products?category=giyim&color=siyah&sort=price_asc'
+curl -s localhost:18080/api/v1/products/deri-ceket
 
 # Admin işlemleri için admin hesabıyla giriş yapıp token al
-curl -s -X POST localhost:8080/api/v1/admin/products \
+curl -s -X POST localhost:18080/api/v1/admin/products \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"Yeni Ürün","category_id":"<kategori-uuid>","variants":[{"sku":"NEW-1","size":"M","price_cents":10000}]}'
 ```
@@ -58,11 +58,11 @@ Inventory'yi deneme (önce `make seed-inventory`):
 
 ```bash
 # Vitrin: bir varyantın stok durumu (herkese açık)
-curl -s "localhost:8080/api/v1/stock?variant_ids=<varyant-uuid>"
+curl -s "localhost:18080/api/v1/stock?variant_ids=<varyant-uuid>"
 
 # Depo yönetimi (admin token'ı ile)
-curl -s localhost:8080/api/v1/admin/stock?below=10 -H "Authorization: Bearer $ADMIN_TOKEN"
-curl -s -X POST localhost:8080/api/v1/admin/stock/<varyant-uuid>/receipts \
+curl -s localhost:18080/api/v1/admin/stock?below=10 -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -s -X POST localhost:18080/api/v1/admin/stock/<varyant-uuid>/receipts \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
   -d '{"quantity":20,"reason":"yeni sevkiyat"}'
 
@@ -74,7 +74,7 @@ curl -s -X POST localhost:8083/api/v1/internal/reservations \
 
 Aynı `order_id` ile ikinci istek 201 yerine **200** ve aynı rezervasyonu döner; stok iki kez tutulmaz. Stok yetmezse 409 ve `fields` içinde hangi varyantta kaç adet kaldığı gelir.
 
-Sağlık: `curl localhost:8081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment), `curl localhost:8086/readyz` (Order) → `{"checks":{"postgres":"ok"},"ready":true}`.
+Sağlık: `curl localhost:18081/readyz` (Identity), `curl localhost:8082/readyz` (Catalog), `curl localhost:8083/readyz` (Inventory), `curl localhost:8085/readyz` (Payment), `curl localhost:8086/readyz` (Order) → `{"checks":{"postgres":"ok"},"ready":true}`.
 
 Veritabanına bakmak için (parolayı `backend/.env` içinden al):
 

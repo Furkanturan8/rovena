@@ -19,7 +19,7 @@ info:
     Requests go through the gateway on port 8080. `/healthz` and `/readyz` exist only on the
     service's own port (8081).
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:18080
     description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 429 with the usual JSON error and a `Retry-After` header.
 tags:
   - name: Auth
@@ -368,7 +368,7 @@ paths:
               example: {success: false, message: Cannot demote the last admin}
         '422': {$ref: '#/components/responses/ValidationError'}
   /healthz:
-    servers: [{url: 'http://localhost:8081', description: Identity service port}]
+    servers: [{url: 'http://localhost:18081', description: Identity service port}]
     get:
       tags: [Health]
       summary: Liveness
@@ -383,7 +383,7 @@ paths:
                 properties:
                   status: {type: string, example: ok}
   /readyz:
-    servers: [{url: 'http://localhost:8081', description: Identity service port}]
+    servers: [{url: 'http://localhost:18081', description: Identity service port}]
     get:
       tags: [Health]
       summary: Readiness (database reachable)

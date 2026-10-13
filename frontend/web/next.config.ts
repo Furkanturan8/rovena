@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const mediaBase = process.env.NEXT_PUBLIC_MEDIA_URL?.trim().replace(/\/+$/, "");
-const apiBase = (process.env.API_BASE_URL ?? "http://localhost:8080").replace(/\/+$/, "");
+const apiBase = (process.env.API_BASE_URL ?? "http://localhost:18080").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   images: {

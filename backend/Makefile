@@ -8,7 +8,7 @@ up:
 down:
 	docker compose down
 
-# Production server (docs/deploy.md). The gateway listens on 127.0.0.1:8080 only; the server's nginx adds HTTPS in front of it.
+# Production server (docs/deploy.md). The gateway listens on 127.0.0.1:18080 only; the server's nginx adds HTTPS in front of it.
 prod-up: up
 
 logs:

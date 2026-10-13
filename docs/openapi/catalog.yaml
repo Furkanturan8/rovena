@@ -24,7 +24,7 @@ info:
     Requests go through the gateway on port 8080. `/healthz` and `/readyz` exist only on the
     service's own port (8082).
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:18080
     description: Gateway (Nginx). Limits each IP to 30 requests/second (burst 60); beyond that it answers 429 with the usual JSON error and a `Retry-After` header.
 tags:
   - name: Categories

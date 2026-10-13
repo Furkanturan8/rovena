@@ -15,7 +15,7 @@ Altyapı, iş kodu olmayan ama servislerin çalışması için gereken parçalar
 | `postgres` | PostgreSQL 17 veritabanı sunucusu | 127.0.0.1:5433 (yalnızca kendi bilgisayarın) |
 | `rabbitmq` | Mesaj kuyruğu (Payment ve Order kullanıyor) | 5672 (mesaj), 15672 (yönetim paneli), 15692 (Prometheus metrikleri) |
 | `identity-migrate` | Identity tablolarını kurar, işi bitince kapanır | yok |
-| `identity` | Identity API sunucusu | 127.0.0.1:8081 |
+| `identity` | Identity API sunucusu | 127.0.0.1:18081 |
 | `identity-seed` | İlk admin kullanıcıyı oluşturur (`tools` profilinde, elle çalıştırılır) | yok |
 | `catalog-migrate` | Catalog tablolarını kurar, işi bitince kapanır | yok |
 | `catalog` | Catalog API sunucusu | 127.0.0.1:8082 |

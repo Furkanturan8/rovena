@@ -15,7 +15,7 @@ import atexit, base64, json, os, subprocess, sys, threading, time, traceback, uu
 import requests
 
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[1])
-G = "http://localhost:8080"
+G = "http://localhost:18080"
 PAYMENT = "http://localhost:8085"
 MQ = "http://localhost:15672/api"
 env = dict(l.split("=", 1) for l in open(f"{ROOT}/.env").read().splitlines() if "=" in l and not l.startswith("#"))

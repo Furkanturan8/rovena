@@ -25,7 +25,7 @@
 
   /* ---------------- Senaryo S1: iade takıldı ---------------- */
   const ORDER = '0192f3a7-5c1e-7d2a-9b8e-4f6a1c2d3e4f';
-  const adminView = { tool: 'logs', command: `curl -s -H "Authorization: Bearer $ADMIN_TOKEN" localhost:8080/api/v1/admin/orders/${ORDER} | jq '.data'`, lines: [
+  const adminView = { tool: 'logs', command: `curl -s -H "Authorization: Bearer $ADMIN_TOKEN" localhost:18080/api/v1/admin/orders/${ORDER} | jq '.data'`, lines: [
     '{', `  "id": "${ORDER}",`, '  "status": "cancelled",', '  "failure_code": "reservation_lost",', '  "reservation_state": "released",', '  "refund_state": "requested",', '  "refund_requests": 5,', '  "payment_requests": 1,', '  "updated_at": "2026-10-09T14:22:41Z"', '}'],
     note: 'Yanıt SİMÜLE ve kısaltılmış; admin uçları siparişin defter alanlarını gösterir (TestAdmin_SeesEveryOrderWithBookkeeping).' };
   const historyView = { tool: 'logs', command: `docker compose exec postgres psql -U orders orders -c "SELECT from_status, to_status, reason, created_at FROM order_status_history WHERE order_id='${ORDER}' ORDER BY id"`, lines: [

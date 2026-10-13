@@ -18,7 +18,7 @@ from openapi_schema_validator import OAS30Validator
 
 ROOT = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "backend")  # compose file, .env and Makefile live here
 DOCS = str(__import__("pathlib").Path(__file__).resolve().parent)
-G = "http://localhost:8080"
+G = "http://localhost:18080"
 INTERNAL = "http://localhost:8083"  # inventory /internal/* is not routed by the gateway
 PAYMENT = "http://localhost:8085"   # payment /internal/* neither
 CATALOG = "http://localhost:8082"   # nor catalog /internal/*
@@ -178,7 +178,7 @@ n_admins = sum(1 for u in requests.get(G + "/api/v1/users?page_size=100", header
 if n_admins == 1:
     call(I, "PATCH", "/api/v1/users/{id}/role", path=f"/api/v1/users/{admin_id}/role", token=admin, json_body={"role": "customer"})  # 409
 for hp in ("healthz", "readyz"):
-    resp = requests.get(f"http://localhost:8081/{hp}"); check(I, "GET", f"/{hp}", resp)
+    resp = requests.get(f"http://localhost:18081/{hp}"); check(I, "GET", f"/{hp}", resp)
 
 # ================================================================= catalog
 C = "catalog"

@@ -13,7 +13,7 @@ Bu dosyalar üç işe yarar:
 ## Bir dosya nasıl okunur?
 
 ```text
-openapi / info / servers      Sürüm, açıklama ve adres (gateway: http://localhost:8080)
+openapi / info / servers      Sürüm, açıklama ve adres (gateway: http://localhost:18080)
 paths                         Her yol ve HTTP metodu: parametreler, istek gövdesi, olası cevaplar
 components
   ├─ schemas                  Yeniden kullanılan veri şekilleri (User, Product, Error...)

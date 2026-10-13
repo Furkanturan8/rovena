@@ -76,7 +76,7 @@ make seed-inventory       # gives every demo variant an opening stock
 make test
 ```
 
-The gateway listens on `http://localhost:8080`. Current API surface:
+The gateway listens on `http://localhost:18080`. Current API surface:
 
 **Identity**
 

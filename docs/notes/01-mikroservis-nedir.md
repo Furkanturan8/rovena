@@ -48,4 +48,4 @@ Monolitte "sipariş oluştur + stok düş + ödeme al" tek veritabanı transacti
 
 ## API Gateway
 
-İstemci (tarayıcı) beş farklı servisin adresini bilmek zorunda kalmasın diye hepsinin önüne tek bir kapı konur. Rovena'da bu Nginx'tir (`localhost:8080`). Yola bakıp isteği doğru servise yönlendirir. Ayrıntı: [03 - Altyapı](03-altyapi.md).
+İstemci (tarayıcı) beş farklı servisin adresini bilmek zorunda kalmasın diye hepsinin önüne tek bir kapı konur. Rovena'da bu Nginx'tir (`localhost:18080`). Yola bakıp isteği doğru servise yönlendirir. Ayrıntı: [03 - Altyapı](03-altyapi.md).
