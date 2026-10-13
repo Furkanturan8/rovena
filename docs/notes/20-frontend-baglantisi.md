@@ -50,7 +50,10 @@ Fiyatlar kuruş cinsinden saklanır (`168000 ₺` → `16800000`).
 | Sepet | Tarayıcıda (localStorage), yalnızca `variantId` ve adet tutulur. Ad, fotoğraf ve fiyat her zaman katalogdan okunur |
 | Ödeme | Giriş gerekir. Server action sepeti Order servisine yazar (`DELETE /cart`, `PUT /cart/items/:id`) ve `POST /checkout` çağırır (`Idempotency-Key` ile). Fiyatı Order servisi katalogdan kendisi hesaplar; tarayıcıdan fiyat gönderilmez |
 | Sipariş takibi | Onay sayfası sipariş durumunu 2 sn'de bir yoklar (`/api/orders/:id`): `pending → awaiting_payment → paid → confirmed`, ya da `cancelled` |
-| Siparişlerim | Gerçek siparişler; ödenmemiş sipariş iptal edilebilir (`POST /orders/:id/cancel`) |
+| Siparişlerim | Gerçek siparişler; ödenmemiş sipariş iptal edilebilir (`POST /orders/:id/cancel`). Detayda teslimat adresi, kargo firması ve takip no görünür |
+| Adresler | Identity'nin `/users/me/addresses` uçları: ekleme, düzenleme, silme, varsayılan yapma. Ödemede kayıtlı adres seçilir (yoksa orada eklenir); sunucu aksiyonu adresi Identity'den okuyup `shipping_address` olarak gönderir, sipariş adresin **kopyasını** saklar |
+| Şifre / e-posta | `POST /users/me/password` (diğer cihazların oturumunu kapatır, yeni token çifti döner, çerezler yenilenir) ve `POST /users/me/email`; ikisi de mevcut şifre ister |
+| Teslimat aşamaları | Order servisinde `confirmed → shipped → delivered`. Frontend'de buton yok; operatör `POST /admin/orders/:id/ship` (`carrier`, `tracking_code`) ve `/deliver` çağırır |
 
 ### Kart numarası ve test kartları
 
@@ -58,9 +61,8 @@ Tarayıcı kart numarasını **sunucuya göndermez**; yalnızca bir ödeme sağl
 
 ## Bilinen boşluklar
 
-- **Adres:** backend'de adres modeli yok. Hesaptaki adresler ve ödemedeki adres seçimi demo veridir; siparişe yazılmaz.
 - **Kargo, kupon, havale:** Order servisi yalnızca ürün toplamını tahsil eder; kargo ücreti, indirim kodu ve havale seçeneği bu yüzden mağazada yoktur.
 - **Favoriler:** tarayıcıda (localStorage) tutulur, backend karşılığı yok.
-- **Şifre değiştirme, e-posta güncelleme:** Identity'de uç yok.
-- **Teslimat aşamaları** (kargoda, teslim edildi): Order servisinin durum makinesi `confirmed`'da biter.
+- **Kargo/teslim paneli:** durumu ilerleten yalnızca admin API'si var; yönetim arayüzü yok. E-posta/bildirim gönderimi de yok.
+- **E-posta değişimi:** doğrulama e-postası yok; yeni adres hemen geçerli olur. Önceden verilmiş access token'lar süresi (15 dk) dolana kadar eski adresi taşır.
 - **Dağıtım:** Vercel'deki frontend'in çalışması için gateway'in internetten erişilebilir bir adreste olması ve `API_BASE_URL`'in ona işaret etmesi gerekir. Şu an backend yalnızca yerelde (Docker Compose) çalışıyor.

@@ -53,3 +53,4 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 | Gözlemlenebilirlik laboratuvarı | Tamamlandı | `frontend/observability-lab/`: animasyonlu akış, 5 tanı senaryosu, araç rehberi; simüle veri, gerçek metrik adları |
 | Saga laboratuvarı | Tamamlandı | `frontend/saga-lab/`: Saga akışı, 5 hata senaryosu, mimari karşılaştırma, kod/test/gözlem laboratuvarları; Rovena modeline dayalı simülatör |
 | Frontend (mağaza) | Tamamlandı | `frontend/web`: Next.js, TR/EN, gerçek katalog, stok, üyelik, sepetten siparişe akış (bkz. 20) |
+| Adres, hesap güvenliği, kargo | Tamamlandı | Identity: adres defteri, şifre ve e-posta değişimi; Order: siparişe teslimat adresi kopyası, `shipped`/`delivered` durumları ve admin uçları (bkz. 14, 20) |

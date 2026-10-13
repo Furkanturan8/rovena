@@ -33,11 +33,15 @@ stateDiagram-v2
     awaiting_payment --> cancelled: PaymentFailed / ödeme zaman aşımı
     paid --> confirmed: stok kesinleşti (commit)
     paid --> cancelled: rezervasyon süresi dolmuştu
-    confirmed --> [*]
+    confirmed --> shipped: operatör kargoya verdi
+    shipped --> delivered: operatör teslim edildi dedi
+    delivered --> [*]
     cancelled --> [*]
 ```
 
-`paid` ayrı bir durum çünkü "para alındı" ile "stok kesinleşti" iki ayrı servisteki iki ayrı olay. Aralarında Inventory kapalı olabilir; o zaman sipariş `paid`'de bekler ve bir sonraki deneme tamamlar. `confirmed` ve `cancelled` son durumlardır.
+`paid` ayrı bir durum çünkü "para alındı" ile "stok kesinleşti" iki ayrı servisteki iki ayrı olay. Aralarında Inventory kapalı olabilir; o zaman sipariş `paid`'de bekler ve bir sonraki deneme tamamlar. `cancelled` ve `delivered` son durumlardır.
+
+`shipped` ve `delivered` Saga'nın parçası değil; ödeme ve stok işi `confirmed`'da biter. Bu iki geçişi yalnızca admin yapar (`POST /admin/orders/{id}/ship` ile `carrier` + `tracking_code`, sonra `/deliver`), olay yayınlanmaz ve kurtarma işi bunlara bakmaz. Müşteri `confirmed` olmuş siparişi artık iptal edemez. Checkout `shipping_address` ister: adres Identity'den kopyalanıp siparişin `shipping_address` (jsonb) sütununa yazılır; sonradan adres defterinde yapılan değişiklik siparişi etkilemez.
 
 Siparişin **stok tarafı** ayrıca `reservation_state` sütununda izlenir: `none` → `held` → `committed` | `released`. Böylece "iptal oldu ama stok hâlâ tutuluyor" gibi yarım kalmış durumlar sorgulanabilir; kurtarma işi tam bunları arar.
 

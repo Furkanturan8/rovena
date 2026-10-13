@@ -31,7 +31,9 @@ info:
     | `pending` | Order exists; stock is not held yet (Inventory was unreachable). The service keeps trying and cancels after 5 minutes (`checkout_timeout`). |
     | `awaiting_payment` | Stock is held and a payment was requested. |
     | `paid` | Payment succeeded; committing the stock is still in progress. Normally lasts milliseconds. |
-    | `confirmed` | Final. Paid, stock committed. |
+    | `confirmed` | Paid, stock committed; the shop can pack the order. |
+    | `shipped` | An operator handed it to a carrier (`carrier`, `tracking_code`, `shipped_at`). |
+    | `delivered` | Final. Delivered to the customer (`delivered_at`). |
     | `cancelled` | Final. See `failure_code`. |
 
     `failure_code` of a cancelled order: `cancelled_by_customer`, `out_of_stock`, `item_unavailable`, `checkout_timeout`,
@@ -329,6 +331,50 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/OrderNotFound'}
+  /api/v1/admin/orders/{id}/ship:
+    post:
+      tags: [Orders (admin)]
+      summary: Hand a confirmed order to a carrier
+      description: confirmed -> shipped. Repeating the same carrier and tracking code is harmless; any other order state answers 409.
+      operationId: adminShipOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ShipRequest'}
+      responses:
+        '200':
+          description: The shipped order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminOrderEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/OrderNotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/admin/orders/{id}/deliver:
+    post:
+      tags: [Orders (admin)]
+      summary: Mark a shipped order as delivered
+      description: shipped -> delivered. Repeating it is harmless; any other order state answers 409.
+      operationId: adminDeliverOrder
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/OrderId'}
+      responses:
+        '200':
+          description: The delivered order
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminOrderEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/OrderNotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
   /healthz:
     servers: [{url: 'http://localhost:8086', description: Order service port}]
     get:
@@ -382,7 +428,7 @@ components:
     Status:
       name: status
       in: query
-      schema: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+      schema: {type: string, enum: [pending, awaiting_payment, paid, confirmed, shipped, delivered, cancelled]}
     Page:
       name: page
       in: query
@@ -424,6 +470,11 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
           example: {success: false, message: The cart is empty}
+    Conflict:
+      description: The order is not in the state this step needs (for example shipping an order that is not confirmed)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
     Unavailable:
       description: Catalog could not be reached; nothing was changed
       content:
@@ -452,10 +503,31 @@ components:
       required: [quantity]
       properties:
         quantity: {type: integer, minimum: 1, maximum: 99, example: 2}
+    ShippingAddress:
+      type: object
+      required: [full_name, phone, line1, district, city]
+      properties:
+        full_name: {type: string, maxLength: 100}
+        phone: {type: string, minLength: 7, maxLength: 24}
+        line1: {type: string, maxLength: 200}
+        line2: {type: string, maxLength: 200}
+        district: {type: string, maxLength: 80}
+        city: {type: string, maxLength: 80}
+        postal_code: {type: string, maxLength: 16}
+        country: {type: string, maxLength: 2, description: Defaults to TR}
+    ShipRequest:
+      type: object
+      required: [carrier, tracking_code]
+      properties:
+        carrier: {type: string, maxLength: 60, example: Yurtici Kargo}
+        tracking_code: {type: string, maxLength: 60}
     CheckoutRequest:
       type: object
-      required: [payment_method]
+      required: [payment_method, shipping_address]
       properties:
+        shipping_address:
+          allOf: [{$ref: '#/components/schemas/ShippingAddress'}]
+          description: A copy of the chosen delivery address. Later edits of the address book never change the order.
         payment_method:
           type: string
           maxLength: 128
@@ -508,7 +580,7 @@ components:
       required: [id, status, total_cents, currency, items, created_at, updated_at]
       properties:
         id: {type: string, format: uuid}
-        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, shipped, delivered, cancelled]}
         total_cents: {type: integer, format: int64, example: 3700}
         currency: {type: string, example: TRY}
         items:
@@ -516,6 +588,11 @@ components:
           items: {$ref: '#/components/schemas/OrderItem'}
         failure_code: {type: string, description: Present only on a cancelled order}
         failure_message: {type: string, description: Present only on a cancelled order}
+        shipping_address: {$ref: '#/components/schemas/ShippingAddress'}
+        carrier: {type: string, description: Present once the order is shipped}
+        tracking_code: {type: string, description: Present once the order is shipped}
+        shipped_at: {type: string, format: date-time}
+        delivered_at: {type: string, format: date-time}
         refund:
           type: string
           enum: [pending, refunded]
@@ -548,7 +625,7 @@ components:
       type: object
       required: [status, at]
       properties:
-        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, cancelled]}
+        status: {type: string, enum: [pending, awaiting_payment, paid, confirmed, shipped, delivered, cancelled]}
         at: {type: string, format: date-time}
     OrderDetail:
       allOf:
@@ -615,6 +692,12 @@ components:
             history:
               type: array
               items: {$ref: '#/components/schemas/AdminHistoryEntry'}
+    AdminOrderEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/AdminOrder'}
     AdminOrderDetailEnvelope:
       type: object
       required: [success, data]

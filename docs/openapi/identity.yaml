@@ -171,6 +171,133 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
         '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/users/me/password:
+    post:
+      tags: [Profile]
+      summary: Change the password
+      description: Needs the current password. Every refresh token of the user is revoked (other devices are signed out) and a fresh token pair is returned for this session. Rate limited (10 per minute per IP).
+      operationId: changePassword
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangePasswordRequest'}
+      responses:
+        '200':
+          description: New token pair
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TokensEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/users/me/email:
+    post:
+      tags: [Profile]
+      summary: Change the sign-in email
+      description: Needs the current password. Access tokens issued before keep the old address until they expire (15 minutes). 409 when the address belongs to another account; 422 when it equals the current one.
+      operationId: changeEmail
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangeEmailRequest'}
+      responses:
+        '200':
+          description: The updated user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  /api/v1/users/me/addresses:
+    get:
+      tags: [Addresses]
+      summary: List the signed-in user's addresses (default first)
+      operationId: listAddresses
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Addresses
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddressListEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      tags: [Addresses]
+      summary: Add an address
+      description: The first address becomes the default. With `is_default` true the new address replaces the current default. At most 10 addresses per user (409 beyond that).
+      operationId: createAddress
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAddressRequest'}
+      responses:
+        '201':
+          description: The new address
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddressEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+  /api/v1/users/me/addresses/{id}:
+    patch:
+      tags: [Addresses]
+      summary: Change an address
+      description: Omitted fields keep their value. `is_default: true` makes it the default.
+      operationId: updateAddress
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAddressRequest'}
+      responses:
+        '200':
+          description: The updated address
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddressEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationError'}
+    delete:
+      tags: [Addresses]
+      summary: Delete an address
+      description: When the default address is deleted, the newest remaining one becomes the default.
+      operationId: deleteAddress
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Deleted}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/users/me/addresses/{id}/default:
+    post:
+      tags: [Addresses]
+      summary: Make an address the default
+      operationId: setDefaultAddress
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: The address
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AddressEnvelope'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /api/v1/users:
     get:
       tags: [Users (admin)]
@@ -329,6 +456,11 @@ components:
             success: false
             message: Validation failed
             fields: {email: must be a valid email address, password: must be at least 8 characters}
+    Conflict:
+      description: The request conflicts with the current state (email in use, address limit reached)
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
     TooManyRequests:
       description: More than 20 requests per minute from this IP on /auth/*
       content:
@@ -385,6 +517,73 @@ components:
       properties:
         first_name: {type: string, maxLength: 100}
         last_name: {type: string, maxLength: 100}
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: {type: string}
+        new_password: {type: string, minLength: 8, maxLength: 72}
+    ChangeEmailRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, description: The current password}
+    Address:
+      type: object
+      required: [id, title, full_name, phone, line1, district, city, country, is_default, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        title: {type: string, example: Home}
+        full_name: {type: string}
+        phone: {type: string}
+        line1: {type: string}
+        line2: {type: string}
+        district: {type: string}
+        city: {type: string}
+        postal_code: {type: string}
+        country: {type: string, example: TR}
+        is_default: {type: boolean}
+        created_at: {type: string, format: date-time}
+    CreateAddressRequest:
+      type: object
+      required: [title, full_name, phone, line1, district, city]
+      properties:
+        title: {type: string, maxLength: 40}
+        full_name: {type: string, maxLength: 100}
+        phone: {type: string, minLength: 7, maxLength: 24}
+        line1: {type: string, maxLength: 200}
+        line2: {type: string, maxLength: 200}
+        district: {type: string, maxLength: 80}
+        city: {type: string, maxLength: 80}
+        postal_code: {type: string, maxLength: 16}
+        is_default: {type: boolean}
+    UpdateAddressRequest:
+      type: object
+      properties:
+        title: {type: string, maxLength: 40}
+        full_name: {type: string, maxLength: 100}
+        phone: {type: string, minLength: 7, maxLength: 24}
+        line1: {type: string, maxLength: 200}
+        line2: {type: string, maxLength: 200}
+        district: {type: string, maxLength: 80}
+        city: {type: string, maxLength: 80}
+        postal_code: {type: string, maxLength: 16}
+        is_default: {type: boolean}
+    AddressEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data: {$ref: '#/components/schemas/Address'}
+    AddressListEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: {type: boolean, example: true}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/Address'}
     ChangeRoleRequest:
       type: object
       required: [role]
