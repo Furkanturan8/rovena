@@ -12,7 +12,7 @@ The initial architecture prioritizes clear service boundaries, reliability, test
 
 ```mermaid
 flowchart TD
-    Client[React Storefront and Admin]
+    Client[Next.js Storefront and Admin]
     Gateway[API Gateway / Nginx]
 
     Identity[Identity Service]

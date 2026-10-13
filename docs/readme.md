@@ -1,6 +1,6 @@
-# Rovena
+# Rovena: API and operations reference
 
-Rovena is a modern fashion and accessories e-commerce marketplace built with **Go, React, and TypeScript**. The project is designed to demonstrate production-oriented software engineering practices through a microservices architecture, reliable order processing, and scalable application design.
+This is the detailed reference for the services' HTTP surface and for running the backend. For the project overview, architecture diagrams and quick start, see the [root README](../README.md).
 
 ## Architecture
 
@@ -17,7 +17,7 @@ Rovena follows a domain-oriented microservices architecture with independently o
 ### Tech Stack
 
 * **Backend:** Go (Golang)
-* **Frontend:** React, TypeScript, Vite
+* **Frontend:** Next.js 16, React, TypeScript, Tailwind CSS
 * **API:** REST / HTTP
 * **Database:** PostgreSQL
 * **Messaging:** RabbitMQ
@@ -52,7 +52,7 @@ rovena/
 │   ├── docker-compose.yml
 │   ├── Makefile
 │   └── .env.example
-├── frontend/                (planned)
+├── frontend/web/            Next.js storefront (TR/EN)
 └── docs/
     ├── architecture.md
     ├── notes/
@@ -84,6 +84,10 @@ The gateway listens on `http://localhost:18080`. Current API surface:
 | --- | --- | --- |
 | POST | `/api/v1/auth/register`, `/login`, `/refresh`, `/logout` | public (rate limited) |
 | GET, PATCH | `/api/v1/users/me` | authenticated |
+| POST | `/api/v1/users/me/password` (signs out other devices, returns a new token pair), `/users/me/email` (both need the current password) | authenticated (rate limited) |
+| GET, POST | `/api/v1/users/me/addresses` | authenticated |
+| PATCH, DELETE | `/api/v1/users/me/addresses/:id` | authenticated |
+| POST | `/api/v1/users/me/addresses/:id/default` | authenticated |
 | GET | `/api/v1/users`, `/api/v1/users/:id` | admin |
 | PATCH | `/api/v1/users/:id/role` | admin |
 
@@ -137,10 +141,13 @@ token, never from the path or the body). Prices always come from Catalog; a pric
 | --- | --- | --- |
 | GET, DELETE | `/api/v1/cart` | signed-in user |
 | PUT, DELETE | `/api/v1/cart/items/:variantId` (body: `quantity`) | signed-in user |
-| POST | `/api/v1/checkout` (header `Idempotency-Key`, body: `payment_method`) | signed-in user |
+| POST | `/api/v1/checkout` (header `Idempotency-Key`, body: `payment_method`, `shipping_address`) | signed-in user |
 | GET | `/api/v1/orders[/:id]` | signed-in user, own orders only |
 | POST | `/api/v1/orders/:id/cancel` | signed-in user, own unpaid orders only |
 | GET | `/api/v1/admin/orders[/:id]` (`status`, `customer_id`, `page`, `page_size`) | admin |
+| POST | `/api/v1/admin/orders/:id/ship` (body: `carrier`, `tracking_code`), `/admin/orders/:id/deliver` | admin |
+
+The order stores a copy of the delivery address. After `confirmed`, an admin moves it to `shipped` and `delivered` (outside the saga).
 
 Checkout answers as soon as stock is held and payment has been requested (`status: awaiting_payment`); poll the order
 until it is `confirmed` or `cancelled`. Repeating a checkout with the same `Idempotency-Key` returns the same order.
@@ -154,7 +161,7 @@ and serves Prometheus metrics at `/metrics` on its own port. `make up` also star
 ready-made dashboard). See
 [`docs/notes/16-gozlemlenebilirlik-ve-ci.md`](notes/16-gozlemlenebilirlik-ve-ci.md).
 
-Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `8081`, catalog: `8082`, inventory: `8083`, payment: `8085`, order: `8086`).
+Health: `/healthz` (liveness) and `/readyz` (dependencies) on each service port (identity: `18081`, catalog: `8082`, inventory: `8083`, payment: `8085`, order: `8086`).
 
 ## Project Goals
 

@@ -11,3 +11,4 @@ dist/
 claude.md
 .venv/
 docs/saga-video/
+docs/images/.DS_Store
