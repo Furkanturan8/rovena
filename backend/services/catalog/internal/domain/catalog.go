@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -29,8 +30,10 @@ type Category struct {
 	Name        string
 	Slug        string
 	Description string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Translations holds localized name/description by language code ({"en": {"name": "Coats"}}).
+	Translations json.RawMessage
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Image struct {
@@ -73,10 +76,14 @@ type Product struct {
 	Description string
 	Brand       string
 	Status      ProductStatus
-	Images      []Image
-	Variants    []Variant
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// Translations: localized texts by language code. Attributes: language-independent storefront facts.
+	// Both are JSON objects the storefront interprets; the catalog only stores them.
+	Translations json.RawMessage
+	Attributes   json.RawMessage
+	Images       []Image
+	Variants     []Variant
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 func (p *Product) ActiveVariantCount() int {
@@ -95,11 +102,16 @@ type ProductSummary struct {
 	CategoryID     uuid.UUID
 	Name           string
 	Slug           string
+	Description    string
 	Brand          string
 	Status         ProductStatus
 	PriceFromCents *int64
 	Currency       string
 	ThumbnailURL   string
+	Translations   json.RawMessage
+	Attributes     json.RawMessage
+	Images         []Image
+	Variants       []Variant // active variants only
 }
 
 type ProductSort string
@@ -142,6 +154,8 @@ var (
 	ErrSKUTaken         = errors.New("sku already in use")
 	ErrVariantExists    = errors.New("variant with this size and color already exists")
 	ErrInvalidSKU       = errors.New("invalid sku")
+	ErrInvalidSlug      = errors.New("invalid slug")
+	ErrInvalidJSON      = errors.New("translations and attributes must be JSON objects")
 	ErrInvalidStatus    = errors.New("invalid status")
 	ErrNoActiveVariant  = errors.New("product needs at least one active variant")
 )

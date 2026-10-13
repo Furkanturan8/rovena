@@ -1,41 +1,49 @@
-export type CategorySlug = "coats" | "trousers" | "jackets" | "knitwear" | "accessories";
-
 export interface Category {
-  slug: CategorySlug;
-  image: string;
+  id: string;
+  slug: string;
+  label: string; // localized
+  image: string; // first photo of a product in the category
 }
 
 export interface ColorOption {
-  name: string;
+  name: string; // catalog key, e.g. "Dark Brown"; display names live in the dictionary
   hex: string;
 }
 
 export interface SizeOption {
   label: string;
-  stock: number;
+  stock: number; // sellable units across all colors; 0 = sold out
+}
+
+export interface VariantInfo {
+  id: string;
+  sku: string;
+  size: string;
+  color: string;
+  price: number;
 }
 
 export type ProductTag = "limited" | "new" | "sealed" | "custom";
 
-export interface ProductText {
+/** Storefront product: catalog API data resolved for one language, plus current stock. */
+export interface Product {
+  id: string;
+  slug: string;
+  category: string; // category slug
   name: string;
   kind: string;
   description: string;
   material: string;
   composition: string[];
-}
-
-/** Dilden bağımsız ürün verisi. */
-export interface ProductBase {
-  id: string;
-  slug: string;
-  category: CategorySlug;
-  price: number;
+  price: number; // TL (cheapest active variant)
   craftHours: number;
-  edition?: string; // "No. 04/20"
+  edition?: string;
   tag?: ProductTag;
   colors: ColorOption[];
   sizes: SizeOption[];
+  variants: VariantInfo[];
+  /** Sellable units per variant id; empty when stock was not loaded (e.g. search suggestions). */
+  stock: Record<string, number>;
   images: string[];
   sku: string;
   rating: number;
@@ -46,45 +54,12 @@ export interface ProductBase {
   video?: "sewing" | "wool";
 }
 
-/** Aktif dile göre metinleri çözülmüş ürün. */
-export type Product = ProductBase & ProductText;
-
 export interface CartItem {
   productId: string;
+  variantId: string;
   size: string;
   color: string;
   qty: number;
-}
-
-export type OrderStatus =
-  | "pending"
-  | "confirmed"
-  | "preparing"
-  | "shipped"
-  | "delivered"
-  | "cancelled"
-  | "refunded";
-
-export interface OrderLine {
-  productId: string;
-  size: string;
-  color: string;
-  qty: number;
-  unitPrice: number;
-}
-
-export interface Order {
-  id: string;
-  number: string;
-  placedAt: string;
-  status: OrderStatus;
-  lines: OrderLine[];
-  shipping: number;
-  total: number;
-  address: string;
-  paymentLabel: string;
-  trackingCode?: string;
-  eta?: string;
 }
 
 export interface Address {

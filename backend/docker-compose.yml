@@ -120,6 +120,7 @@ services:
     entrypoint: ["/app/seed"]
     environment:
       DATABASE_URL: postgres://catalog:${CATALOG_DB_PASSWORD}@postgres:5432/catalog?sslmode=disable
+      MEDIA_BASE_URL: ${MEDIA_BASE_URL:?set in .env (public media bucket URL)}
     depends_on:
       catalog-migrate:
         condition: service_completed_successfully
@@ -199,6 +200,8 @@ services:
       PAYMENT_CHARGE_TIMEOUT: 10s
       PAYMENT_RETRY_DELAY: 5s
       FAKE_PROVIDER_LATENCY: 300ms
+      # The storefront sells items above the fake provider's default 100,000 TRY approval limit.
+      FAKE_PROVIDER_MAX_AMOUNT_CENTS: "5000000000"
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
     depends_on:
       payment-migrate:

@@ -9,17 +9,19 @@ import { CraftSection } from "@/components/home/craft-section";
 import { AppointmentSection } from "@/components/home/appointment-section";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
+import { getCatalog } from "@/lib/data/catalog";
 
 export default async function HomePage({ params }: PageProps<"/[locale]">) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const d = await getDictionary(locale);
+  const { products, categories } = await getCatalog(locale);
   return (
     <>
       <Hero />
-      <CategoryStrip d={d} />
+      <CategoryStrip categories={categories} />
       <CapsuleSection d={d} />
-      <FeaturedProducts />
+      <FeaturedProducts products={products} categories={categories} />
       <FilmSection d={d} />
       <ValuesSection d={d} />
       <CraftSection d={d} />

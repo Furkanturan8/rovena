@@ -1,0 +1,1679 @@
+{
+  "categories": [
+    {
+      "slug": "coats",
+      "name": "Paltolar",
+      "translations": {
+        "en": {
+          "name": "Coats"
+        }
+      }
+    },
+    {
+      "slug": "trousers",
+      "name": "Pantolonlar",
+      "translations": {
+        "en": {
+          "name": "Trousers"
+        }
+      }
+    },
+    {
+      "slug": "jackets",
+      "name": "Ceketler",
+      "translations": {
+        "en": {
+          "name": "Jackets"
+        }
+      }
+    },
+    {
+      "slug": "knitwear",
+      "name": "Kaşmir ve Triko",
+      "translations": {
+        "en": {
+          "name": "Cashmere and Knitwear"
+        }
+      }
+    },
+    {
+      "slug": "accessories",
+      "name": "Çanta ve Ayakkabı",
+      "translations": {
+        "en": {
+          "name": "Bags and Shoes"
+        }
+      }
+    }
+  ],
+  "products": [
+    {
+      "slug": "manston-coat-in-dark-brown",
+      "category": "coats",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Manston Trençkot",
+      "description": "Klasik trençkotun yumuşak yapılı, çift yüzlü yünle yeniden yorumu. Dış dikişler elle atılır ve organza şeritlerle desteklenir; düşük kol oyuntusu rahat bir siluet verir. Bel kemeri ve yüzer sırt yokesi hacmi dengeler.",
+      "translations": {
+        "tr": {
+          "kind": "Çift Yüzlü Yün Trençkot",
+          "material": "Çift Yüzlü Yün",
+          "composition": [
+            "%100 Yün, İtalya'da üretim",
+            "Katmanlı omuz kapakları ve düğmeli apoletler",
+            "Bakım: Yalnızca profesyonel kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Manston Trench Coat",
+          "kind": "Double-Faced Wool Trench",
+          "description": "A classic trench reimagined in softly structured, double-faced wool. Exterior seams are sewn by hand and reinforced with organza strips; low armholes give a relaxed silhouette. The belt and floating back yoke balance the volume.",
+          "material": "Double-Faced Wool",
+          "composition": [
+            "100% wool, made in Italy",
+            "Layered gun flaps and button-fastening epaulets",
+            "Care: professional dry cleaning only."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-8842",
+        "craft_hours": 48,
+        "rating": 4.9,
+        "review_count": 18,
+        "released_at": "2025-09-12",
+        "colors": [
+          {
+            "name": "Dark Brown",
+            "hex": "#3b2a22"
+          }
+        ],
+        "edition": "No. 04/20",
+        "tag": "limited",
+        "video": "sewing",
+        "lead_time_days": [
+          7,
+          10
+        ]
+      },
+      "images": [
+        "/media/products/manston-coat-in-dark-brown/2.jpg",
+        "/media/products/manston-coat-in-dark-brown/1.jpg",
+        "/media/products/manston-coat-in-dark-brown/3.jpg",
+        "/media/products/manston-coat-in-dark-brown/4.jpg",
+        "/media/products/manston-coat-in-dark-brown/5.jpg",
+        "/media/products/manston-coat-in-dark-brown/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-8842-XS-DARK-BROWN",
+          "size": "XS",
+          "color": "Dark Brown",
+          "price_cents": 16800000
+        },
+        {
+          "sku": "RV-8842-S-DARK-BROWN",
+          "size": "S",
+          "color": "Dark Brown",
+          "price_cents": 16800000
+        },
+        {
+          "sku": "RV-8842-M-DARK-BROWN",
+          "size": "M",
+          "color": "Dark Brown",
+          "price_cents": 16800000
+        },
+        {
+          "sku": "RV-8842-L-DARK-BROWN",
+          "size": "L",
+          "color": "Dark Brown",
+          "price_cents": 16800000
+        },
+        {
+          "sku": "RV-8842-XL-DARK-BROWN",
+          "size": "XL",
+          "color": "Dark Brown",
+          "price_cents": 16800000
+        }
+      ]
+    },
+    {
+      "slug": "sonti-coat-in-charcoal",
+      "category": "coats",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Sonti Sarma Palto",
+      "description": "İtalya'da, elle bitirilen çift yüzlü kaşmirden sarma palto. Cesur ölçekli yaka açık giyilebilir ya da kuşakla belden toplanarak yuvarlak bir hacim yaratır.",
+      "translations": {
+        "tr": {
+          "kind": "Çift Yüzlü Kaşmir Palto",
+          "material": "Çift Yüzlü Kaşmir",
+          "composition": [
+            "%100 Kaşmir, İtalya'da üretim",
+            "Elle bitirilmiş kenarlar, sarma kuşak",
+            "Bakım: Yalnızca profesyonel kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Sonti Wrap Coat",
+          "kind": "Double-Faced Cashmere Coat",
+          "description": "An enveloping wrap coat made in Italy of double-faced cashmere, finished by hand. The boldly scaled collar can be worn open or cinched with the sash belt for rolling volume.",
+          "material": "Double-Faced Cashmere",
+          "composition": [
+            "100% cashmere, made in Italy",
+            "Hand-finished edges, wrap sash",
+            "Care: professional dry cleaning only."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-9001",
+        "craft_hours": 64,
+        "rating": 5,
+        "review_count": 6,
+        "released_at": "2025-10-05",
+        "colors": [
+          {
+            "name": "Charcoal",
+            "hex": "#44464a"
+          }
+        ],
+        "edition": "No. 01/10",
+        "tag": "custom",
+        "made_to_order_weeks": 6
+      },
+      "images": [
+        "/media/products/sonti-coat-in-charcoal/2.jpg",
+        "/media/products/sonti-coat-in-charcoal/4.jpg",
+        "/media/products/sonti-coat-in-charcoal/1.jpg",
+        "/media/products/sonti-coat-in-charcoal/3.jpg",
+        "/media/products/sonti-coat-in-charcoal/5.jpg",
+        "/media/products/sonti-coat-in-charcoal/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-9001-XS-CHARCOAL",
+          "size": "XS",
+          "color": "Charcoal",
+          "price_cents": 40250000
+        },
+        {
+          "sku": "RV-9001-S-CHARCOAL",
+          "size": "S",
+          "color": "Charcoal",
+          "price_cents": 40250000
+        },
+        {
+          "sku": "RV-9001-M-CHARCOAL",
+          "size": "M",
+          "color": "Charcoal",
+          "price_cents": 40250000
+        },
+        {
+          "sku": "RV-9001-L-CHARCOAL",
+          "size": "L",
+          "color": "Charcoal",
+          "price_cents": 40250000
+        },
+        {
+          "sku": "RV-9001-XL-CHARCOAL",
+          "size": "XL",
+          "color": "Charcoal",
+          "price_cents": 40250000
+        }
+      ]
+    },
+    {
+      "slug": "marlot-coat-in-dark-olive",
+      "category": "coats",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Marlot Kruvaze Palto",
+      "description": "Askeri bir klasiğin modern yorumu: tereyağı yumuşaklığında nappa kuzu derisinden kruvaze palto. Güçlü omuzlar, apoletler ve manşetlerde tekrar eden shearling kaplı yüksek yaka.",
+      "translations": {
+        "tr": {
+          "kind": "Nappa Kuzu Derisi Palto",
+          "material": "Nappa Kuzu Derisi",
+          "composition": [
+            "%100 Kuzu derisi, İtalya'da üretim",
+            "Yaka ve manşetlerde shearling",
+            "Bakım: Deri uzmanına danışınız."
+          ]
+        },
+        "en": {
+          "name": "Marlot Double-Breasted Coat",
+          "kind": "Nappa Lambskin Coat",
+          "description": "A modern take on a military classic: a double-breasted coat in buttery nappa lambskin. Strong shoulders, epaulettes and a high shearling-lined collar that returns at the cuffs.",
+          "material": "Nappa Lambskin",
+          "composition": [
+            "100% lambskin, made in Italy",
+            "Shearling on collar and cuffs",
+            "Care: consult a leather specialist."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-8231",
+        "craft_hours": 56,
+        "rating": 4.8,
+        "review_count": 9,
+        "released_at": "2025-09-25",
+        "colors": [
+          {
+            "name": "Dark Olive",
+            "hex": "#6b5b2a"
+          }
+        ],
+        "tag": "sealed",
+        "lead_time_days": [
+          7,
+          10
+        ]
+      },
+      "images": [
+        "/media/products/marlot-coat-in-dark-olive/3.jpg",
+        "/media/products/marlot-coat-in-dark-olive/1.jpg",
+        "/media/products/marlot-coat-in-dark-olive/2.jpg",
+        "/media/products/marlot-coat-in-dark-olive/4.jpg",
+        "/media/products/marlot-coat-in-dark-olive/5.jpg",
+        "/media/products/marlot-coat-in-dark-olive/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-8231-XS-DARK-OLIVE",
+          "size": "XS",
+          "color": "Dark Olive",
+          "price_cents": 31150000
+        },
+        {
+          "sku": "RV-8231-S-DARK-OLIVE",
+          "size": "S",
+          "color": "Dark Olive",
+          "price_cents": 31150000
+        },
+        {
+          "sku": "RV-8231-M-DARK-OLIVE",
+          "size": "M",
+          "color": "Dark Olive",
+          "price_cents": 31150000
+        },
+        {
+          "sku": "RV-8231-L-DARK-OLIVE",
+          "size": "L",
+          "color": "Dark Olive",
+          "price_cents": 31150000
+        },
+        {
+          "sku": "RV-8231-XL-DARK-OLIVE",
+          "size": "XL",
+          "color": "Dark Olive",
+          "price_cents": 31150000
+        }
+      ]
+    },
+    {
+      "slug": "simone-sweater-in-bark",
+      "category": "knitwear",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Simone Kazak",
+      "description": "Yoğun, kadifemsi dokusu zamanla yumuşayan saf kaşmirden dolgun bir kazak. Saddle kol yapısı yakada örme bantla sabitlenir; yarım balıkçı yaka ve ribanalı bitişler.",
+      "translations": {
+        "tr": {
+          "kind": "Saf Kaşmir Kazak",
+          "material": "Saf Kaşmir",
+          "composition": [
+            "%100 Kaşmir",
+            "Bakım: Elde, soğuk yıkama; düz kurutma."
+          ]
+        },
+        "en": {
+          "name": "Simone Sweater",
+          "kind": "Pure Cashmere Sweater",
+          "description": "A robust, refined pullover in dense, velvety cashmere that softens over time. The saddle-sleeve silhouette is stabilized by a knitted tape at the neck, with a mock neck and ribbed trim.",
+          "material": "Pure Cashmere",
+          "composition": [
+            "100% cashmere",
+            "Care: hand wash cold; dry flat."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-5503",
+        "craft_hours": 18,
+        "rating": 4.9,
+        "review_count": 42,
+        "released_at": "2025-10-08",
+        "colors": [
+          {
+            "name": "Bark",
+            "hex": "#3a2a22"
+          }
+        ],
+        "tag": "new",
+        "video": "wool",
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/simone-sweater-in-bark/3.jpg",
+        "/media/products/simone-sweater-in-bark/1.jpg",
+        "/media/products/simone-sweater-in-bark/2.jpg",
+        "/media/products/simone-sweater-in-bark/4.jpg",
+        "/media/products/simone-sweater-in-bark/5.jpg",
+        "/media/products/simone-sweater-in-bark/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-5503-XS-BARK",
+          "size": "XS",
+          "color": "Bark",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5503-S-BARK",
+          "size": "S",
+          "color": "Bark",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5503-M-BARK",
+          "size": "M",
+          "color": "Bark",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5503-L-BARK",
+          "size": "L",
+          "color": "Bark",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5503-XL-BARK",
+          "size": "XL",
+          "color": "Bark",
+          "price_cents": 6600000
+        }
+      ]
+    },
+    {
+      "slug": "hewit-jacket-in-dark-navy",
+      "category": "jackets",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Hewit Bomber Ceket",
+      "description": "Son derece yumuşak plongé deriden yeniden tasarlanmış bomber. Rahat ve yuvarlak siluet, temiz açılı yaka, düşük omuz dikişleri ve çift yönlü fermuar.",
+      "translations": {
+        "tr": {
+          "kind": "Plongé Deri Bomber",
+          "material": "Plongé Kuzu Derisi",
+          "composition": [
+            "%100 Kuzu derisi",
+            "Çift yönlü fermuar",
+            "Bakım: Deri uzmanına danışınız."
+          ]
+        },
+        "en": {
+          "name": "Hewit Bomber Jacket",
+          "kind": "Plongé Leather Bomber",
+          "description": "A reimagined bomber in exceptionally soft plongé leather. Relaxed, rounded silhouette with a clean angular neckline, dropped shoulder seams and a two-way zipper.",
+          "material": "Plongé Lambskin",
+          "composition": [
+            "100% lambskin",
+            "Two-way zipper",
+            "Care: consult a leather specialist."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-7021",
+        "craft_hours": 40,
+        "rating": 4.8,
+        "review_count": 14,
+        "released_at": "2025-10-09",
+        "colors": [
+          {
+            "name": "Dark Navy",
+            "hex": "#1f2a44"
+          }
+        ],
+        "tag": "new",
+        "lead_time_days": [
+          3,
+          5
+        ]
+      },
+      "images": [
+        "/media/products/hewit-jacket-in-dark-navy/3.jpg",
+        "/media/products/hewit-jacket-in-dark-navy/1.jpg",
+        "/media/products/hewit-jacket-in-dark-navy/2.jpg",
+        "/media/products/hewit-jacket-in-dark-navy/4.jpg",
+        "/media/products/hewit-jacket-in-dark-navy/5.jpg",
+        "/media/products/hewit-jacket-in-dark-navy/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-7021-XS-DARK-NAVY",
+          "size": "XS",
+          "color": "Dark Navy",
+          "price_cents": 23450000
+        },
+        {
+          "sku": "RV-7021-S-DARK-NAVY",
+          "size": "S",
+          "color": "Dark Navy",
+          "price_cents": 23450000
+        },
+        {
+          "sku": "RV-7021-M-DARK-NAVY",
+          "size": "M",
+          "color": "Dark Navy",
+          "price_cents": 23450000
+        },
+        {
+          "sku": "RV-7021-L-DARK-NAVY",
+          "size": "L",
+          "color": "Dark Navy",
+          "price_cents": 23450000
+        },
+        {
+          "sku": "RV-7021-XL-DARK-NAVY",
+          "size": "XL",
+          "color": "Dark Navy",
+          "price_cents": 23450000
+        }
+      ]
+    },
+    {
+      "slug": "alder-jacket-in-charcoal",
+      "category": "jackets",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Alder Moto Ceket",
+      "description": "Moto siluetinin mevsimsiz yünle yeniden yorumu. Çift yüzlü yapı, grafik detaylarla (zarif yaka, biyeli cepler, kemer kulpları) dökümlü, oversize bir gövde tanımlar.",
+      "translations": {
+        "tr": {
+          "kind": "Çift Yüzlü Yün Ceket",
+          "material": "Çift Yüzlü Yün",
+          "composition": [
+            "%100 Yün",
+            "Bakım: Profesyonel kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Alder Moto Jacket",
+          "kind": "Double-Faced Wool Jacket",
+          "description": "A moto silhouette reimagined in seasonless wool. Double-faced construction defines a draped, oversized body with graphic details: a sleek collar, welt pockets and belt loops.",
+          "material": "Double-Faced Wool",
+          "composition": [
+            "100% wool",
+            "Care: professional dry cleaning."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-7133",
+        "craft_hours": 30,
+        "rating": 4.7,
+        "review_count": 11,
+        "released_at": "2025-09-20",
+        "colors": [
+          {
+            "name": "Charcoal",
+            "hex": "#44464a"
+          }
+        ],
+        "lead_time_days": [
+          3,
+          5
+        ]
+      },
+      "images": [
+        "/media/products/alder-jacket-in-charcoal/3.jpg",
+        "/media/products/alder-jacket-in-charcoal/1.jpg",
+        "/media/products/alder-jacket-in-charcoal/2.jpg",
+        "/media/products/alder-jacket-in-charcoal/4.jpg",
+        "/media/products/alder-jacket-in-charcoal/5.jpg",
+        "/media/products/alder-jacket-in-charcoal/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-7133-XS-CHARCOAL",
+          "size": "XS",
+          "color": "Charcoal",
+          "price_cents": 11200000
+        },
+        {
+          "sku": "RV-7133-S-CHARCOAL",
+          "size": "S",
+          "color": "Charcoal",
+          "price_cents": 11200000
+        },
+        {
+          "sku": "RV-7133-M-CHARCOAL",
+          "size": "M",
+          "color": "Charcoal",
+          "price_cents": 11200000
+        },
+        {
+          "sku": "RV-7133-L-CHARCOAL",
+          "size": "L",
+          "color": "Charcoal",
+          "price_cents": 11200000
+        },
+        {
+          "sku": "RV-7133-XL-CHARCOAL",
+          "size": "XL",
+          "color": "Charcoal",
+          "price_cents": 11200000
+        }
+      ]
+    },
+    {
+      "slug": "meko-jacket-in-black",
+      "category": "jackets",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Meko Kısa Ceket",
+      "description": "Opera pelerinlerinden ilham alan mimari bir ceket. Yumuşak yapılı çift yüzlü yünden, kısa ve kruvaze; abartılı omuzlardaki iç destek 'yüzen' bir yaka çizgisi yaratır. Uzun kollar heykelsi sırtla dengelenir.",
+      "translations": {
+        "tr": {
+          "kind": "Mimari Opera Ceketi",
+          "material": "Çift Yüzlü Yün",
+          "composition": [
+            "%100 Yün, ABD'de üretim",
+            "Bakım: Profesyonel kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Meko Cropped Jacket",
+          "kind": "Architectural Opera Jacket",
+          "description": "An architectural jacket inspired by opera capes. Cropped and double-breasted in softly structured double-faced wool; internal support at the exaggerated shoulders creates a floating neckline. Extended sleeves are balanced by a sculptural back.",
+          "material": "Double-Faced Wool",
+          "composition": [
+            "100% wool, made in the USA",
+            "Care: professional dry cleaning."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-7140",
+        "craft_hours": 32,
+        "rating": 4.6,
+        "review_count": 8,
+        "released_at": "2025-09-08",
+        "colors": [
+          {
+            "name": "Black",
+            "hex": "#16161a"
+          }
+        ],
+        "tag": "sealed",
+        "lead_time_days": [
+          3,
+          5
+        ]
+      },
+      "images": [
+        "/media/products/meko-jacket-in-black/3.jpg",
+        "/media/products/meko-jacket-in-black/1.jpg",
+        "/media/products/meko-jacket-in-black/2.jpg",
+        "/media/products/meko-jacket-in-black/4.jpg",
+        "/media/products/meko-jacket-in-black/5.jpg",
+        "/media/products/meko-jacket-in-black/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-7140-34-BLACK",
+          "size": "34",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-36-BLACK",
+          "size": "36",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-38-BLACK",
+          "size": "38",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-40-BLACK",
+          "size": "40",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-42-BLACK",
+          "size": "42",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-44-BLACK",
+          "size": "44",
+          "color": "Black",
+          "price_cents": 12600000
+        },
+        {
+          "sku": "RV-7140-46-BLACK",
+          "size": "46",
+          "color": "Black",
+          "price_cents": 12600000
+        }
+      ]
+    },
+    {
+      "slug": "august-pant-in-charcoal",
+      "category": "trousers",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "August Pantolon",
+      "description": "Erkek terziliğinden ilhamla, hafif ve lüks İtalyan yün-kaşmir gömleklik kumaştan orta bel pantolon. Yakın yerleştirilmiş çift ters pileler temiz çizgiyi korur; önde hafifçe aşağı iner.",
+      "translations": {
+        "tr": {
+          "kind": "Pileli Yün-Kaşmir Pantolon",
+          "material": "Yün ve Kaşmir",
+          "composition": [
+            "%90 Yün, %8 Kaşmir, %2 Elastan",
+            "Kemer kulpları, yan ve arka biyeli cepler",
+            "Bakım: Kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "August Trousers",
+          "kind": "Pleated Wool-Cashmere Trousers",
+          "description": "A menswear-inspired, mid-rise trouser in lightweight, luxurious Italian wool-cashmere shirting. Paired reverse pleats sit close together to keep the lines clean; it dips slightly lower in front.",
+          "material": "Wool and Cashmere",
+          "composition": [
+            "90% wool, 8% cashmere, 2% elastane",
+            "Belt loops, on-seam side pockets and back welt pockets",
+            "Care: dry clean."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-4410",
+        "craft_hours": 16,
+        "rating": 4.7,
+        "review_count": 33,
+        "released_at": "2025-09-01",
+        "colors": [
+          {
+            "name": "Charcoal",
+            "hex": "#44464a"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/august-pant-in-charcoal/3.jpg",
+        "/media/products/august-pant-in-charcoal/1.jpg",
+        "/media/products/august-pant-in-charcoal/2.jpg",
+        "/media/products/august-pant-in-charcoal/4.jpg",
+        "/media/products/august-pant-in-charcoal/5.jpg",
+        "/media/products/august-pant-in-charcoal/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-4410-34-CHARCOAL",
+          "size": "34",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-36-CHARCOAL",
+          "size": "36",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-38-CHARCOAL",
+          "size": "38",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-40-CHARCOAL",
+          "size": "40",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-42-CHARCOAL",
+          "size": "42",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-44-CHARCOAL",
+          "size": "44",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        },
+        {
+          "sku": "RV-4410-46-CHARCOAL",
+          "size": "46",
+          "color": "Charcoal",
+          "price_cents": 5550000
+        }
+      ]
+    },
+    {
+      "slug": "hunter-pant-in-desert-sand",
+      "category": "trousers",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Hunter Pantolon",
+      "description": "Dökümü için seçilmiş hafif ve lüks yün-kaşmir kumaştan tailored pantolon. Belde daha aşağıda oturan dar paça; bel düğmesi, iç cepler ve arkada tek kapaklı cep.",
+      "translations": {
+        "tr": {
+          "kind": "Yün-Kaşmir Pantolon",
+          "material": "Yün ve Kaşmir",
+          "composition": [
+            "%90 Yün, %8 Kaşmir, %2 Elastan",
+            "İtalya'da üretim",
+            "Bakım: Kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Hunter Trousers",
+          "kind": "Wool-Cashmere Trousers",
+          "description": "A tailored trouser in lightweight, luxurious wool-cashmere shirting chosen for its drape. A sleek, narrow leg that sits lower on the waist, with a button closure, inset side pockets and a single flap pocket at the back.",
+          "material": "Wool and Cashmere",
+          "composition": [
+            "90% wool, 8% cashmere, 2% elastane",
+            "Made in Italy",
+            "Care: dry clean."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-4422",
+        "craft_hours": 14,
+        "rating": 4.6,
+        "review_count": 12,
+        "released_at": "2025-10-02",
+        "colors": [
+          {
+            "name": "Desert Sand",
+            "hex": "#c2a77e"
+          }
+        ],
+        "tag": "new",
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/hunter-pant-in-desert-sand/3.jpg",
+        "/media/products/hunter-pant-in-desert-sand/1.jpg",
+        "/media/products/hunter-pant-in-desert-sand/2.jpg",
+        "/media/products/hunter-pant-in-desert-sand/4.jpg",
+        "/media/products/hunter-pant-in-desert-sand/5.jpg",
+        "/media/products/hunter-pant-in-desert-sand/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-4422-34-DESERT-SAND",
+          "size": "34",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-36-DESERT-SAND",
+          "size": "36",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-38-DESERT-SAND",
+          "size": "38",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-40-DESERT-SAND",
+          "size": "40",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-42-DESERT-SAND",
+          "size": "42",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-44-DESERT-SAND",
+          "size": "44",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        },
+        {
+          "sku": "RV-4422-46-DESERT-SAND",
+          "size": "46",
+          "color": "Desert Sand",
+          "price_cents": 4850000
+        }
+      ]
+    },
+    {
+      "slug": "clover-pant-in-dark-brown",
+      "category": "trousers",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Clover Pantolon",
+      "description": "Çift yüzlü yünden beli lastikli pantolon. Kısa paça; uzatan çizgileri cesur kavislerle buluşturur. Temiz arka, yan cepler.",
+      "translations": {
+        "tr": {
+          "kind": "Çift Yüzlü Yün Pantolon",
+          "material": "Çift Yüzlü Yün",
+          "composition": [
+            "%100 Yün",
+            "Bakım: Profesyonel kuru temizleme."
+          ]
+        },
+        "en": {
+          "name": "Clover Trousers",
+          "kind": "Double-Faced Wool Trousers",
+          "description": "A pull-on trouser in double-faced wool. The cropped silhouette combines elongating lines with bold curves. Clean back, elasticated waist, side pockets.",
+          "material": "Double-Faced Wool",
+          "composition": [
+            "100% wool",
+            "Care: professional dry cleaning."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-4430",
+        "craft_hours": 15,
+        "rating": 4.8,
+        "review_count": 19,
+        "released_at": "2025-08-18",
+        "colors": [
+          {
+            "name": "Dark Brown",
+            "hex": "#3b2a22"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/clover-pant-in-dark-brown/3.jpg",
+        "/media/products/clover-pant-in-dark-brown/1.jpg",
+        "/media/products/clover-pant-in-dark-brown/2.jpg",
+        "/media/products/clover-pant-in-dark-brown/4.jpg",
+        "/media/products/clover-pant-in-dark-brown/5.jpg",
+        "/media/products/clover-pant-in-dark-brown/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-4430-XS-DARK-BROWN",
+          "size": "XS",
+          "color": "Dark Brown",
+          "price_cents": 6950000
+        },
+        {
+          "sku": "RV-4430-S-DARK-BROWN",
+          "size": "S",
+          "color": "Dark Brown",
+          "price_cents": 6950000
+        },
+        {
+          "sku": "RV-4430-M-DARK-BROWN",
+          "size": "M",
+          "color": "Dark Brown",
+          "price_cents": 6950000
+        },
+        {
+          "sku": "RV-4430-L-DARK-BROWN",
+          "size": "L",
+          "color": "Dark Brown",
+          "price_cents": 6950000
+        },
+        {
+          "sku": "RV-4430-XL-DARK-BROWN",
+          "size": "XL",
+          "color": "Dark Brown",
+          "price_cents": 6950000
+        }
+      ]
+    },
+    {
+      "slug": "cate-handbag-in-black-haircalf",
+      "category": "accessories",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Cate Çanta",
+      "description": "Kaplı bir çerçeveyle yapılandırılmış, hem ayrıntılı hem çevik bir kısa saplı siluet. 18 ayar altın kaplama özel kiss-lock kapama.",
+      "translations": {
+        "tr": {
+          "kind": "Kısa Saplı Deri Çanta",
+          "material": "Tüylü Dana Derisi",
+          "composition": [
+            "%100 Dana derisi",
+            "Donanım: 18 ayar altın kaplama",
+            "Bakım: Deri uzmanına danışınız."
+          ]
+        },
+        "en": {
+          "name": "Cate Handbag",
+          "kind": "Top-Handle Leather Bag",
+          "description": "Structured by a covered frame, this top-handled silhouette is at once intricate and nimble. Custom kiss-lock clasp plated in 18-karat gold.",
+          "material": "Haircalf",
+          "composition": [
+            "100% calfskin",
+            "Hardware: 18-karat gold plated",
+            "Care: consult a leather specialist."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-3308",
+        "craft_hours": 24,
+        "rating": 4.9,
+        "review_count": 27,
+        "released_at": "2025-07-15",
+        "colors": [
+          {
+            "name": "Black",
+            "hex": "#16161a"
+          }
+        ],
+        "edition": "No. 12/20",
+        "tag": "limited",
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/cate-handbag-in-black-haircalf/1.jpg",
+        "/media/products/cate-handbag-in-black-haircalf/2.jpg",
+        "/media/products/cate-handbag-in-black-haircalf/3.jpg",
+        "/media/products/cate-handbag-in-black-haircalf/4.jpg",
+        "/media/products/cate-handbag-in-black-haircalf/5.jpg",
+        "/media/products/cate-handbag-in-black-haircalf/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-3308-OS-BLACK",
+          "size": "OS",
+          "color": "Black",
+          "price_cents": 19600000
+        }
+      ]
+    },
+    {
+      "slug": "clive-ankle-boot-35-in-caramel",
+      "category": "accessories",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Clive Bilek Bot",
+      "description": "Eskimiş Western klasiklerinden ilham alan, günlük kullanım için oranlanmış keskin ama rustik bir bilek botu. Sivri burun, kasıtlı eğimli konç; el işi split süet, dikişli welt ve patinalı yığma topuk.",
+      "translations": {
+        "tr": {
+          "kind": "Süet Western Bot",
+          "material": "Split Süet Dana Derisi",
+          "composition": [
+            "Dış: Split süet dana derisi",
+            "Taban ve topuk: Patinalı deri",
+            "Bakım: Süet fırçası ve koruyucu sprey."
+          ]
+        },
+        "en": {
+          "name": "Clive Ankle Boot",
+          "kind": "Suede Western Boot",
+          "description": "A sharp yet rustic ankle boot inspired by well-worn Western classics and proportioned for daily wear. Snip-toe silhouette with a deliberately tilted shaft in hand-worked split-suede calfskin, stitched welt and stacked patinated-leather heel.",
+          "material": "Split Suede Calfskin",
+          "composition": [
+            "Upper: split-suede calfskin",
+            "Sole and heel: patinated leather",
+            "Care: suede brush and protective spray."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-3420",
+        "craft_hours": 16,
+        "rating": 4.7,
+        "review_count": 15,
+        "released_at": "2025-09-28",
+        "colors": [
+          {
+            "name": "Caramel",
+            "hex": "#b9772d"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/clive-ankle-boot-35-in-caramel/1.jpg",
+        "/media/products/clive-ankle-boot-35-in-caramel/2.jpg",
+        "/media/products/clive-ankle-boot-35-in-caramel/3.jpg",
+        "/media/products/clive-ankle-boot-35-in-caramel/4.jpg",
+        "/media/products/clive-ankle-boot-35-in-caramel/5.jpg",
+        "/media/products/clive-ankle-boot-35-in-caramel/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-3420-36-CARAMEL",
+          "size": "36",
+          "color": "Caramel",
+          "price_cents": 5900000
+        },
+        {
+          "sku": "RV-3420-37-CARAMEL",
+          "size": "37",
+          "color": "Caramel",
+          "price_cents": 5900000
+        },
+        {
+          "sku": "RV-3420-38-CARAMEL",
+          "size": "38",
+          "color": "Caramel",
+          "price_cents": 5900000
+        },
+        {
+          "sku": "RV-3420-39-CARAMEL",
+          "size": "39",
+          "color": "Caramel",
+          "price_cents": 5900000
+        },
+        {
+          "sku": "RV-3420-40-CARAMEL",
+          "size": "40",
+          "color": "Caramel",
+          "price_cents": 5900000
+        },
+        {
+          "sku": "RV-3420-41-CARAMEL",
+          "size": "41",
+          "color": "Caramel",
+          "price_cents": 5900000
+        }
+      ]
+    },
+    {
+      "slug": "blake-crossbody-bag-in-midnight-navy",
+      "category": "accessories",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Blake Çapraz Çanta",
+      "description": "Kutu siluetini yeniden tanımlayan, çizgi ve kıvrımı birleştiren dinamik kapaklı çanta. Altın tonlu imza donanım, cepli iç bölme; çıkarılabilir ve ayarlanabilir askıyla omuzda ya da çapraz taşınır.",
+      "translations": {
+        "tr": {
+          "kind": "Kapaklı Deri Çanta",
+          "material": "Dana Derisi ve Süet",
+          "composition": [
+            "%100 Dana derisi",
+            "Altın tonlu donanım",
+            "Ölçü: 24 × 16 × 6 cm"
+          ]
+        },
+        "en": {
+          "name": "Blake Crossbody Bag",
+          "kind": "Flap Leather Bag",
+          "description": "A dynamic flap-front handbag that redefines the box silhouette, combining line with curves. Signature gold hardware and internal pocketing; the adjustable, removable strap can be worn on the shoulder or across the body.",
+          "material": "Calfskin and Suede",
+          "composition": [
+            "100% calfskin",
+            "Gold-tone hardware",
+            "Size: 24 × 16 × 6 cm"
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-3312",
+        "craft_hours": 20,
+        "rating": 4.8,
+        "review_count": 19,
+        "released_at": "2025-08-18",
+        "colors": [
+          {
+            "name": "Midnight Navy",
+            "hex": "#1b2340"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/blake-crossbody-bag-in-midnight-navy/1.jpg",
+        "/media/products/blake-crossbody-bag-in-midnight-navy/2.jpg",
+        "/media/products/blake-crossbody-bag-in-midnight-navy/3.jpg",
+        "/media/products/blake-crossbody-bag-in-midnight-navy/4.jpg",
+        "/media/products/blake-crossbody-bag-in-midnight-navy/5.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-3312-OS-MIDNIGHT-NAVY",
+          "size": "OS",
+          "color": "Midnight Navy",
+          "price_cents": 15400000
+        }
+      ]
+    },
+    {
+      "slug": "donna-shoulder-bag-in-ebano",
+      "category": "accessories",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Donna Omuz Çantası",
+      "description": "Zengin rengi, mat derinliği ve kalıcı yumuşaklığı için seçilmiş ipeksi süet dana derisinden uzatılmış çanta. Doğu-batı siluetli, panelli ve körüklü; uzun tüp saplar omuzda ya da elde taşınır.",
+      "translations": {
+        "tr": {
+          "kind": "Süet Omuz Çantası",
+          "material": "Süet Dana Derisi",
+          "composition": [
+            "%100 Dana derisi, İtalya'da üretim",
+            "Çift yönlü fermuarlı üst",
+            "Bakım: Süet fırçası."
+          ]
+        },
+        "en": {
+          "name": "Donna Shoulder Bag",
+          "kind": "Suede Shoulder Bag",
+          "description": "An elongated handbag in silky calfskin suede chosen for its rich color, matte depth and enduring softness. East-west silhouette, paneled and gusseted, with long tubular handles to carry on the shoulder or by hand.",
+          "material": "Calfskin Suede",
+          "composition": [
+            "100% calfskin, made in Italy",
+            "Two-way zipper top",
+            "Care: suede brush."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-3352",
+        "craft_hours": 18,
+        "rating": 4.7,
+        "review_count": 12,
+        "released_at": "2025-10-04",
+        "colors": [
+          {
+            "name": "Ebano",
+            "hex": "#2d1f18"
+          }
+        ],
+        "tag": "new",
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/donna-shoulder-bag-in-ebano/1.jpg",
+        "/media/products/donna-shoulder-bag-in-ebano/2.jpg",
+        "/media/products/donna-shoulder-bag-in-ebano/3.jpg",
+        "/media/products/donna-shoulder-bag-in-ebano/4.jpg",
+        "/media/products/donna-shoulder-bag-in-ebano/5.jpg",
+        "/media/products/donna-shoulder-bag-in-ebano/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-3352-OS-EBANO",
+          "size": "OS",
+          "color": "Ebano",
+          "price_cents": 9400000
+        }
+      ]
+    },
+    {
+      "slug": "simone-sweater-in-pewter",
+      "category": "knitwear",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Simone Kazak",
+      "description": "Yoğun, kadifemsi dokusu zamanla yumuşayan saf kaşmirden dolgun bir kazak. Saddle kol yapısı yakada örme bantla sabitlenir; yarım balıkçı yaka ve ribanalı bitişler.",
+      "translations": {
+        "tr": {
+          "kind": "Saf Kaşmir Kazak",
+          "material": "Saf Kaşmir",
+          "composition": [
+            "%100 Kaşmir",
+            "Bakım: Elde, soğuk yıkama; düz kurutma."
+          ]
+        },
+        "en": {
+          "name": "Simone Sweater",
+          "kind": "Pure Cashmere Sweater",
+          "description": "A robust, refined pullover in dense, velvety cashmere that softens over time. The saddle-sleeve silhouette is stabilized by a knitted tape at the neck, with a mock neck and ribbed trim.",
+          "material": "Pure Cashmere",
+          "composition": [
+            "100% cashmere",
+            "Care: hand wash cold; dry flat."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-5504",
+        "craft_hours": 18,
+        "rating": 4.9,
+        "review_count": 37,
+        "released_at": "2025-09-14",
+        "colors": [
+          {
+            "name": "Pewter",
+            "hex": "#b9b9b6"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/simone-sweater-in-pewter/3.jpg",
+        "/media/products/simone-sweater-in-pewter/1.jpg",
+        "/media/products/simone-sweater-in-pewter/2.jpg",
+        "/media/products/simone-sweater-in-pewter/4.jpg",
+        "/media/products/simone-sweater-in-pewter/5.jpg",
+        "/media/products/simone-sweater-in-pewter/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-5504-XS-PEWTER",
+          "size": "XS",
+          "color": "Pewter",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5504-S-PEWTER",
+          "size": "S",
+          "color": "Pewter",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5504-M-PEWTER",
+          "size": "M",
+          "color": "Pewter",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5504-L-PEWTER",
+          "size": "L",
+          "color": "Pewter",
+          "price_cents": 6600000
+        },
+        {
+          "sku": "RV-5504-XL-PEWTER",
+          "size": "XL",
+          "color": "Pewter",
+          "price_cents": 6600000
+        }
+      ]
+    },
+    {
+      "slug": "niels-cardigan-in-sterling",
+      "category": "knitwear",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Niels Hırka",
+      "description": "Melanj ipliğinin olağanüstü yumuşaklığını öne çıkaran hafif hırka: kaşmir ve ipek karışımı sarıcı sıcaklık ve rafine bir bitiş verir. Kısa, hafif büzük kesim; gevşek gerginlikli jarse örgü ve ribanalı bitişler.",
+      "translations": {
+        "tr": {
+          "kind": "Kaşmir-İpek Hırka",
+          "material": "Kaşmir ve İpek",
+          "composition": [
+            "%76 Kaşmir, %24 İpek",
+            "Bakım: Elde yıkama."
+          ]
+        },
+        "en": {
+          "name": "Niels Cardigan",
+          "kind": "Cashmere-Silk Cardigan",
+          "description": "A lightweight cardigan that spotlights the softness of its mélange yarn, a cashmere and silk blend offering enveloping warmth with a refined finish. Shrunken, gently cropped fit in a loose-tension jersey stitch with ribbed trim.",
+          "material": "Cashmere and Silk",
+          "composition": [
+            "76% cashmere, 24% silk",
+            "Care: hand wash."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-5510",
+        "craft_hours": 22,
+        "rating": 4.8,
+        "review_count": 25,
+        "released_at": "2025-09-30",
+        "colors": [
+          {
+            "name": "Sterling",
+            "hex": "#8a8a8a"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/niels-cardigan-in-sterling/3.jpg",
+        "/media/products/niels-cardigan-in-sterling/1.jpg",
+        "/media/products/niels-cardigan-in-sterling/2.jpg",
+        "/media/products/niels-cardigan-in-sterling/4.jpg",
+        "/media/products/niels-cardigan-in-sterling/5.jpg",
+        "/media/products/niels-cardigan-in-sterling/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-5510-XS-STERLING",
+          "size": "XS",
+          "color": "Sterling",
+          "price_cents": 8400000
+        },
+        {
+          "sku": "RV-5510-S-STERLING",
+          "size": "S",
+          "color": "Sterling",
+          "price_cents": 8400000
+        },
+        {
+          "sku": "RV-5510-M-STERLING",
+          "size": "M",
+          "color": "Sterling",
+          "price_cents": 8400000
+        },
+        {
+          "sku": "RV-5510-L-STERLING",
+          "size": "L",
+          "color": "Sterling",
+          "price_cents": 8400000
+        },
+        {
+          "sku": "RV-5510-XL-STERLING",
+          "size": "XL",
+          "color": "Sterling",
+          "price_cents": 8400000
+        }
+      ]
+    },
+    {
+      "slug": "elias-embroidery-sweater-in-ivory",
+      "category": "knitwear",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Elias İşlemeli Kazak",
+      "description": "Kaşmir ve moher karışımı, örgü desenli kazak üzerinde sanatsal nakışlar. Düşük omuzlarla rahatlatılmış siluet; yakada, manşetlerde ve etek ucunda 1x1 ribana.",
+      "translations": {
+        "tr": {
+          "kind": "Örgü Desenli Kazak",
+          "material": "Kaşmir ve Moher",
+          "composition": [
+            "%85 Kaşmir, %15 Moher",
+            "El işi çiçek nakışı",
+            "Bakım: Elde yıkama."
+          ]
+        },
+        "en": {
+          "name": "Elias Embroidered Sweater",
+          "kind": "Cable-Knit Sweater",
+          "description": "An artfully embroidered pullover in a cable-knit blend of cashmere and mohair. Dropped shoulders ease the silhouette, with 1x1 ribbing at the neck, cuffs and hem.",
+          "material": "Cashmere and Mohair",
+          "composition": [
+            "85% cashmere, 15% mohair",
+            "Hand-embroidered floral motifs",
+            "Care: hand wash."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-5522",
+        "craft_hours": 36,
+        "rating": 4.9,
+        "review_count": 30,
+        "released_at": "2025-10-12",
+        "colors": [
+          {
+            "name": "Ivory",
+            "hex": "#f0e9dc"
+          }
+        ],
+        "tag": "sealed",
+        "lead_time_days": [
+          3,
+          5
+        ]
+      },
+      "images": [
+        "/media/products/elias-embroidery-sweater-in-ivory/3.jpg",
+        "/media/products/elias-embroidery-sweater-in-ivory/1.jpg",
+        "/media/products/elias-embroidery-sweater-in-ivory/2.jpg",
+        "/media/products/elias-embroidery-sweater-in-ivory/4.jpg",
+        "/media/products/elias-embroidery-sweater-in-ivory/5.jpg",
+        "/media/products/elias-embroidery-sweater-in-ivory/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-5522-XS-IVORY",
+          "size": "XS",
+          "color": "Ivory",
+          "price_cents": 11900000
+        },
+        {
+          "sku": "RV-5522-S-IVORY",
+          "size": "S",
+          "color": "Ivory",
+          "price_cents": 11900000
+        },
+        {
+          "sku": "RV-5522-M-IVORY",
+          "size": "M",
+          "color": "Ivory",
+          "price_cents": 11900000
+        },
+        {
+          "sku": "RV-5522-L-IVORY",
+          "size": "L",
+          "color": "Ivory",
+          "price_cents": 11900000
+        },
+        {
+          "sku": "RV-5522-XL-IVORY",
+          "size": "XL",
+          "color": "Ivory",
+          "price_cents": 11900000
+        }
+      ]
+    },
+    {
+      "slug": "wilson-coat-in-black",
+      "category": "coats",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Wilson Caban",
+      "description": "Dokusu ve dayanıklılığı için seçilmiş nappa kuzu derisinden rahat bir caban. Kıvırcık shearling yaka, klasik iş giysisinden ilham alan düğmeli ön, grafik dikişler; kapitone astar ve ördek tüyü dolgu.",
+      "translations": {
+        "tr": {
+          "kind": "Shearling Yakalı Deri Caban",
+          "material": "Nappa Kuzu Derisi",
+          "composition": [
+            "%100 Kuzu derisi, İtalya'da üretim",
+            "Astar: Kapitone, ördek tüyü dolgu",
+            "Bakım: Deri uzmanına danışınız."
+          ]
+        },
+        "en": {
+          "name": "Wilson Caban Coat",
+          "kind": "Shearling-Collar Leather Coat",
+          "description": "A relaxed caban in robust nappa lambskin chosen for its grained texture and durability. Curly shearling collar, a button front inspired by classic workwear and graphic stitching; quilted lining with duck-down insulation.",
+          "material": "Nappa Lambskin",
+          "composition": [
+            "100% lambskin, made in Italy",
+            "Lining: quilted, duck-down insulation",
+            "Care: consult a leather specialist."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-8330",
+        "craft_hours": 44,
+        "rating": 4.8,
+        "review_count": 13,
+        "released_at": "2025-10-10",
+        "colors": [
+          {
+            "name": "Black",
+            "hex": "#16161a"
+          }
+        ],
+        "lead_time_days": [
+          7,
+          10
+        ]
+      },
+      "images": [
+        "/media/products/wilson-coat-in-black/3.jpg",
+        "/media/products/wilson-coat-in-black/1.jpg",
+        "/media/products/wilson-coat-in-black/2.jpg",
+        "/media/products/wilson-coat-in-black/4.jpg",
+        "/media/products/wilson-coat-in-black/5.jpg",
+        "/media/products/wilson-coat-in-black/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-8330-XS-BLACK",
+          "size": "XS",
+          "color": "Black",
+          "price_cents": 22400000
+        },
+        {
+          "sku": "RV-8330-S-BLACK",
+          "size": "S",
+          "color": "Black",
+          "price_cents": 22400000
+        },
+        {
+          "sku": "RV-8330-M-BLACK",
+          "size": "M",
+          "color": "Black",
+          "price_cents": 22400000
+        },
+        {
+          "sku": "RV-8330-L-BLACK",
+          "size": "L",
+          "color": "Black",
+          "price_cents": 22400000
+        },
+        {
+          "sku": "RV-8330-XL-BLACK",
+          "size": "XL",
+          "color": "Black",
+          "price_cents": 22400000
+        }
+      ]
+    },
+    {
+      "slug": "petra-knee-high-boot-in-black",
+      "category": "accessories",
+      "brand": "Rovena",
+      "status": "active",
+      "name": "Petra Diz Altı Çizme",
+      "description": "Yapılandırılmış hassasiyette bir diz altı çizme: kare burun, düz konç, ince deri taban ve yığma blok topuk ile güçlü bir dikeylik. İpeksi dana derisi anilin boyalıdır; deriyi doğal karakteriyle korur.",
+      "translations": {
+        "tr": {
+          "kind": "Deri Çizme",
+          "material": "Anilin Dana Derisi",
+          "composition": [
+            "Dış ve taban: Dana derisi, İtalya'da üretim",
+            "Topuk: 7 cm blok topuk",
+            "Bakım: Deri bakım kremi."
+          ]
+        },
+        "en": {
+          "name": "Petra Knee-High Boot",
+          "kind": "Leather Boot",
+          "description": "A knee-high boot of structured precision: a square toe, straight shaft, sleek leather sole and stacked block heel express strong verticality. Saddle-soft calfskin is aniline dyed to preserve the natural character of the leather.",
+          "material": "Aniline Calfskin",
+          "composition": [
+            "Upper and sole: calfskin, made in Italy",
+            "Heel: 7 cm block heel",
+            "Care: leather conditioner."
+          ]
+        }
+      },
+      "attributes": {
+        "sku_base": "RV-3440",
+        "craft_hours": 20,
+        "rating": 4.7,
+        "review_count": 16,
+        "released_at": "2025-09-05",
+        "colors": [
+          {
+            "name": "Black",
+            "hex": "#16161a"
+          }
+        ],
+        "lead_time_days": [
+          2,
+          4
+        ]
+      },
+      "images": [
+        "/media/products/petra-knee-high-boot-in-black/1.jpg",
+        "/media/products/petra-knee-high-boot-in-black/2.jpg",
+        "/media/products/petra-knee-high-boot-in-black/3.jpg",
+        "/media/products/petra-knee-high-boot-in-black/4.jpg",
+        "/media/products/petra-knee-high-boot-in-black/5.jpg",
+        "/media/products/petra-knee-high-boot-in-black/6.jpg"
+      ],
+      "variants": [
+        {
+          "sku": "RV-3440-36-BLACK",
+          "size": "36",
+          "color": "Black",
+          "price_cents": 9100000
+        },
+        {
+          "sku": "RV-3440-37-BLACK",
+          "size": "37",
+          "color": "Black",
+          "price_cents": 9100000
+        },
+        {
+          "sku": "RV-3440-38-BLACK",
+          "size": "38",
+          "color": "Black",
+          "price_cents": 9100000
+        },
+        {
+          "sku": "RV-3440-39-BLACK",
+          "size": "39",
+          "color": "Black",
+          "price_cents": 9100000
+        },
+        {
+          "sku": "RV-3440-40-BLACK",
+          "size": "40",
+          "color": "Black",
+          "price_cents": 9100000
+        },
+        {
+          "sku": "RV-3440-41-BLACK",
+          "size": "41",
+          "color": "Black",
+          "price_cents": 9100000
+        }
+      ]
+    }
+  ]
+}

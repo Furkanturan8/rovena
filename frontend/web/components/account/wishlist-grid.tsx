@@ -2,18 +2,17 @@
 
 import { Link } from "@/components/ui/link";
 import { useStore } from "@/components/cart/store";
-import { getProductById } from "@/lib/mock/catalog";
 import { ProductCard } from "@/components/product/product-card";
-import { useDict, useLocale } from "@/lib/i18n/provider";
-import type { Product } from "@/types";
+import { useProducts } from "@/hooks/use-products";
+import { useDict } from "@/lib/i18n/provider";
 
 export function WishlistGrid() {
   const d = useDict();
-  const locale = useLocale();
   const { wishlist, hydrated } = useStore();
-  const items = wishlist.map((id) => getProductById(id, locale)).filter((p): p is Product => !!p);
+  const { products, ready } = useProducts(wishlist);
+  const items = wishlist.flatMap((id) => products.get(id) ?? []);
 
-  if (!hydrated) return <div className="h-80 animate-pulse bg-sand" />;
+  if (!hydrated || !ready) return <div className="h-80 animate-pulse bg-sand" />;
   if (items.length === 0) {
     return (
       <div className="border border-travertine py-20 text-center">

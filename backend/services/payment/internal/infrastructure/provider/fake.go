@@ -33,7 +33,8 @@ var ErrUnavailable = errors.New("payment provider unavailable")
 // remembers the idempotency keys it has seen: a repeated call returns the first answer
 // instead of "charging again". State is in memory, so it resets when the service restarts.
 type Fake struct {
-	latency time.Duration
+	latency   time.Duration
+	maxAmount int64
 
 	mu      sync.Mutex
 	results map[string]domain.ChargeResult // by idempotency key
@@ -44,11 +45,21 @@ type Fake struct {
 // NewFake creates a fake provider that waits latency before every answer.
 func NewFake(latency time.Duration) *Fake {
 	return &Fake{
-		latency: latency,
-		results: make(map[string]domain.ChargeResult),
-		calls:   make(map[string]int),
-		refunds: make(map[string]domain.RefundResult),
+		latency:   latency,
+		maxAmount: MaxAmountCents,
+		results:   make(map[string]domain.ChargeResult),
+		calls:     make(map[string]int),
+		refunds:   make(map[string]domain.RefundResult),
 	}
+}
+
+// WithMaxAmount sets the largest amount (in kuruş) the provider approves. The default is
+// MaxAmountCents; a storefront with expensive items raises it.
+func (f *Fake) WithMaxAmount(cents int64) *Fake {
+	if cents > 0 {
+		f.maxAmount = cents
+	}
+	return f
 }
 
 func (f *Fake) Charge(ctx context.Context, req domain.ChargeRequest) (domain.ChargeResult, error) {
@@ -77,7 +88,7 @@ func (f *Fake) Charge(ctx context.Context, req domain.ChargeRequest) (domain.Cha
 		}
 	}
 
-	res := decide(req)
+	res := f.decide(req)
 	f.results[req.IdempotencyKey] = res
 	return res, nil
 }
@@ -98,8 +109,8 @@ func (f *Fake) Refund(ctx context.Context, req domain.RefundRequest) (domain.Ref
 	return res, nil
 }
 
-func decide(req domain.ChargeRequest) domain.ChargeResult {
-	if req.AmountCents > MaxAmountCents {
+func (f *Fake) decide(req domain.ChargeRequest) domain.ChargeResult {
+	if req.AmountCents > f.maxAmount {
 		return decline(domain.CodeAmountLimit, "The amount is above the allowed limit")
 	}
 	switch req.PaymentMethod {

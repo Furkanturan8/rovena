@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"hash/fnv"
 	"net/http"
@@ -19,17 +21,26 @@ import (
 	"github.com/google/uuid"
 )
 
+// stock.json maps a variant SKU to its opening stock (the storefront demo catalog, sold-out and
+// last-pieces sizes included). SKUs it does not know get a stable number derived from the SKU.
+//
+//go:embed stock.json
+var stockJSON []byte
+
 // Gives every variant of the demo catalog a starting stock. Inventory has no access
 // to the catalog database, so the variants are read from the catalog public API —
-// the same way any other service would.
+// the same way any other service would. With -reset all stock, movements and reservations are
+// deleted first; that is meant for local development, after the catalog was re-seeded.
 func main() {
-	if err := run(); err != nil {
+	reset := flag.Bool("reset", false, "delete all stock data before seeding (development only)")
+	flag.Parse()
+	if err := run(*reset); err != nil {
 		fmt.Fprintln(os.Stderr, "seed:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(reset bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -42,6 +53,18 @@ func run() error {
 		return err
 	}
 	defer func() { _ = db.Close() }()
+
+	if reset {
+		if _, err := db.ExecContext(ctx, "TRUNCATE reservation_items, reservations, stock_movements, stock_items CASCADE"); err != nil {
+			return err
+		}
+		fmt.Println("stock cleared")
+	}
+
+	var opening map[string]int
+	if err := json.Unmarshal(stockJSON, &opening); err != nil {
+		return fmt.Errorf("parse stock.json: %w", err)
+	}
 
 	stock := application.NewStockService(postgres.NewStockRepository(db))
 
@@ -66,7 +89,7 @@ func run() error {
 	created := 0
 	for _, v := range variants {
 		_, err := stock.Create(ctx, application.CreateStockInput{
-			VariantID: v.id, SKU: v.sku, OnHand: openingStock(v.sku), Reason: "demo seed",
+			VariantID: v.id, SKU: v.sku, OnHand: openingStock(opening, v.sku), Reason: "demo seed",
 		})
 		if errors.Is(err, domain.ErrStockItemExists) || errors.Is(err, domain.ErrSKUTaken) {
 			continue
@@ -85,9 +108,12 @@ type variant struct {
 	sku string
 }
 
-// openingStock derives a stable quantity from the SKU, so repeated seeding of a
-// rebuilt database always produces the same demo numbers.
-func openingStock(sku string) int {
+// openingStock returns the quantity listed in stock.json, or a stable one derived from the SKU,
+// so repeated seeding of a rebuilt database always produces the same demo numbers.
+func openingStock(listed map[string]int, sku string) int {
+	if n, ok := listed[sku]; ok {
+		return n
+	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(sku))
 	return 5 + int(h.Sum32()%46)

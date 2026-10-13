@@ -5,13 +5,12 @@ import { PlayButton } from "@/components/motion/video-modal";
 import { Reveal } from "@/components/motion/reveal";
 import { VIDEO } from "@/lib/media";
 import { formatPrice } from "@/lib/utils";
-import { getProduct } from "@/lib/mock/catalog";
+import type { Product } from "@/types";
 import type { Dictionary } from "@/lib/i18n/dictionaries/tr";
 import type { Locale } from "@/lib/i18n/config";
 
-export function FilmBanner({ d, locale }: { d: Dictionary; locale: Locale }) {
+export function FilmBanner({ d, locale, product: hero }: { d: Dictionary; locale: Locale; product: Product }) {
   const f = d.banner.film;
-  const hero = getProduct("sonti-coat-in-charcoal", locale)!;
   return (
     <Reveal>
       <section className="grid overflow-hidden bg-ink text-canvas md:grid-cols-2">

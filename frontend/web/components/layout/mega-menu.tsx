@@ -1,13 +1,13 @@
 import { Link } from "@/components/ui/link";
-import { categories } from "@/lib/mock/catalog";
 import { Photo } from "@/components/ui/photo";
 import { useDict } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import type { Category } from "@/types";
 
-export function MegaMenu({ open, onNavigate }: { open: boolean; onNavigate: () => void }) {
+export function MegaMenu({ open, categories, onNavigate }: { open: boolean; categories: Category[]; onNavigate: () => void }) {
   const d = useDict();
   const m = d.megaMenu;
-  const features = [categories[0], categories[3]];
+  const features = [categories.find((c) => c.slug === "coats"), categories.find((c) => c.slug === "knitwear")].filter((c): c is Category => !!c);
   return (
     <div
       className={cn(
@@ -28,7 +28,7 @@ export function MegaMenu({ open, onNavigate }: { open: boolean; onNavigate: () =
             {categories.map((c) => (
               <li key={c.slug}>
                 <Link href={`/collection?category=${c.slug}`} onClick={onNavigate} className="text-[15px] text-umber hover:text-ink">
-                  {d.categories[c.slug].label}
+                  {c.label}
                 </Link>
               </li>
             ))}
@@ -46,9 +46,9 @@ export function MegaMenu({ open, onNavigate }: { open: boolean; onNavigate: () =
         </div>
         {features.map((c, i) => (
           <Link key={c.slug} href={`/collection?category=${c.slug}`} onClick={onNavigate} className="group col-span-3">
-            <Photo src={c.image} alt={d.categories[c.slug].label} ratio="4/5" sizes="20vw" className="max-h-[230px]" imgClassName="object-top transition-transform duration-700 group-hover:scale-[1.04]" />
+            <Photo src={c.image} alt={c.label} ratio="4/5" sizes="20vw" className="max-h-[230px]" imgClassName="object-top transition-transform duration-700 group-hover:scale-[1.04]" />
             <p className="label-caps mt-3 text-umber">{i === 0 ? m.featured : m.seasonTexture}</p>
-            <p className="headline-sm">{d.categories[c.slug].label}</p>
+            <p className="headline-sm">{c.label}</p>
           </Link>
         ))}
       </div>

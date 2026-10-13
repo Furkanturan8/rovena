@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { user } from "@/lib/mock/account";
+import { ProfileForm } from "@/components/account/profile-form";
+import { requireUser } from "@/lib/auth/session";
 import { getI18n } from "@/lib/i18n/server";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/account/profile">): Promise<Metadata> {
@@ -8,30 +9,12 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/account/
 }
 
 export default async function ProfilePage({ params }: PageProps<"/[locale]/account/profile">) {
-  const { d } = await getI18n(params);
+  const { locale, d } = await getI18n(params);
+  const { user } = await requireUser(locale, `/${locale}/account/profile`);
   const t = d.account.profile;
   return (
     <div className="max-w-2xl space-y-14">
-      <form>
-        <h2 className="headline-md mb-8">{t.personal}</h2>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div><label className="field-label" htmlFor="fn">{t.firstName}</label><input id="fn" defaultValue={user.firstName} className="field" /></div>
-          <div><label className="field-label" htmlFor="ln">{t.lastName}</label><input id="ln" defaultValue={user.lastName} className="field" /></div>
-          <div className="sm:col-span-2"><label className="field-label" htmlFor="em">{t.email}</label><input id="em" type="email" defaultValue={user.email} className="field" /></div>
-          <div className="sm:col-span-2"><label className="field-label" htmlFor="ph">{t.phone}</label><input id="ph" defaultValue={user.phone} className="field" /></div>
-        </div>
-        <button type="button" className="btn btn-primary mt-8">{d.common.save}</button>
-      </form>
-
-      <form>
-        <h2 className="headline-md mb-8">{t.changePassword}</h2>
-        <div className="grid gap-5">
-          <div><label className="field-label" htmlFor="cur">{t.currentPassword}</label><input id="cur" type="password" className="field" /></div>
-          <div><label className="field-label" htmlFor="new">{t.newPassword}</label><input id="new" type="password" className="field" /></div>
-        </div>
-        <button type="button" className="btn btn-secondary mt-8">{t.updatePassword}</button>
-      </form>
-
+      <ProfileForm user={{ firstName: user.first_name, lastName: user.last_name, email: user.email }} />
       <section>
         <h2 className="headline-md mb-6">{t.preferences}</h2>
         <div className="space-y-4">

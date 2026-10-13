@@ -13,10 +13,11 @@ import { useStore } from "@/components/cart/store";
 import { splitLocale } from "@/lib/i18n/config";
 import { useDict } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
+import type { Category } from "@/types";
 
 const heroRoutes = /^\/($|gallery|about)/;
 
-export function Header() {
+export function Header({ categories }: { categories: Category[] }) {
   const d = useDict();
   const { count, wishlist, openDrawer, hydrated } = useStore();
   const rawPath = usePathname();
@@ -125,7 +126,7 @@ export function Header() {
             </button>
           </div>
         </div>
-        <MegaMenu open={mega} onNavigate={() => setMega(false)} />
+        <MegaMenu open={mega} categories={categories} onNavigate={() => setMega(false)} />
       </header>
 
       <SearchOverlay open={search} onClose={() => setSearch(false)} />

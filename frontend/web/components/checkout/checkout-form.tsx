@@ -6,14 +6,24 @@ import { Check, CreditCard, Lock } from "lucide-react";
 import { Link } from "@/components/ui/link";
 import { useStore } from "@/components/cart/store";
 import { OrderSummary } from "@/components/cart/order-summary";
-import { getProductById } from "@/lib/mock/catalog";
-import { addresses, user } from "@/lib/mock/account";
+import { addresses } from "@/lib/mock/account";
 import { Photo } from "@/components/ui/photo";
+import { useCartLines } from "@/components/cart/use-cart-lines";
+import { placeOrderAction } from "@/lib/orders/actions";
 import { useDict, useLocale } from "@/lib/i18n/provider";
 import { cn, formatPrice } from "@/lib/utils";
 
-const shippingPrices = { standard: 0, express: 650, store: 0 } as const;
-type ShippingId = keyof typeof shippingPrices;
+const shippingIds = ["standard", "store"] as const;
+type ShippingId = (typeof shippingIds)[number];
+
+/** Maps a card number to a payment provider token. The number itself never leaves the browser. */
+function paymentToken(cardNumber: string): string {
+  const digits = cardNumber.replace(/\D/g, "");
+  if (digits === "4000000000000002") return "tok_declined";
+  if (digits === "4000000000009995") return "tok_insufficient_funds";
+  if (digits === "4000000000000069") return "tok_expired";
+  return "tok_visa";
+}
 
 function Step({ n, title, done, children }: { n: number; title: string; done?: boolean; children: React.ReactNode }) {
   return (
@@ -29,19 +39,19 @@ function Step({ n, title, done, children }: { n: number; title: string; done?: b
   );
 }
 
-export function CheckoutForm() {
+export function CheckoutForm({ user }: { user: { firstName: string; lastName: string; email: string } }) {
   const d = useDict();
   const locale = useLocale();
   const t = d.checkout;
   const router = useRouter();
   const { items, clear, hydrated } = useStore();
+  const { lines, ready } = useCartLines();
+  const [error, setError] = useState<string | null>(null);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [shipping, setShipping] = useState<ShippingId>("standard");
   const [addressId, setAddressId] = useState(addresses[0].id);
-  const [payment, setPayment] = useState<"card" | "transfer">("card");
   const [giftNote, setGiftNote] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const shippingPrice = shippingPrices[shipping];
 
   if (hydrated && items.length === 0) {
     return (
@@ -52,14 +62,24 @@ export function CheckoutForm() {
     );
   }
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const cardNumber = String(new FormData(e.currentTarget).get("card_number") ?? "");
     setBusy(true);
-    const number = `RV-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-    setTimeout(() => {
+    setError(null);
+    const result = await placeOrderAction({
+      locale,
+      paymentMethod: paymentToken(cardNumber),
+      items: items.map((i) => ({ variantId: i.variantId, quantity: i.qty })),
+    });
+    if (result.ok) {
       clear();
-      router.push(`/${locale}/order-confirmation/${number}`);
-    }, 1100);
+      router.push(`/${locale}/order-confirmation/${result.orderId}`);
+      return;
+    }
+    setBusy(false);
+    if (result.reason === "auth") setNeedsLogin(true);
+    else setError(result.message ?? t.errors.generic);
   }
 
   return (
@@ -104,14 +124,14 @@ export function CheckoutForm() {
 
         <Step n={3} title={t.delivery}>
           <div className="space-y-3">
-            {(Object.keys(shippingPrices) as ShippingId[]).map((id) => (
+            {shippingIds.map((id) => (
               <label key={id} className={cn("flex cursor-pointer items-center justify-between gap-4 border p-5 transition-colors", shipping === id ? "border-ink bg-paper" : "border-travertine hover:border-ink")}>
                 <input type="radio" name="shipping" className="sr-only" checked={shipping === id} onChange={() => setShipping(id)} />
                 <div>
                   <p className="text-[14px]">{t.shippingOptions[id].label}</p>
                   <p className="text-[12px] text-umber">{t.shippingOptions[id].note}</p>
                 </div>
-                <span className="label-mono shrink-0">{shippingPrices[id] === 0 ? d.common.free : formatPrice(shippingPrices[id], locale)}</span>
+                <span className="label-mono shrink-0">{d.common.free}</span>
               </label>
             ))}
           </div>
@@ -123,70 +143,57 @@ export function CheckoutForm() {
         </Step>
 
         <Step n={4} title={t.payment}>
-          <div className="mb-5 grid grid-cols-2 gap-3">
-            {([["card", t.card], ["transfer", t.transfer]] as const).map(([id, label]) => (
-              <button type="button" key={id} onClick={() => setPayment(id)} className={cn("label-caps border px-4 py-4 text-[10px]", payment === id ? "border-ink bg-ink text-canvas" : "border-travertine hover:border-ink")}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {payment === "card" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="field-label" htmlFor="cc-num">{t.cardNumber}</label>
-                <div className="relative">
-                  <input id="cc-num" required inputMode="numeric" autoComplete="cc-number" placeholder="0000 0000 0000 0000" className="field !pr-11" />
-                  <CreditCard size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-umber" />
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="field-label" htmlFor="cc-name">{t.cardName}</label>
-                <input id="cc-name" required autoComplete="cc-name" className="field" />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="cc-exp">{t.cardExpiry}</label>
-                <input id="cc-exp" required placeholder="MM / YY" autoComplete="cc-exp" className="field" />
-              </div>
-              <div>
-                <label className="field-label" htmlFor="cc-cvc">{t.cardCvc}</label>
-                <input id="cc-cvc" required placeholder="000" autoComplete="cc-csc" className="field" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="field-label" htmlFor="cc-inst">{t.installments}</label>
-                <select id="cc-inst" className="field">
-                  {t.installmentOptions.map((o) => <option key={o}>{o}</option>)}
-                </select>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="field-label" htmlFor="cc-num">{t.cardNumber}</label>
+              <div className="relative">
+                <input id="cc-num" name="card_number" required inputMode="numeric" autoComplete="cc-number" placeholder="4242 4242 4242 4242" className="field !pr-11" />
+                <CreditCard size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-umber" />
               </div>
             </div>
-          ) : (
-            <div className="border border-travertine bg-paper p-5 text-[13px] leading-6 text-umber">{t.transferNote}</div>
-          )}
-          <p className="mt-4 flex items-center gap-2 text-[12px] text-umber"><Lock size={13} /> {t.secureNote}</p>
+            <div className="sm:col-span-2">
+              <label className="field-label" htmlFor="cc-name">{t.cardName}</label>
+              <input id="cc-name" required autoComplete="cc-name" className="field" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="cc-exp">{t.cardExpiry}</label>
+              <input id="cc-exp" required placeholder="MM / YY" autoComplete="cc-exp" className="field" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="cc-cvc">{t.cardCvc}</label>
+              <input id="cc-cvc" required placeholder="000" autoComplete="cc-csc" className="field" />
+            </div>
+          </div>
+          <p className="mt-4 flex items-start gap-2 text-[12px] text-umber"><Lock size={13} className="mt-0.5 shrink-0" /> {t.secureNote}</p>
+          <p className="mt-2 text-[12px] text-umber">{t.testCardNote}</p>
         </Step>
       </div>
 
       <aside className="lg:col-span-5">
-        <OrderSummary shipping={shippingPrice} className="lg:sticky lg:top-24">
+        <OrderSummary className="lg:sticky lg:top-24">
           <ul className="mt-6 space-y-4 border-t border-travertine pt-6">
-            {items.map((i) => {
-              const p = getProductById(i.productId, locale);
-              if (!p) return null;
-              return (
-                <li key={`${i.productId}${i.size}${i.color}`} className="flex gap-4">
-                  <div className="relative w-16 shrink-0">
-                    <Photo src={p.images[0]} alt={p.name} sizes="64px" imgClassName="object-top" />
-                    <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center bg-ink text-[10px] text-canvas">{i.qty}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-serif text-[15px] leading-5">{p.name}</p>
-                    <p className="text-[12px] text-umber">{d.colors[i.color] ?? i.color} · {d.sizes[i.size] ?? i.size}</p>
-                  </div>
-                  <p className="label-mono">{formatPrice(p.price * i.qty, locale)}</p>
-                </li>
-              );
-            })}
+            {lines.map(({ item: i, product: p, lineTotal }) => (
+              <li key={i.variantId} className="flex gap-4">
+                <div className="relative w-16 shrink-0">
+                  <Photo src={p.images[0]} alt={p.name} sizes="64px" imgClassName="object-top" />
+                  <span className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center bg-ink text-[10px] text-canvas">{i.qty}</span>
+                </div>
+                <div className="flex-1">
+                  <p className="font-serif text-[15px] leading-5">{p.name}</p>
+                  <p className="text-[12px] text-umber">{d.colors[i.color] ?? i.color} · {d.sizes[i.size] ?? i.size}</p>
+                </div>
+                <p className="label-mono">{formatPrice(lineTotal, locale)}</p>
+              </li>
+            ))}
           </ul>
-          <button disabled={busy} className="btn btn-primary mt-8 w-full">{busy ? t.confirming : t.confirm}</button>
+          {error && <p role="alert" className="mt-6 border border-danger/40 bg-danger/5 p-3 text-[13px] text-danger">{error}</p>}
+          {needsLogin && (
+            <p role="alert" className="mt-6 border border-travertine p-3 text-[13px]">
+              {t.loginRequired}{" "}
+              <Link href="/login?next=/checkout" className="underline underline-offset-4">{t.signIn}</Link>
+            </p>
+          )}
+          <button disabled={busy || !ready || lines.length === 0} className="btn btn-primary mt-8 w-full">{busy ? t.confirming : t.confirm}</button>
           <p className="mt-4 text-center text-[11px] leading-5 text-umber">{t.terms}</p>
         </OrderSummary>
       </aside>

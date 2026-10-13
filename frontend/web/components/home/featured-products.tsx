@@ -3,20 +3,19 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Link } from "@/components/ui/link";
-import { categories, getProducts } from "@/lib/mock/catalog";
-import { useDict, useLocale } from "@/lib/i18n/provider";
+import { useDict } from "@/lib/i18n/provider";
+import type { Category, Product } from "@/types";
 import { ProductCard } from "@/components/product/product-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
 
-export function FeaturedProducts() {
+export function FeaturedProducts({ products, categories }: { products: Product[]; categories: Category[] }) {
   const d = useDict();
-  const locale = useLocale();
   const f = d.home.featured;
-  const tabs = [{ slug: "all", label: f.all }, ...categories.map((c) => ({ slug: c.slug as string, label: d.categories[c.slug].short }))];
+  const tabs = [{ slug: "all", label: f.all }, ...categories.map((c) => ({ slug: c.slug, label: c.label }))];
   const [tab, setTab] = useState<string>("all");
-  const list = getProducts(locale).filter((p) => tab === "all" || p.category === tab).slice(0, 4);
+  const list = products.filter((p) => tab === "all" || p.category === tab).slice(0, 4);
 
   return (
     <section className="border-y border-travertine bg-paper/60 py-24 md:py-32">

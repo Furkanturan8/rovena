@@ -89,8 +89,9 @@ func (h *ProductHandler) Create(c *fiber.Ctx) error {
 	}
 	categoryID, _ := uuid.Parse(req.CategoryID) // format already validated
 	in := application.CreateProductInput{
-		Name: req.Name, Description: req.Description, Brand: req.Brand, CategoryID: categoryID,
+		Name: req.Name, Slug: req.Slug, Description: req.Description, Brand: req.Brand, CategoryID: categoryID,
 		Status: domain.ProductStatus(req.Status), Images: toImages(req.Images),
+		Translations: req.Translations, Attributes: req.Attributes,
 	}
 	for _, v := range req.Variants {
 		in.Variants = append(in.Variants, v.toInput())
@@ -113,6 +114,7 @@ func (h *ProductHandler) Update(c *fiber.Ctx) error {
 	}
 	in := application.UpdateProductInput{
 		Name: req.Name, Description: req.Description, Brand: req.Brand,
+		Translations: req.Translations, Attributes: req.Attributes,
 	}
 	if req.CategoryID != nil {
 		cid, _ := uuid.Parse(*req.CategoryID)

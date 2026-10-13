@@ -1,17 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Link } from "@/components/ui/link";
-import { getProducts } from "@/lib/mock/catalog";
 import { Photo } from "@/components/ui/photo";
+import { searchProducts } from "@/lib/api/client";
+import { toProduct } from "@/lib/api/mappers";
 import { useDict, useLocale } from "@/lib/i18n/provider";
 import { formatPrice } from "@/lib/utils";
+import type { Product } from "@/types";
 
 export function SearchOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
   const d = useDict();
   const locale = useLocale();
   const [q, setQ] = useState("");
+  const [results, setResults] = useState<Product[]>([]);
+  const [searched, setSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -26,12 +30,26 @@ export function SearchOverlay({ open, onClose }: { open: boolean; onClose: () =>
     };
   }, [open, onClose]);
 
-  const results = useMemo(() => {
-    const term = q.trim().toLocaleLowerCase(locale);
-    if (term.length < 2) return [];
-    return getProducts(locale)
-      .filter((p) => `${p.name} ${p.kind} ${p.material}`.toLocaleLowerCase(locale).includes(term))
-      .slice(0, 4);
+  // Debounced catalog search; the API matches accent-insensitively across all languages.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const found = await searchProducts(term, 4);
+      if (cancelled) return;
+      setResults(found.map((p) => toProduct(p, locale, "")));
+      setSearched(true);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [q, locale]);
 
   if (!open) return null;
@@ -66,7 +84,7 @@ export function SearchOverlay({ open, onClose }: { open: boolean; onClose: () =>
                   </button>
                 ))}
               </div>
-              {q.trim().length >= 2 && <p className="mt-10 text-umber">{d.search.noResults(q)}</p>}
+              {searched && <p className="mt-10 text-umber">{d.search.noResults(q)}</p>}
             </div>
           ) : (
             <div className="mt-10 grid grid-cols-2 gap-6 md:grid-cols-4">

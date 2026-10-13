@@ -83,10 +83,12 @@ vet:
 seed-admin:
 	docker compose --profile tools run --rm identity-seed
 
-# Demo categories and products
+# Storefront categories and products (cmd/seed/store.json). Needs MEDIA_BASE_URL in .env.
+# `make seed-catalog SEED_FLAGS=-reset` replaces an existing catalog (development only).
 seed-catalog:
-	docker compose --profile tools run --rm catalog-seed
+	docker compose --profile tools run --rm catalog-seed $(SEED_FLAGS)
 
-# Opening stock for every demo variant; needs seed-catalog first
+# Opening stock for every demo variant (cmd/seed/stock.json); needs seed-catalog first.
+# `make seed-inventory SEED_FLAGS=-reset` clears existing stock first (development only).
 seed-inventory:
-	docker compose --profile tools run --rm inventory-seed
+	docker compose --profile tools run --rm inventory-seed $(SEED_FLAGS)

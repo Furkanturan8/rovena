@@ -20,8 +20,11 @@ export function PurchasePanel({ product: p }: { product: Product }) {
   const [error, setError] = useState(false);
   const [added, setAdded] = useState(false);
 
-  const selected = p.sizes.find((s) => s.label === size);
-  const soldOut = p.sizes.every((s) => s.stock === 0);
+  // Stock is tracked per variant (size x color), so availability follows the selected color.
+  const variantFor = (label: string, colorName = color) => p.variants.find((v) => v.size === label && v.color === colorName);
+  const stockFor = (label: string) => p.stock[variantFor(label)?.id ?? ""] ?? 0;
+  const selectedStock = size ? stockFor(size) : 0;
+  const soldOut = p.variants.every((v) => (p.stock[v.id] ?? 0) === 0);
   const wished = hydrated && wishlist.includes(p.id);
   const installment = Math.round(p.price / 6);
   const ctaRef = useRef<HTMLButtonElement>(null);
@@ -45,7 +48,9 @@ export function PurchasePanel({ product: p }: { product: Product }) {
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    add({ productId: p.id, size, color, qty: 1 });
+    const variant = variantFor(size);
+    if (!variant) return;
+    add({ productId: p.id, variantId: variant.id, size, color, qty: 1 });
     setAdded(true);
     setTimeout(() => setAdded(false), 2200);
   }
@@ -81,7 +86,10 @@ export function PurchasePanel({ product: p }: { product: Product }) {
                 key={c.name}
                 aria-label={d.colors[c.name] ?? c.name}
                 aria-pressed={color === c.name}
-                onClick={() => setColor(c.name)}
+                onClick={() => {
+                  setColor(c.name);
+                  if (size && (p.stock[variantFor(size, c.name)?.id ?? ""] ?? 0) === 0) setSize(null);
+                }}
                 className={cn("h-9 w-9 rounded-full border border-ink/15 outline-offset-[3px] transition-all", color === c.name && "outline outline-1 outline-ink")}
                 style={{ background: c.hex }}
               />
@@ -100,7 +108,7 @@ export function PurchasePanel({ product: p }: { product: Product }) {
             {p.sizes.map((s) => (
               <button
                 key={s.label}
-                disabled={s.stock === 0}
+                disabled={stockFor(s.label) === 0}
                 aria-pressed={size === s.label}
                 onClick={() => {
                   setSize(s.label);
@@ -110,14 +118,14 @@ export function PurchasePanel({ product: p }: { product: Product }) {
                   "relative border py-3 text-[13px] transition-colors",
                   p.sizes.length === 1 && "col-span-2",
                   size === s.label ? "border-ink bg-ink text-canvas" : "border-travertine hover:border-ink",
-                  s.stock === 0 && "cursor-not-allowed text-umber/40 line-through hover:border-travertine",
+                  stockFor(s.label) === 0 && "cursor-not-allowed text-umber/40 line-through hover:border-travertine",
                 )}
               >
                 {sizeName(s.label)}
               </button>
             ))}
           </div>
-          {selected && selected.stock <= 2 && <p className="mt-3 text-[12px] text-bronze-deep">{t.onlyLeft(selected.stock)}</p>}
+          {size && selectedStock > 0 && selectedStock <= 2 && <p className="mt-3 text-[12px] text-bronze-deep">{t.onlyLeft(selectedStock)}</p>}
         </div>
 
         <label className="mt-8 flex cursor-pointer gap-3 border border-travertine p-4 hover:border-ink">

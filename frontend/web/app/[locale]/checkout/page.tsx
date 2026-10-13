@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Link } from "@/components/ui/link";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
 import { getI18n } from "@/lib/i18n/server";
+import { requireUser } from "@/lib/auth/session";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/checkout">): Promise<Metadata> {
   const { d } = await getI18n(params);
@@ -9,7 +10,8 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/checkout
 }
 
 export default async function CheckoutPage({ params }: PageProps<"/[locale]/checkout">) {
-  const { d } = await getI18n(params);
+  const { locale, d } = await getI18n(params);
+  const { user } = await requireUser(locale, `/${locale}/checkout`);
   return (
     <div className="container-page py-12 md:py-16">
       <div className="mb-12 flex items-center justify-between">
@@ -19,7 +21,7 @@ export default async function CheckoutPage({ params }: PageProps<"/[locale]/chec
         </div>
         <Link href="/cart" className="link-underline hidden sm:inline-block">{d.checkout.backToCart}</Link>
       </div>
-      <CheckoutForm />
+      <CheckoutForm user={{ firstName: user.first_name, lastName: user.last_name, email: user.email }} />
     </div>
   );
 }

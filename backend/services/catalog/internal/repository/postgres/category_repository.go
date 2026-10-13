@@ -65,6 +65,7 @@ func (r *CategoryRepository) Update(ctx context.Context, c *domain.Category) err
 	res, err := r.db.NewUpdate().Model((*categoryRow)(nil)).
 		Set("name = ?", c.Name).
 		Set("description = ?", c.Description).
+		Set("translations = ?::jsonb", string(objectOrEmpty(c.Translations))).
 		Set("updated_at = ?", c.UpdatedAt).
 		Where("id = ?", c.ID).
 		Exec(ctx)

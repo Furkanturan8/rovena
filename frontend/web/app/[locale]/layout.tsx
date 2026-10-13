@@ -11,6 +11,7 @@ import { CartDrawer } from "@/components/cart/cart-drawer";
 import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { getCategoriesSafe } from "@/lib/data/catalog";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -42,6 +43,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   const d = await getDictionary(locale);
+  const categories = await getCategoriesSafe(locale);
 
   return (
     <html lang={locale} className={`${playfair.variable} ${jakarta.variable}`}>
@@ -50,9 +52,9 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
           <MotionProvider>
             <StoreProvider>
               <AnnouncementBar messages={d.announcement} />
-              <Header />
+              <Header categories={categories} />
               <main className="flex-1">{children}</main>
-              <Footer d={d} />
+              <Footer d={d} categories={categories} />
               <CartDrawer />
             </StoreProvider>
           </MotionProvider>

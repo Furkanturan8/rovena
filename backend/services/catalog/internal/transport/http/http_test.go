@@ -258,8 +258,15 @@ func TestPublicList_ResponseShapeAndHiding(t *testing.T) {
 		item["currency"] != "TRY" || item["thumbnail_url"] != "https://img.test/deri-ceket.jpg" {
 		t.Errorf("item = %v", item)
 	}
-	if _, leaked := item["variants"]; leaked {
-		t.Error("list items must not carry variants")
+	// Listing cards need variants (sizes, colours) and images without a request per product.
+	if variants, _ := item["variants"].([]any); len(variants) != 2 {
+		t.Errorf("list item variants = %v, want the 2 active variants", item["variants"])
+	}
+	if images, _ := item["images"].([]any); len(images) != 1 {
+		t.Errorf("list item images = %v", item["images"])
+	}
+	if item["translations"] == nil || item["attributes"] == nil {
+		t.Errorf("translations/attributes must always be objects, got %v / %v", item["translations"], item["attributes"])
 	}
 }
 

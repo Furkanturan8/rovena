@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, SlidersHorizontal, X } from "lucide-react";
-import { allSizes, priceRange, sortKeys, type SortKey } from "@/lib/listing";
-import { productBases } from "@/lib/mock/catalog";
+import { sortKeys, type SortKey } from "@/lib/listing";
 import { useDict, useLocale } from "@/lib/i18n/provider";
 import { cn, formatPrice } from "@/lib/utils";
-
-const allColors = Array.from(new Map(productBases.flatMap((p) => p.colors).map((c) => [c.name, c])).values());
+import type { ColorOption } from "@/types";
 
 function useQueryUpdater() {
   const router = useRouter();
@@ -68,10 +66,13 @@ function toggleIn(list: string[], v: string) {
 interface Props {
   total: number;
   shown: number;
+  sizes: string[];
+  colors: ColorOption[];
+  priceRange: { min: number; max: number };
   selected: { size: string[]; color: string[]; min?: number; max?: number; sort: SortKey; q?: string };
 }
 
-export function ListingToolbar({ total, shown, selected }: Props) {
+export function ListingToolbar({ total, shown, sizes, colors, priceRange, selected }: Props) {
   const d = useDict();
   const locale = useLocale();
   const l = d.listing;
@@ -94,7 +95,7 @@ export function ListingToolbar({ total, shown, selected }: Props) {
 
   const sizeGrid = (
     <div className="grid grid-cols-4 gap-2">
-      {allSizes.map((s) => (
+      {sizes.map((s) => (
         <button
           key={s}
           onClick={() => update({ size: toggleIn(selected.size, s).join(",") || null })}
@@ -108,7 +109,7 @@ export function ListingToolbar({ total, shown, selected }: Props) {
 
   const colorGrid = (big?: boolean) => (
     <div className="flex flex-wrap gap-3">
-      {allColors.map((c) => (
+      {colors.map((c) => (
         <button
           key={c.name}
           title={colorName(c.name)}

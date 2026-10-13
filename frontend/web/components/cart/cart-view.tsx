@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { Lock, RefreshCw, ShieldCheck } from "lucide-react";
 import { Link } from "@/components/ui/link";
 import { useStore } from "./store";
@@ -12,7 +11,6 @@ export function CartView() {
   const d = useDict();
   const c = d.cart;
   const { items, hydrated } = useStore();
-  const [promo, setPromo] = useState(false);
 
   if (hydrated && items.length === 0) {
     return (
@@ -46,7 +44,7 @@ export function CartView() {
         </div>
       </div>
       <aside className="lg:col-span-4">
-        <OrderSummary promo promoApplied={promo} onPromo={setPromo} className="lg:sticky lg:top-24">
+        <OrderSummary className="lg:sticky lg:top-24">
           <Link href="/checkout" className="btn btn-primary mt-6 w-full">{c.secureCheckout}</Link>
           <p className="mt-4 text-center text-[12px] text-umber">{c.deliveryNote}</p>
         </OrderSummary>

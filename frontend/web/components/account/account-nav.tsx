@@ -4,10 +4,13 @@ import { usePathname } from "next/navigation";
 import { Link } from "@/components/ui/link";
 import { splitLocale } from "@/lib/i18n/config";
 import { useDict } from "@/lib/i18n/provider";
+import { logoutAction } from "@/lib/auth/actions";
+import { useLocale } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 export function AccountNav() {
   const d = useDict();
+  const locale = useLocale();
   const n = d.account.nav;
   const pathname = splitLocale(usePathname()).rest;
   const links = [
@@ -35,9 +38,10 @@ export function AccountNav() {
           </Link>
         );
       })}
-      <Link href="/login" className="label-caps shrink-0 border border-travertine px-4 py-3 text-[10px] text-umber hover:text-ink lg:mt-6 lg:border-0 lg:px-5">
-        {n.logout}
-      </Link>
+      <form action={logoutAction} className="shrink-0 lg:mt-6">
+        <input type="hidden" name="locale" value={locale} />
+        <button className="label-caps border border-travertine px-4 py-3 text-[10px] text-umber hover:text-ink lg:border-0 lg:px-5">{n.logout}</button>
+      </form>
     </nav>
   );
 }

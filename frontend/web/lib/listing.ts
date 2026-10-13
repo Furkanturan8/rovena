@@ -1,4 +1,3 @@
-import { getProducts, priceRange } from "@/lib/mock/catalog";
 import type { Locale } from "@/lib/i18n/config";
 import type { Product } from "@/types";
 
@@ -46,9 +45,9 @@ export function parseListingParams(raw: Raw): ListingParams {
 
 export const PAGE_SIZE = 9;
 
-export function filterProducts(p: ListingParams, locale: Locale, ignore?: "category"): Product[] {
+export function filterProducts(products: Product[], p: ListingParams, locale: Locale, ignore?: "category"): Product[] {
   const q = p.q?.trim().toLocaleLowerCase(locale);
-  const out = getProducts(locale).filter((x) => {
+  const out = products.filter((x) => {
     if (ignore !== "category" && p.category && x.category !== p.category) return false;
     if (q && !`${x.name} ${x.kind} ${x.material} ${x.description}`.toLocaleLowerCase(locale).includes(q)) return false;
     if (p.tag === "limited" && x.tag !== "limited") return false;
@@ -69,5 +68,19 @@ export function filterProducts(p: ListingParams, locale: Locale, ignore?: "categ
   return [...out].sort(by[p.sort]);
 }
 
-export const allSizes = ["XS", "S", "M", "L", "XL", "34", "36", "38", "40", "42", "44", "46", "OS"];
-export { priceRange };
+/** Sizes that exist in the catalog, in a sensible order (letters, then numbers, then one-size). */
+export function sizesOf(products: Product[]): string[] {
+  const order = ["XS", "S", "M", "L", "XL"];
+  const all = Array.from(new Set(products.flatMap((p) => p.sizes.map((s) => s.label))));
+  const rank = (v: string) => (order.includes(v) ? order.indexOf(v) : /^\d+$/.test(v) ? 10 + Number(v) : 1000);
+  return all.sort((a, b) => rank(a) - rank(b));
+}
+
+export function colorsOf(products: Product[]) {
+  return Array.from(new Map(products.flatMap((p) => p.colors).map((c) => [c.name, c])).values());
+}
+
+export function priceRangeOf(products: Product[]) {
+  const prices = products.map((p) => p.price);
+  return { min: prices.length ? Math.min(...prices) : 0, max: prices.length ? Math.max(...prices) : 0 };
+}

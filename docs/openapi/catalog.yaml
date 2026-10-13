@@ -587,13 +587,14 @@ components:
       enum: [draft, active, archived]
     Category:
       type: object
-      required: [id, parent_id, name, slug, description]
+      required: [id, parent_id, name, slug, description, translations]
       properties:
         id: {type: string, format: uuid}
         parent_id: {type: string, format: uuid, nullable: true}
         name: {type: string}
         slug: {type: string, example: dis-giyim}
         description: {type: string}
+        translations: {type: object, additionalProperties: true, description: 'Localized texts by language code, e.g. {"en": {"name": "Coats"}}. name/description columns stay the default (Turkish) text.'}
     Image:
       type: object
       required: [url, alt]
@@ -613,7 +614,7 @@ components:
         active: {type: boolean}
     Product:
       type: object
-      required: [id, category_id, name, slug, description, brand, status, images, variants, created_at, updated_at]
+      required: [id, category_id, name, slug, description, brand, status, translations, attributes, images, variants, created_at, updated_at]
       properties:
         id: {type: string, format: uuid}
         category_id: {type: string, format: uuid}
@@ -622,6 +623,8 @@ components:
         description: {type: string}
         brand: {type: string}
         status: {$ref: '#/components/schemas/ProductStatus'}
+        translations: {type: object, additionalProperties: true, description: 'Localized texts by language code, e.g. {"en": {"name": "Coats"}}. name/description columns stay the default (Turkish) text.'}
+        attributes: {type: object, additionalProperties: true, description: Language-independent storefront facts (tag, rating, craft hours, colour swatches, ...)}
         images:
           type: array
           items: {$ref: '#/components/schemas/Image'}
@@ -632,12 +635,13 @@ components:
         updated_at: {type: string, format: date-time}
     ProductSummary:
       type: object
-      required: [id, category_id, name, slug, brand, status, price_from_cents, currency, thumbnail_url]
+      required: [id, category_id, name, slug, description, brand, status, price_from_cents, currency, thumbnail_url, translations, attributes, images, variants]
       properties:
         id: {type: string, format: uuid}
         category_id: {type: string, format: uuid}
         name: {type: string}
         slug: {type: string}
+        description: {type: string}
         brand: {type: string}
         status: {$ref: '#/components/schemas/ProductStatus'}
         price_from_cents:
@@ -647,6 +651,16 @@ components:
           description: Cheapest active variant; null when there is none.
         currency: {type: string, example: TRY}
         thumbnail_url: {type: string, description: 'First image; empty when there is none'}
+        translations: {type: object, additionalProperties: true, description: 'Localized texts by language code, e.g. {"en": {"name": "Coats"}}. name/description columns stay the default (Turkish) text.'}
+        attributes: {type: object, additionalProperties: true, description: Language-independent storefront facts (tag, rating, craft hours, colour swatches, ...)}
+        images:
+          type: array
+          description: All images, so a listing card needs no request per product
+          items: {$ref: '#/components/schemas/Image'}
+        variants:
+          type: array
+          description: Active variants only
+          items: {$ref: '#/components/schemas/Variant'}
     ImageInput:
       type: object
       required: [url]
@@ -678,6 +692,9 @@ components:
       required: [name, category_id]
       properties:
         name: {type: string, minLength: 2, maxLength: 200}
+        slug: {type: string, maxLength: 80, description: 'Optional. Lowercase letters, digits and single dashes; derived from the name when empty. Cannot be changed later'}
+        translations: {type: object, additionalProperties: true, description: Localized texts by language code; replaces the object when present}
+        attributes: {type: object, additionalProperties: true, description: Storefront facts; replaces the object when present. Together with translations at most 32 KB each}
         description: {type: string, maxLength: 10000}
         brand: {type: string, maxLength: 100}
         category_id: {type: string, format: uuid}
@@ -694,6 +711,8 @@ components:
       type: object
       properties:
         name: {type: string, minLength: 2, maxLength: 200}
+        translations: {type: object, additionalProperties: true, description: Localized texts by language code; replaces the object when present}
+        attributes: {type: object, additionalProperties: true, description: Storefront facts; replaces the object when present. Together with translations at most 32 KB each}
         description: {type: string, maxLength: 10000}
         brand: {type: string, maxLength: 100}
         category_id: {type: string, format: uuid}
@@ -708,13 +727,16 @@ components:
       required: [name]
       properties:
         name: {type: string, minLength: 2, maxLength: 100}
+        slug: {type: string, maxLength: 80, description: 'Optional. Lowercase letters, digits and single dashes; derived from the name when empty. Cannot be changed later'}
         description: {type: string, maxLength: 1000}
+        translations: {type: object, additionalProperties: true, description: Localized texts by language code; replaces the object when present}
         parent_id: {type: string, format: uuid, nullable: true}
     UpdateCategoryRequest:
       type: object
       properties:
         name: {type: string, minLength: 2, maxLength: 100}
         description: {type: string, maxLength: 1000}
+        translations: {type: object, additionalProperties: true, description: Localized texts by language code; replaces the object when present}
     CategoryEnvelope:
       type: object
       required: [success, data]

@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/Furkanturan8/rovena/services/catalog/internal/domain"
@@ -11,50 +12,67 @@ import (
 type categoryRow struct {
 	bun.BaseModel `bun:"table:categories,alias:c"`
 
-	ID          uuid.UUID  `bun:",pk,type:uuid"`
-	ParentID    *uuid.UUID `bun:",type:uuid,nullzero"`
-	Name        string     `bun:",notnull"`
-	Slug        string     `bun:",notnull"`
-	Description string     `bun:",notnull"`
-	CreatedAt   time.Time  `bun:",notnull"`
-	UpdatedAt   time.Time  `bun:",notnull"`
+	ID           uuid.UUID       `bun:",pk,type:uuid"`
+	ParentID     *uuid.UUID      `bun:",type:uuid,nullzero"`
+	Name         string          `bun:",notnull"`
+	Slug         string          `bun:",notnull"`
+	Description  string          `bun:",notnull"`
+	Translations json.RawMessage `bun:"translations,type:jsonb,notnull"`
+	CreatedAt    time.Time       `bun:",notnull"`
+	UpdatedAt    time.Time       `bun:",notnull"`
 }
 
 func (r *categoryRow) toDomain() *domain.Category {
 	return &domain.Category{
 		ID: r.ID, ParentID: r.ParentID, Name: r.Name, Slug: r.Slug,
-		Description: r.Description, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		Description: r.Description, Translations: r.Translations, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
 
 func categoryRowFrom(c *domain.Category) *categoryRow {
 	return &categoryRow{
 		ID: c.ID, ParentID: c.ParentID, Name: c.Name, Slug: c.Slug,
-		Description: c.Description, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		Description: c.Description, Translations: objectOrEmpty(c.Translations), CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
 	}
+}
+
+// objectOrEmpty keeps the NOT NULL jsonb columns valid for domain values built without translations.
+func objectOrEmpty(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return json.RawMessage(`{}`)
+	}
+	return raw
+}
+
+func searchTextOf(p *domain.Product) string {
+	parts := append([]string{p.Name, p.Brand}, domain.TranslationTerms(p.Translations)...)
+	return domain.SearchText(parts...)
 }
 
 type productRow struct {
 	bun.BaseModel `bun:"table:products,alias:p"`
 
-	ID          uuid.UUID `bun:",pk,type:uuid"`
-	CategoryID  uuid.UUID `bun:",type:uuid,notnull"`
-	Name        string    `bun:",notnull"`
-	Slug        string    `bun:",notnull"`
-	Description string    `bun:",notnull"`
-	Brand       string    `bun:",notnull"`
-	Status      string    `bun:",notnull"`
-	SearchText  string    `bun:",notnull"`
-	CreatedAt   time.Time `bun:",notnull"`
-	UpdatedAt   time.Time `bun:",notnull"`
+	ID           uuid.UUID       `bun:",pk,type:uuid"`
+	CategoryID   uuid.UUID       `bun:",type:uuid,notnull"`
+	Name         string          `bun:",notnull"`
+	Slug         string          `bun:",notnull"`
+	Description  string          `bun:",notnull"`
+	Brand        string          `bun:",notnull"`
+	Status       string          `bun:",notnull"`
+	SearchText   string          `bun:",notnull"`
+	Translations json.RawMessage `bun:"translations,type:jsonb,notnull"`
+	Attributes   json.RawMessage `bun:"attributes,type:jsonb,notnull"`
+	CreatedAt    time.Time       `bun:",notnull"`
+	UpdatedAt    time.Time       `bun:",notnull"`
 }
 
 func productRowFrom(p *domain.Product) *productRow {
 	return &productRow{
 		ID: p.ID, CategoryID: p.CategoryID, Name: p.Name, Slug: p.Slug,
 		Description: p.Description, Brand: p.Brand, Status: string(p.Status),
-		SearchText: domain.SearchText(p.Name, p.Brand),
-		CreatedAt:  p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		SearchText:   searchTextOf(p),
+		Translations: objectOrEmpty(p.Translations), Attributes: objectOrEmpty(p.Attributes),
+		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 
@@ -62,6 +80,7 @@ func (r *productRow) toDomain() *domain.Product {
 	return &domain.Product{
 		ID: r.ID, CategoryID: r.CategoryID, Name: r.Name, Slug: r.Slug,
 		Description: r.Description, Brand: r.Brand, Status: domain.ProductStatus(r.Status),
+		Translations: r.Translations, Attributes: r.Attributes,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 	}
 }
@@ -111,11 +130,14 @@ func (r *variantRow) toDomain() *domain.Variant {
 type summaryRow struct {
 	bun.BaseModel `bun:"table:products,alias:p"`
 
-	ID         uuid.UUID `bun:",pk,type:uuid"`
-	CategoryID uuid.UUID `bun:",type:uuid"`
-	Name       string
-	Slug       string
-	Brand      string
-	Status     string
-	PriceFrom  *int64 `bun:"price_from,scanonly"`
+	ID           uuid.UUID `bun:",pk,type:uuid"`
+	CategoryID   uuid.UUID `bun:",type:uuid"`
+	Name         string
+	Slug         string
+	Description  string
+	Brand        string
+	Status       string
+	Translations json.RawMessage `bun:"translations,type:jsonb"`
+	Attributes   json.RawMessage `bun:"attributes,type:jsonb"`
+	PriceFrom    *int64          `bun:"price_from,scanonly"`
 }

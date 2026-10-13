@@ -1,20 +1,28 @@
 "use client";
 
-import type { OrderStatus } from "@/types";
-import { statusTone } from "@/lib/mock/account";
+import type { DisplayStatus } from "@/lib/order-status";
 import { useDict } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export function StatusBadge({ status }: { status: OrderStatus }) {
+const tone: Record<DisplayStatus, "neutral" | "active" | "done" | "bad"> = {
+  pending: "neutral",
+  awaiting_payment: "neutral",
+  paid: "active",
+  confirmed: "done",
+  cancelled: "bad",
+  refunded: "bad",
+};
+
+export function StatusBadge({ status }: { status: DisplayStatus }) {
   const d = useDict();
-  const tone = statusTone[status];
+  const t = tone[status];
   return (
     <span
       className={cn(
         "chip",
-        tone === "done" && "!border-success/40 !text-success",
-        tone === "active" && "!border-bronze-deep/50 !text-bronze-deep",
-        tone === "bad" && "!text-umber",
+        t === "done" && "!border-success/40 !text-success",
+        t === "active" && "!border-bronze-deep/50 !text-bronze-deep",
+        t === "bad" && "!text-umber",
       )}
     >
       {d.status[status]}

@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Link } from "@/components/ui/link";
 import { useStore } from "./store";
-import { getProductById } from "@/lib/mock/catalog";
+import { useCartLines } from "./use-cart-lines";
 import { Photo } from "@/components/ui/photo";
 import { useDict, useLocale } from "@/lib/i18n/provider";
 import { cn, formatPrice } from "@/lib/utils";
@@ -14,7 +14,8 @@ export const FREE_SHIPPING_THRESHOLD = 25000;
 export function CartDrawer() {
   const d = useDict();
   const locale = useLocale();
-  const { drawerOpen, closeDrawer, items, subtotal, setQty, remove } = useStore();
+  const { drawerOpen, closeDrawer, items, setQty, remove } = useStore();
+  const { lines, subtotal } = useCartLines();
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -66,11 +67,9 @@ export function CartDrawer() {
               </div>
             </div>
             <ul className="flex-1 divide-y divide-travertine overflow-y-auto px-6">
-              {items.map((i) => {
-                const p = getProductById(i.productId, locale);
-                if (!p) return null;
+              {lines.map(({ item: i, product: p, lineTotal }) => {
                 return (
-                  <li key={`${i.productId}-${i.size}-${i.color}`} className="flex gap-4 py-5">
+                  <li key={i.variantId} className="flex gap-4 py-5">
                     <Link href={`/product/${p.slug}`} onClick={closeDrawer} className="w-24 shrink-0">
                       <Photo src={p.images[0]} alt={p.name} sizes="100px" imgClassName="object-top" />
                     </Link>
@@ -84,17 +83,17 @@ export function CartDrawer() {
                       </p>
                       <div className="mt-auto flex items-center justify-between pt-3">
                         <div className="flex items-center border border-travertine">
-                          <button aria-label={c.decrease} className="p-2 hover:bg-sand" onClick={() => setQty(i.productId, i.size, i.color, i.qty - 1)}>
+                          <button aria-label={c.decrease} className="p-2 hover:bg-sand" onClick={() => setQty(i.variantId, i.qty - 1)}>
                             <Minus size={12} />
                           </button>
                           <span className="w-7 text-center text-[12px]">{i.qty}</span>
-                          <button aria-label={c.increase} className="p-2 hover:bg-sand" onClick={() => setQty(i.productId, i.size, i.color, i.qty + 1)}>
+                          <button aria-label={c.increase} className="p-2 hover:bg-sand" onClick={() => setQty(i.variantId, i.qty + 1)}>
                             <Plus size={12} />
                           </button>
                         </div>
-                        <p className="label-mono">{formatPrice(p.price * i.qty, locale)}</p>
+                        <p className="label-mono">{formatPrice(lineTotal, locale)}</p>
                       </div>
-                      <button onClick={() => remove(i.productId, i.size, i.color)} className="mt-2 self-start text-[11px] text-umber underline underline-offset-4 hover:text-ink">
+                      <button onClick={() => remove(i.variantId)} className="mt-2 self-start text-[11px] text-umber underline underline-offset-4 hover:text-ink">
                         {d.common.remove}
                       </button>
                     </div>

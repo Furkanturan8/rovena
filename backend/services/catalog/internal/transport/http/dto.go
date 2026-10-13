@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/Furkanturan8/rovena/services/catalog/internal/application"
@@ -34,22 +35,27 @@ func (r VariantRequest) toInput() application.VariantInput {
 }
 
 type CreateProductRequest struct {
-	Name        string           `json:"name" validate:"required,min=2,max=200"`
-	Description string           `json:"description" validate:"max=10000"`
-	Brand       string           `json:"brand" validate:"max=100"`
-	CategoryID  string           `json:"category_id" validate:"required,uuid"`
-	Status      string           `json:"status" validate:"omitempty,oneof=draft active archived"`
-	Images      []ImageInput     `json:"images" validate:"max=10,dive"`
-	Variants    []VariantRequest `json:"variants" validate:"max=100,dive"`
+	Name         string           `json:"name" validate:"required,min=2,max=200"`
+	Slug         string           `json:"slug" validate:"omitempty,max=80"`
+	Translations json.RawMessage  `json:"translations"`
+	Attributes   json.RawMessage  `json:"attributes"`
+	Description  string           `json:"description" validate:"max=10000"`
+	Brand        string           `json:"brand" validate:"max=100"`
+	CategoryID   string           `json:"category_id" validate:"required,uuid"`
+	Status       string           `json:"status" validate:"omitempty,oneof=draft active archived"`
+	Images       []ImageInput     `json:"images" validate:"max=10,dive"`
+	Variants     []VariantRequest `json:"variants" validate:"max=100,dive"`
 }
 
 type UpdateProductRequest struct {
-	Name        *string       `json:"name" validate:"omitempty,min=2,max=200"`
-	Description *string       `json:"description" validate:"omitempty,max=10000"`
-	Brand       *string       `json:"brand" validate:"omitempty,max=100"`
-	CategoryID  *string       `json:"category_id" validate:"omitempty,uuid"`
-	Status      *string       `json:"status" validate:"omitempty,oneof=draft active archived"`
-	Images      *[]ImageInput `json:"images" validate:"omitempty,max=10,dive"`
+	Translations json.RawMessage `json:"translations"`
+	Attributes   json.RawMessage `json:"attributes"`
+	Name         *string         `json:"name" validate:"omitempty,min=2,max=200"`
+	Description  *string         `json:"description" validate:"omitempty,max=10000"`
+	Brand        *string         `json:"brand" validate:"omitempty,max=100"`
+	CategoryID   *string         `json:"category_id" validate:"omitempty,uuid"`
+	Status       *string         `json:"status" validate:"omitempty,oneof=draft active archived"`
+	Images       *[]ImageInput   `json:"images" validate:"omitempty,max=10,dive"`
 }
 
 type UpdateVariantRequest struct {
@@ -60,28 +66,32 @@ type UpdateVariantRequest struct {
 }
 
 type CreateCategoryRequest struct {
-	Name        string  `json:"name" validate:"required,min=2,max=100"`
-	Description string  `json:"description" validate:"max=1000"`
-	ParentID    *string `json:"parent_id" validate:"omitempty,uuid"`
+	Name         string          `json:"name" validate:"required,min=2,max=100"`
+	Slug         string          `json:"slug" validate:"omitempty,max=80"`
+	Translations json.RawMessage `json:"translations"`
+	Description  string          `json:"description" validate:"max=1000"`
+	ParentID     *string         `json:"parent_id" validate:"omitempty,uuid"`
 }
 
 type UpdateCategoryRequest struct {
-	Name        *string `json:"name" validate:"omitempty,min=2,max=100"`
-	Description *string `json:"description" validate:"omitempty,max=1000"`
+	Translations json.RawMessage `json:"translations"`
+	Name         *string         `json:"name" validate:"omitempty,min=2,max=100"`
+	Description  *string         `json:"description" validate:"omitempty,max=1000"`
 }
 
 // ---- responses ----
 
 type CategoryResponse struct {
-	ID          string  `json:"id"`
-	ParentID    *string `json:"parent_id"`
-	Name        string  `json:"name"`
-	Slug        string  `json:"slug"`
-	Description string  `json:"description"`
+	ID           string          `json:"id"`
+	ParentID     *string         `json:"parent_id"`
+	Name         string          `json:"name"`
+	Slug         string          `json:"slug"`
+	Description  string          `json:"description"`
+	Translations json.RawMessage `json:"translations"`
 }
 
 func ToCategoryResponse(c *domain.Category) CategoryResponse {
-	r := CategoryResponse{ID: c.ID.String(), Name: c.Name, Slug: c.Slug, Description: c.Description}
+	r := CategoryResponse{ID: c.ID.String(), Name: c.Name, Slug: c.Slug, Description: c.Description, Translations: orEmptyObject(c.Translations)}
 	if c.ParentID != nil {
 		s := c.ParentID.String()
 		r.ParentID = &s
@@ -112,17 +122,19 @@ func ToVariantResponse(v *domain.Variant) VariantResponse {
 }
 
 type ProductResponse struct {
-	ID          string            `json:"id"`
-	CategoryID  string            `json:"category_id"`
-	Name        string            `json:"name"`
-	Slug        string            `json:"slug"`
-	Description string            `json:"description"`
-	Brand       string            `json:"brand"`
-	Status      string            `json:"status"`
-	Images      []ImageResponse   `json:"images"`
-	Variants    []VariantResponse `json:"variants"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
+	ID           string            `json:"id"`
+	CategoryID   string            `json:"category_id"`
+	Name         string            `json:"name"`
+	Slug         string            `json:"slug"`
+	Description  string            `json:"description"`
+	Brand        string            `json:"brand"`
+	Status       string            `json:"status"`
+	Translations json.RawMessage   `json:"translations"`
+	Attributes   json.RawMessage   `json:"attributes"`
+	Images       []ImageResponse   `json:"images"`
+	Variants     []VariantResponse `json:"variants"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
 func ToProductResponse(p *domain.Product) ProductResponse {
@@ -137,6 +149,7 @@ func ToProductResponse(p *domain.Product) ProductResponse {
 	return ProductResponse{
 		ID: p.ID.String(), CategoryID: p.CategoryID.String(), Name: p.Name, Slug: p.Slug,
 		Description: p.Description, Brand: p.Brand, Status: string(p.Status),
+		Translations: orEmptyObject(p.Translations), Attributes: orEmptyObject(p.Attributes),
 		Images: images, Variants: variants, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
@@ -146,16 +159,32 @@ type ProductSummaryResponse struct {
 	CategoryID     string `json:"category_id"`
 	Name           string `json:"name"`
 	Slug           string `json:"slug"`
+	Description    string `json:"description"`
 	Brand          string `json:"brand"`
 	Status         string `json:"status"`
 	PriceFromCents *int64 `json:"price_from_cents"`
 	Currency       string `json:"currency"`
 	ThumbnailURL   string `json:"thumbnail_url"`
+	// Everything a listing card needs, so the storefront does not call once per product.
+	Translations json.RawMessage   `json:"translations"`
+	Attributes   json.RawMessage   `json:"attributes"`
+	Images       []ImageResponse   `json:"images"`
+	Variants     []VariantResponse `json:"variants"`
 }
 
 func ToSummaryResponse(s domain.ProductSummary) ProductSummaryResponse {
+	images := make([]ImageResponse, len(s.Images))
+	for i, img := range s.Images {
+		images[i] = ImageResponse{URL: img.URL, Alt: img.Alt}
+	}
+	variants := make([]VariantResponse, len(s.Variants))
+	for i := range s.Variants {
+		variants[i] = ToVariantResponse(&s.Variants[i])
+	}
 	return ProductSummaryResponse{
-		ID: s.ID.String(), CategoryID: s.CategoryID.String(), Name: s.Name, Slug: s.Slug,
+		Translations: orEmptyObject(s.Translations), Attributes: orEmptyObject(s.Attributes),
+		Images: images, Variants: variants,
+		ID: s.ID.String(), CategoryID: s.CategoryID.String(), Name: s.Name, Slug: s.Slug, Description: s.Description,
 		Brand: s.Brand, Status: string(s.Status), PriceFromCents: s.PriceFromCents,
 		Currency: s.Currency, ThumbnailURL: s.ThumbnailURL,
 	}
@@ -184,4 +213,11 @@ func ToVariantSnapshotResponse(s domain.VariantSnapshot) VariantSnapshotResponse
 		SKU: s.SKU, Size: s.Size, Color: s.Color, PriceCents: s.PriceCents,
 		Currency: s.Currency, Sellable: s.Sellable(),
 	}
+}
+
+func orEmptyObject(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 {
+		return json.RawMessage(`{}`)
+	}
+	return raw
 }

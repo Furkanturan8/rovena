@@ -70,7 +70,7 @@ func run() error {
 	defer func() { _ = broker.Close() }()
 
 	repo := postgres.NewPaymentRepository(db)
-	payments := application.NewPaymentService(repo, provider.NewFake(cfg.ProviderLatency), log, application.Config{
+	payments := application.NewPaymentService(repo, provider.NewFake(cfg.ProviderLatency).WithMaxAmount(cfg.ProviderMaxAmountCents), log, application.Config{
 		MaxAttempts:   cfg.MaxAttempts,
 		ChargeTimeout: cfg.ChargeTimeout,
 	})

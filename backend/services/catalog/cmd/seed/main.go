@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Furkanturan8/rovena/services/catalog/internal/application"
 	"github.com/Furkanturan8/rovena/services/catalog/internal/domain"
@@ -12,19 +17,65 @@ import (
 	"github.com/Furkanturan8/rovena/services/catalog/internal/repository/postgres"
 )
 
-// Loads demo categories and products. Does nothing when categories already exist.
+// store.json holds the storefront catalog (categories, products, variants with Turkish and
+// English texts). Image paths start with /media/ and are resolved against MEDIA_BASE_URL.
+//
+//go:embed store.json
+var storeJSON []byte
+
+type seedFile struct {
+	Categories []struct {
+		Slug         string          `json:"slug"`
+		Name         string          `json:"name"`
+		Description  string          `json:"description"`
+		Translations json.RawMessage `json:"translations"`
+	} `json:"categories"`
+	Products []struct {
+		Slug         string          `json:"slug"`
+		Category     string          `json:"category"`
+		Brand        string          `json:"brand"`
+		Status       string          `json:"status"`
+		Name         string          `json:"name"`
+		Description  string          `json:"description"`
+		Translations json.RawMessage `json:"translations"`
+		Attributes   json.RawMessage `json:"attributes"`
+		Images       []string        `json:"images"`
+		Variants     []struct {
+			SKU        string `json:"sku"`
+			Size       string `json:"size"`
+			Color      string `json:"color"`
+			PriceCents int64  `json:"price_cents"`
+		} `json:"variants"`
+	} `json:"products"`
+}
+
+// Loads the storefront catalog. Existing categories and products (by slug) are left alone, so
+// running it twice is harmless. With -reset every category and product is deleted first; that is
+// meant for local development, to replace an older demo catalog.
 func main() {
-	if err := run(); err != nil {
+	reset := flag.Bool("reset", false, "delete all categories and products before seeding (development only)")
+	flag.Parse()
+	if err := run(*reset); err != nil {
 		fmt.Fprintln(os.Stderr, "seed:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(reset bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	var data seedFile
+	if err := json.Unmarshal(storeJSON, &data); err != nil {
+		return fmt.Errorf("parse store.json: %w", err)
+	}
+	mediaBase := strings.TrimRight(os.Getenv("MEDIA_BASE_URL"), "/")
+	if mediaBase == "" {
+		return errors.New("MEDIA_BASE_URL is required: product images are stored as absolute URLs " +
+			"(e.g. https://<project>.supabase.co/storage/v1/object/public/media)")
+	}
+
 	ctx := context.Background()
 	db, err := database.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -32,81 +83,77 @@ func run() error {
 	}
 	defer func() { _ = db.Close() }()
 
+	if reset {
+		if _, err := db.ExecContext(ctx, "DELETE FROM products"); err != nil {
+			return err
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM categories WHERE parent_id IS NOT NULL"); err != nil {
+			return err
+		}
+		if _, err := db.ExecContext(ctx, "DELETE FROM categories"); err != nil {
+			return err
+		}
+		fmt.Println("catalog cleared")
+	}
+
 	catRepo := postgres.NewCategoryRepository(db)
 	categories := application.NewCategoryService(catRepo)
-	products := application.NewProductService(postgres.NewProductRepository(db), postgres.NewVariantRepository(db))
+	prodRepo := postgres.NewProductRepository(db)
+	products := application.NewProductService(prodRepo, postgres.NewVariantRepository(db))
 
-	existing, err := categories.List(ctx)
-	if err != nil {
-		return err
-	}
-	if len(existing) > 0 {
-		fmt.Println("catalog already seeded")
-		return nil
-	}
-
-	clothing, err := categories.Create(ctx, application.CreateCategoryInput{Name: "Giyim"})
-	if err != nil {
-		return err
-	}
-	outer, err := categories.Create(ctx, application.CreateCategoryInput{Name: "Dış Giyim", ParentID: &clothing.ID})
-	if err != nil {
-		return err
-	}
-	tshirts, err := categories.Create(ctx, application.CreateCategoryInput{Name: "Tişört", ParentID: &clothing.ID})
-	if err != nil {
-		return err
-	}
-	accessories, err := categories.Create(ctx, application.CreateCategoryInput{Name: "Aksesuar"})
-	if err != nil {
-		return err
-	}
-	bags, err := categories.Create(ctx, application.CreateCategoryInput{Name: "Çanta", ParentID: &accessories.ID})
-	if err != nil {
-		return err
-	}
-
-	demo := []application.CreateProductInput{
-		{
-			Name: "Deri Ceket", Brand: "Rovena", CategoryID: outer.ID, Status: domain.StatusActive,
-			Description: "Gerçek deri, slim fit biker ceket.",
-			Images:      []domain.Image{{URL: "https://picsum.photos/seed/rovena-jacket/800/1000", Alt: "Deri ceket"}},
-			Variants: []application.VariantInput{
-				{SKU: "JKT-LTH-BLK-S", Size: "S", Color: "Siyah", PriceCents: 459900},
-				{SKU: "JKT-LTH-BLK-M", Size: "M", Color: "Siyah", PriceCents: 459900},
-				{SKU: "JKT-LTH-BRN-M", Size: "M", Color: "Kahverengi", PriceCents: 479900},
-			},
-		},
-		{
-			Name: "Basic Tişört", Brand: "Rovena", CategoryID: tshirts.ID, Status: domain.StatusActive,
-			Description: "Organik pamuk, regular fit.",
-			Images:      []domain.Image{{URL: "https://picsum.photos/seed/rovena-tee/800/1000", Alt: "Basic tişört"}},
-			Variants: []application.VariantInput{
-				{SKU: "TEE-BSC-WHT-S", Size: "S", Color: "Beyaz", PriceCents: 34900},
-				{SKU: "TEE-BSC-WHT-M", Size: "M", Color: "Beyaz", PriceCents: 34900},
-				{SKU: "TEE-BSC-BLK-M", Size: "M", Color: "Siyah", PriceCents: 34900},
-			},
-		},
-		{
-			Name: "Deri Omuz Çantası", Brand: "Aurea", CategoryID: bags.ID, Status: domain.StatusActive,
-			Description: "El yapımı, ayarlanabilir askılı omuz çantası.",
-			Images:      []domain.Image{{URL: "https://picsum.photos/seed/rovena-bag/800/1000", Alt: "Omuz çantası"}},
-			Variants: []application.VariantInput{
-				{SKU: "BAG-SHL-TAN", Color: "Taba", PriceCents: 219900},
-				{SKU: "BAG-SHL-BLK", Color: "Siyah", PriceCents: 219900},
-			},
-		},
-		{
-			Name: "Keten Gömlek", Brand: "Rovena", CategoryID: clothing.ID, Status: domain.StatusDraft,
-			Description: "Taslak ürün: vitrinde görünmez.",
-			Variants:    []application.VariantInput{{SKU: "SHT-LNN-BLU-M", Size: "M", Color: "Mavi", PriceCents: 89900}},
-		},
-	}
-	for _, in := range demo {
-		if _, err := products.Create(ctx, in); err != nil {
-			return fmt.Errorf("create %q: %w", in.Name, err)
+	categoryIDs := map[string]domain.Category{}
+	newCategories := 0
+	for _, c := range data.Categories {
+		existing, err := catRepo.GetBySlug(ctx, c.Slug)
+		if err == nil {
+			categoryIDs[c.Slug] = *existing
+			continue
 		}
+		if !errors.Is(err, domain.ErrCategoryNotFound) {
+			return err
+		}
+		created, err := categories.Create(ctx, application.CreateCategoryInput{
+			Name: c.Name, Slug: c.Slug, Description: c.Description, Translations: c.Translations,
+		})
+		if err != nil {
+			return fmt.Errorf("create category %q: %w", c.Slug, err)
+		}
+		categoryIDs[c.Slug] = *created
+		newCategories++
 	}
-	fmt.Println("catalog seeded: 5 categories, 4 products")
+
+	newProducts := 0
+	for _, p := range data.Products {
+		if taken, err := prodRepo.SlugExists(ctx, p.Slug); err != nil {
+			return err
+		} else if taken {
+			continue
+		}
+		category, ok := categoryIDs[p.Category]
+		if !ok {
+			return fmt.Errorf("product %q: unknown category %q", p.Slug, p.Category)
+		}
+		in := application.CreateProductInput{
+			Name: p.Name, Slug: p.Slug, Description: p.Description, Brand: p.Brand,
+			CategoryID: category.ID, Status: domain.ProductStatus(p.Status),
+			Translations: p.Translations, Attributes: p.Attributes,
+		}
+		for _, img := range p.Images {
+			in.Images = append(in.Images, domain.Image{URL: mediaURL(mediaBase, img), Alt: p.Name})
+		}
+		for _, v := range p.Variants {
+			in.Variants = append(in.Variants, application.VariantInput{SKU: v.SKU, Size: v.Size, Color: v.Color, PriceCents: v.PriceCents})
+		}
+		if _, err := products.Create(ctx, in); err != nil {
+			return fmt.Errorf("create product %q: %w", p.Slug, err)
+		}
+		newProducts++
+	}
+	fmt.Printf("catalog seeded: %d new categories, %d new products\n", newCategories, newProducts)
 	return nil
+}
+
+// mediaURL turns "/media/products/x/1.jpg" into "<MEDIA_BASE_URL>/products/x/1.jpg".
+func mediaURL(base, path string) string {
+	return base + "/" + strings.TrimPrefix(strings.TrimPrefix(path, "/media/"), "/")
 }

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
@@ -31,13 +32,16 @@ type VariantInput struct {
 }
 
 type CreateProductInput struct {
-	Name        string
-	Description string
-	Brand       string
-	CategoryID  uuid.UUID
-	Status      domain.ProductStatus // empty = draft
-	Images      []domain.Image
-	Variants    []VariantInput
+	Name         string
+	Slug         string // empty = derived from Name
+	Description  string
+	Brand        string
+	CategoryID   uuid.UUID
+	Status       domain.ProductStatus // empty = draft
+	Translations json.RawMessage
+	Attributes   json.RawMessage
+	Images       []domain.Image
+	Variants     []VariantInput
 }
 
 func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*domain.Product, error) {
@@ -52,8 +56,16 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*do
 		return nil, domain.ErrNoActiveVariant
 	}
 
+	translations, err := domain.NormalizeObject(in.Translations)
+	if err != nil {
+		return nil, err
+	}
+	attributes, err := domain.NormalizeObject(in.Attributes)
+	if err != nil {
+		return nil, err
+	}
 	name := strings.TrimSpace(in.Name)
-	slug, err := uniqueSlug(ctx, name, s.products.SlugExists)
+	slug, err := s.productSlug(ctx, name, in.Slug)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +77,8 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*do
 	p := &domain.Product{
 		ID: id, CategoryID: in.CategoryID, Name: name, Slug: slug,
 		Description: strings.TrimSpace(in.Description), Brand: strings.TrimSpace(in.Brand),
-		Status: status, Images: numberImages(in.Images), CreatedAt: now, UpdatedAt: now,
+		Status: status, Translations: translations, Attributes: attributes,
+		Images: numberImages(in.Images), CreatedAt: now, UpdatedAt: now,
 	}
 	for _, vin := range in.Variants {
 		v, err := s.newVariant(p.ID, vin, now)
@@ -81,12 +94,14 @@ func (s *ProductService) Create(ctx context.Context, in CreateProductInput) (*do
 }
 
 type UpdateProductInput struct {
-	Name        *string
-	Description *string
-	Brand       *string
-	CategoryID  *uuid.UUID
-	Status      *domain.ProductStatus
-	Images      *[]domain.Image // non-nil replaces the whole image list
+	Name         *string
+	Description  *string
+	Brand        *string
+	CategoryID   *uuid.UUID
+	Status       *domain.ProductStatus
+	Translations json.RawMessage // non-empty replaces the translations object
+	Attributes   json.RawMessage // non-empty replaces the attributes object
+	Images       *[]domain.Image // non-nil replaces the whole image list
 }
 
 func (s *ProductService) Update(ctx context.Context, id uuid.UUID, in UpdateProductInput) (*domain.Product, error) {
@@ -114,6 +129,20 @@ func (s *ProductService) Update(ctx context.Context, id uuid.UUID, in UpdateProd
 			return nil, domain.ErrNoActiveVariant
 		}
 		p.Status = *in.Status
+	}
+	if len(in.Translations) > 0 {
+		t, err := domain.NormalizeObject(in.Translations)
+		if err != nil {
+			return nil, err
+		}
+		p.Translations = t
+	}
+	if len(in.Attributes) > 0 {
+		a, err := domain.NormalizeObject(in.Attributes)
+		if err != nil {
+			return nil, err
+		}
+		p.Attributes = a
 	}
 	replaceImages := in.Images != nil
 	if replaceImages {
@@ -218,6 +247,25 @@ func (s *ProductService) ListPublic(ctx context.Context, f domain.ProductFilter)
 
 func (s *ProductService) ListAdmin(ctx context.Context, f domain.ProductFilter) ([]domain.ProductSummary, int, error) {
 	return s.products.List(ctx, f)
+}
+
+// productSlug uses the explicit slug when given (it must be valid and free) and derives one from the name otherwise.
+func (s *ProductService) productSlug(ctx context.Context, name, explicit string) (string, error) {
+	explicit = strings.TrimSpace(explicit)
+	if explicit == "" {
+		return uniqueSlug(ctx, name, s.products.SlugExists)
+	}
+	if !domain.ValidSlug(explicit) {
+		return "", domain.ErrInvalidSlug
+	}
+	taken, err := s.products.SlugExists(ctx, explicit)
+	if err != nil {
+		return "", err
+	}
+	if taken {
+		return "", domain.ErrSlugTaken
+	}
+	return explicit, nil
 }
 
 func (s *ProductService) newVariant(productID uuid.UUID, in VariantInput, now time.Time) (*domain.Variant, error) {

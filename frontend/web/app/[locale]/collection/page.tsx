@@ -5,8 +5,8 @@ import { ListingToolbar } from "@/components/product/listing-toolbar";
 import { ProductCard } from "@/components/product/product-card";
 import { CraftFeature, FilmBanner } from "@/components/product/editorial-banners";
 import { Stagger, StaggerItem } from "@/components/motion/reveal";
-import { categories, getCategory, productBases } from "@/lib/mock/catalog";
-import { filterProducts, PAGE_SIZE, parseListingParams } from "@/lib/listing";
+import { getCatalog } from "@/lib/data/catalog";
+import { colorsOf, filterProducts, PAGE_SIZE, parseListingParams, priceRangeOf, sizesOf } from "@/lib/listing";
 import { getI18n } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
@@ -20,12 +20,16 @@ export default async function CollectionPage({ params, searchParams }: PageProps
   const l = d.listing;
   const raw = await searchParams;
   const query = parseListingParams(raw);
-  const filtered = filterProducts(query, locale);
+  const { products, categories } = await getCatalog(locale);
+  const filtered = filterProducts(products, query, locale);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const page = Math.min(query.page, pageCount);
   const slice = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const category = query.category ? getCategory(query.category) : undefined;
-  const countsBase = filterProducts(query, locale, "category");
+  const category = query.category ? categories.find((c) => c.slug === query.category) : undefined;
+  const countsBase = filterProducts(products, query, locale, "category");
+
+  // Filmde öne çıkan ürün: en uzun işçiliğe sahip parça.
+  const showcase = [...products].sort((a, b) => b.craftHours - a.craftHours)[0];
 
   // Filtre değişince satırları yeniden bağla ki giriş animasyonu yeni ürünler için tekrar çalışsın.
   const listKey = JSON.stringify(raw);
@@ -55,7 +59,7 @@ export default async function CollectionPage({ params, searchParams }: PageProps
         ))}
       </Stagger>,
     );
-    if (page === 1 && i === 3 && slice.length > 6 && !query.q) rows.push(<FilmBanner key="film" d={d} locale={locale} />);
+    if (page === 1 && i === 3 && slice.length > 6 && !query.q && showcase) rows.push(<FilmBanner key="film" d={d} locale={locale} product={showcase} />);
   }
 
   return (
@@ -68,7 +72,7 @@ export default async function CollectionPage({ params, searchParams }: PageProps
           {category && (
             <>
               <ChevronRight size={11} />
-              <span className="text-ink">{d.categories[category.slug].label}</span>
+              <span className="text-ink">{category.label}</span>
             </>
           )}
         </nav>
@@ -76,9 +80,9 @@ export default async function CollectionPage({ params, searchParams }: PageProps
         <header className="mt-8 grid gap-8 pb-12 md:grid-cols-12 md:items-end">
           <div className="md:col-span-8">
             <p className="label-caps mb-4 text-umber">{l.eyebrow}</p>
-            <h1 className="headline-xl md:!text-[64px] md:!leading-[72px]">{category ? d.categories[category.slug].label : l.title}</h1>
+            <h1 className="headline-xl md:!text-[64px] md:!leading-[72px]">{category ? category.label : l.title}</h1>
           </div>
-          <p className="max-w-md text-[14px] leading-6 text-umber md:col-span-4">{l.description(productBases.length)}</p>
+          <p className="max-w-md text-[14px] leading-6 text-umber md:col-span-4">{l.description(products.length)}</p>
         </header>
 
         <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-6 md:mx-0 md:px-0">
@@ -91,7 +95,7 @@ export default async function CollectionPage({ params, searchParams }: PageProps
               href={href({ category: c.slug })}
               className={cn("label-caps shrink-0 border px-5 py-3 text-[10px]", query.category === c.slug ? "border-ink bg-ink text-canvas" : "border-travertine hover:border-ink")}
             >
-              {d.categories[c.slug].label} ({countsBase.filter((p) => p.category === c.slug).length})
+              {c.label} ({countsBase.filter((p) => p.category === c.slug).length})
             </Link>
           ))}
         </div>
@@ -99,6 +103,9 @@ export default async function CollectionPage({ params, searchParams }: PageProps
         <ListingToolbar
           total={filtered.length}
           shown={slice.length}
+          sizes={sizesOf(products)}
+          colors={colorsOf(products)}
+          priceRange={priceRangeOf(products)}
           selected={{ size: query.size, color: query.color, min: query.min, max: query.max, sort: query.sort, q: query.q }}
         />
 

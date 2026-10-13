@@ -30,6 +30,10 @@ func MapDomainError(err error) (*errorx.AppError, bool) {
 		return errorx.WithMessage(errorx.ErrConflict, "An active product needs at least one active variant"), true
 	case errors.Is(err, domain.ErrInvalidSKU):
 		return errorx.WithMessage(errorx.ErrValidation, "SKU may only contain letters, digits, '-' and '_' (2-64 characters)"), true
+	case errors.Is(err, domain.ErrInvalidSlug):
+		return errorx.WithMessage(errorx.ErrValidation, "Slug may only contain lowercase letters, digits and single dashes"), true
+	case errors.Is(err, domain.ErrInvalidJSON):
+		return errorx.WithMessage(errorx.ErrValidation, "translations and attributes must be JSON objects of at most 32 KB"), true
 	case errors.Is(err, domain.ErrInvalidStatus):
 		return errorx.WithMessage(errorx.ErrValidation, "Invalid status"), true
 	}

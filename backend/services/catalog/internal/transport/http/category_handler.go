@@ -44,7 +44,7 @@ func (h *CategoryHandler) Create(c *fiber.Ctx) error {
 	if err := httpx.BindAndValidate(c, &req); err != nil {
 		return err
 	}
-	in := application.CreateCategoryInput{Name: req.Name, Description: req.Description}
+	in := application.CreateCategoryInput{Name: req.Name, Slug: req.Slug, Description: req.Description, Translations: req.Translations}
 	if req.ParentID != nil {
 		id, _ := uuid.Parse(*req.ParentID) // format already validated
 		in.ParentID = &id
@@ -66,7 +66,7 @@ func (h *CategoryHandler) Update(c *fiber.Ctx) error {
 		return err
 	}
 	cat, err := h.categories.Update(c.UserContext(), id, application.UpdateCategoryInput{
-		Name: req.Name, Description: req.Description,
+		Name: req.Name, Description: req.Description, Translations: req.Translations,
 	})
 	if err != nil {
 		return err

@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { Link } from "@/components/ui/link";
-import { addresses, orders, user } from "@/lib/mock/account";
-import { getProductById } from "@/lib/mock/catalog";
+import { addresses } from "@/lib/mock/account";
 import { StatusBadge } from "@/components/account/status-badge";
+import { displayStatus } from "@/lib/order-status";
 import { Photo } from "@/components/ui/photo";
 import { getI18n } from "@/lib/i18n/server";
+import { requireUser } from "@/lib/auth/session";
+import { getMyOrders } from "@/lib/data/orders";
+import { productsForOrders } from "@/lib/data/order-products";
 import { formatPrice } from "@/lib/utils";
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/account">): Promise<Metadata> {
@@ -15,10 +18,12 @@ export async function generateMetadata({ params }: PageProps<"/[locale]/account"
 
 export default async function AccountOverview({ params }: PageProps<"/[locale]/account">) {
   const { locale, d } = await getI18n(params);
+  const { user, token } = await requireUser(locale, `/${locale}/account`);
   const o = d.account.overview;
-  const active = orders.find((x) => x.status === "preparing" || x.status === "shipped");
-  const dateFmt = new Intl.DateTimeFormat(locale === "tr" ? "tr-TR" : "en-GB", { day: "numeric", month: "long", year: "numeric" });
-  const spent = orders.filter((x) => x.status === "delivered" || x.status === "preparing").reduce((n, x) => n + x.total, 0);
+  const orders = await getMyOrders(token);
+  const products = await productsForOrders(orders, locale);
+  const active = orders.find((x) => x.status === "pending" || x.status === "awaiting_payment" || x.status === "paid");
+  const spent = orders.filter((x) => x.status === "confirmed").reduce((n, x) => n + x.total_cents / 100, 0);
 
   return (
     <div className="space-y-12">
@@ -35,7 +40,7 @@ export default async function AccountOverview({ params }: PageProps<"/[locale]/a
         ))}
       </div>
 
-      {active && (
+      {active ? (
         <section>
           <div className="mb-5 flex items-end justify-between">
             <h2 className="headline-md">{o.activeOrder}</h2>
@@ -43,20 +48,21 @@ export default async function AccountOverview({ params }: PageProps<"/[locale]/a
           </div>
           <div className="flex flex-col gap-6 border border-travertine bg-paper p-6 sm:flex-row sm:items-center">
             <div className="flex gap-3">
-              {active.lines.slice(0, 3).map((l) => {
-                const p = getProductById(l.productId, locale)!;
-                return <Photo key={l.productId} src={p.images[0]} alt={p.name} className="w-20" sizes="80px" imgClassName="object-top" />;
+              {active.items.slice(0, 3).map((it) => {
+                const p = products.get(it.product_id);
+                return p ? <Photo key={it.variant_id} src={p.images[0]} alt={p.name} className="w-20" sizes="80px" imgClassName="object-top" /> : null;
               })}
             </div>
             <div className="flex-1">
-              <p className="label-mono">{active.number}</p>
-              <p className="mt-1 font-serif text-[18px]">{getProductById(active.lines[0].productId, locale)?.name}</p>
-              {active.eta && <p className="mt-2 text-[13px] text-umber">{o.eta(dateFmt.format(new Date(active.eta)))}</p>}
+              <p className="label-mono">#{active.id.slice(-8).toUpperCase()}</p>
+              <p className="mt-1 font-serif text-[18px]">{active.items[0]?.product_name}</p>
             </div>
-            <StatusBadge status={active.status} />
+            <StatusBadge status={displayStatus(active.status, active.refund)} />
           </div>
         </section>
-      )}
+      ) : orders.length === 0 ? (
+        <p className="border border-travertine p-6 text-umber">{o.noOrders}</p>
+      ) : null}
 
       <section>
         <div className="mb-5 flex items-end justify-between">
@@ -65,9 +71,8 @@ export default async function AccountOverview({ params }: PageProps<"/[locale]/a
         </div>
         <dl className="grid gap-px border border-travertine bg-travertine sm:grid-cols-2">
           {[
-            [o.fullName, `${user.firstName} ${user.lastName}`],
+            [o.fullName, `${user.first_name} ${user.last_name}`.trim() || "—"],
             [o.email, user.email],
-            [o.phone, user.phone],
             [o.membership, d.account.tier],
           ].map(([k, v]) => (
             <div key={k} className="bg-canvas p-5">

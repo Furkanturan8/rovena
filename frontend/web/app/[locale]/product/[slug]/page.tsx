@@ -8,33 +8,34 @@ import { Accordion } from "@/components/product/accordion";
 import { ProductCard } from "@/components/product/product-card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { Stagger, StaggerItem } from "@/components/motion/reveal";
-import { getCategory, getProduct, getProducts, productBases } from "@/lib/mock/catalog";
+import { getCatalog, getProduct, getProductSlugs } from "@/lib/data/catalog";
 import { getI18n } from "@/lib/i18n/server";
 import { locales } from "@/lib/i18n/config";
 import { VIDEO } from "@/lib/media";
 
-export function generateStaticParams() {
-  return locales.flatMap((locale) => productBases.map((p) => ({ locale, slug: p.slug })));
+export async function generateStaticParams() {
+  const slugs = await getProductSlugs();
+  return locales.flatMap((locale) => slugs.map((slug) => ({ locale, slug })));
 }
 
 export async function generateMetadata({ params }: PageProps<"/[locale]/product/[slug]">): Promise<Metadata> {
   const { locale, slug } = await params;
-  const p = getProduct(slug, locale === "en" ? "en" : "tr");
+  const p = await getProduct(slug, locale === "en" ? "en" : "tr");
   return p ? { title: p.name, description: p.description } : {};
 }
 
 export default async function ProductPage({ params }: PageProps<"/[locale]/product/[slug]">) {
   const { locale, d } = await getI18n(params);
   const { slug } = await params;
-  const p = getProduct(slug, locale);
+  const p = await getProduct(slug, locale);
   if (!p) notFound();
 
   const t = d.product;
-  const category = getCategory(p.category);
-  const all = getProducts(locale);
+  const { products: all, categories } = await getCatalog(locale);
+  const category = categories.find((c) => c.slug === p.category);
   const look = all.filter((x) => x.id !== p.id && x.category !== p.category).slice(0, 3);
   const similar = all.filter((x) => x.id !== p.id && x.category === p.category).slice(0, 4);
-  const categoryLabel = category ? d.categories[category.slug].label : "";
+  const categoryLabel = category?.label ?? "";
   const rating = p.rating.toFixed(1);
 
   return (

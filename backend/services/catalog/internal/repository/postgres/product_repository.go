@@ -106,7 +106,7 @@ func (r *ProductRepository) getOne(ctx context.Context, where string, arg any) (
 func (r *ProductRepository) List(ctx context.Context, f domain.ProductFilter) ([]domain.ProductSummary, int, error) {
 	var rows []summaryRow
 	q := r.db.NewSelect().Model(&rows).
-		Column("p.id", "p.category_id", "p.name", "p.slug", "p.brand", "p.status").
+		Column("p.id", "p.category_id", "p.name", "p.slug", "p.description", "p.brand", "p.status", "p.translations", "p.attributes").
 		ColumnExpr(priceFromExpr + " AS price_from")
 
 	if f.Status != nil {
@@ -174,15 +174,49 @@ func (r *ProductRepository) List(ctx context.Context, f domain.ProductFilter) ([
 		return nil, 0, err
 	}
 
+	images, variants, err := r.imagesAndVariants(ctx, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	out := make([]domain.ProductSummary, len(rows))
 	for i, row := range rows {
 		out[i] = domain.ProductSummary{
-			ID: row.ID, CategoryID: row.CategoryID, Name: row.Name, Slug: row.Slug, Brand: row.Brand,
+			ID: row.ID, CategoryID: row.CategoryID, Name: row.Name, Slug: row.Slug, Description: row.Description, Brand: row.Brand,
 			Status: domain.ProductStatus(row.Status), PriceFromCents: row.PriceFrom,
 			Currency: domain.DefaultCurrency, ThumbnailURL: thumbs[row.ID],
+			Translations: objectOrEmpty(row.Translations), Attributes: objectOrEmpty(row.Attributes),
+			Images: images[row.ID], Variants: variants[row.ID],
 		}
 	}
 	return out, int(total), nil
+}
+
+// imagesAndVariants loads, for a page of listing rows, every image and every active variant, so the
+// storefront can draw cards (hover image, colours, sizes) without one request per product.
+func (r *ProductRepository) imagesAndVariants(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID][]domain.Image, map[uuid.UUID][]domain.Variant, error) {
+	images := make(map[uuid.UUID][]domain.Image, len(ids))
+	variants := make(map[uuid.UUID][]domain.Variant, len(ids))
+	if len(ids) == 0 {
+		return images, variants, nil
+	}
+	var imageRows []imageRow
+	if err := r.db.NewSelect().Model(&imageRows).
+		Where("i.product_id IN (?)", bun.List(ids)).OrderExpr("i.product_id, i.position").Scan(ctx); err != nil {
+		return nil, nil, err
+	}
+	for _, row := range imageRows {
+		images[row.ProductID] = append(images[row.ProductID], domain.Image{URL: row.URL, Alt: row.Alt, Position: row.Position})
+	}
+	var variantRows []variantRow
+	if err := r.db.NewSelect().Model(&variantRows).
+		Where("v.product_id IN (?)", bun.List(ids)).Where("v.active").OrderExpr("v.product_id, v.created_at, v.id").Scan(ctx); err != nil {
+		return nil, nil, err
+	}
+	for i := range variantRows {
+		variants[variantRows[i].ProductID] = append(variants[variantRows[i].ProductID], *variantRows[i].toDomain())
+	}
+	return images, variants, nil
 }
 
 func (r *ProductRepository) thumbnails(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]string, error) {
@@ -227,7 +261,9 @@ func (r *ProductRepository) Update(ctx context.Context, p *domain.Product, repla
 			Set("description = ?", p.Description).
 			Set("brand = ?", p.Brand).
 			Set("status = ?", string(p.Status)).
-			Set("search_text = ?", domain.SearchText(p.Name, p.Brand)).
+			Set("search_text = ?", searchTextOf(p)).
+			Set("translations = ?::jsonb", string(objectOrEmpty(p.Translations))).
+			Set("attributes = ?::jsonb", string(objectOrEmpty(p.Attributes))).
 			Set("updated_at = ?", p.UpdatedAt).
 			Where("id = ?", p.ID).
 			Exec(ctx); err != nil {

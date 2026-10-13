@@ -35,6 +35,8 @@ type Config struct {
 	RetryDelay time.Duration
 	// ProviderLatency is the artificial delay of the fake provider.
 	ProviderLatency time.Duration
+	// ProviderMaxAmountCents is the largest amount (kuruş) the fake provider approves; 0 = its default.
+	ProviderMaxAmountCents int64
 }
 
 const (
@@ -67,6 +69,13 @@ func Load() (*Config, error) {
 	}
 	if cfg.ProviderLatency, err = nonNegativeDuration("FAKE_PROVIDER_LATENCY", 0); err != nil {
 		return nil, err
+	}
+	if raw := os.Getenv("FAKE_PROVIDER_MAX_AMOUNT_CENTS"); raw != "" {
+		n, perr := strconv.ParseInt(raw, 10, 64)
+		if perr != nil || n <= 0 {
+			return nil, fmt.Errorf("FAKE_PROVIDER_MAX_AMOUNT_CENTS must be a positive integer, got %q", raw)
+		}
+		cfg.ProviderMaxAmountCents = n
 	}
 
 	if cfg.OutboxRetention, err = duration("OUTBOX_RETENTION", 7*24*time.Hour); err != nil {

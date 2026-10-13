@@ -2,17 +2,17 @@ import { Link } from "@/components/ui/link";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter-form";
 import { LanguageSwitcher } from "./language-switcher";
-import { categories } from "@/lib/mock/catalog";
 import type { Dictionary } from "@/lib/i18n/dictionaries/tr";
+import type { Category } from "@/types";
 
-export function Footer({ d }: { d: Dictionary }) {
+export function Footer({ d, categories }: { d: Dictionary; categories: Category[] }) {
   const f = d.footer;
   const cols = [
     {
       title: f.columns.collection,
       links: [
         { label: f.newArrivals, href: "/collection?sort=newest" },
-        ...categories.map((c) => ({ label: d.categories[c.slug].label, href: `/collection?category=${c.slug}` })),
+        ...categories.map((c) => ({ label: c.label, href: `/collection?category=${c.slug}` })),
       ],
     },
     {

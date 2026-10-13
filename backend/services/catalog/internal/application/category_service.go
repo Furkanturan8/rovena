@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -19,14 +20,20 @@ func NewCategoryService(categories repository.CategoryRepository) *CategoryServi
 }
 
 type CreateCategoryInput struct {
-	Name        string
-	Description string
-	ParentID    *uuid.UUID
+	Name         string
+	Slug         string // empty = derived from Name
+	Description  string
+	ParentID     *uuid.UUID
+	Translations json.RawMessage
 }
 
 func (s *CategoryService) Create(ctx context.Context, in CreateCategoryInput) (*domain.Category, error) {
+	translations, err := domain.NormalizeObject(in.Translations)
+	if err != nil {
+		return nil, err
+	}
 	name := strings.TrimSpace(in.Name)
-	slug, err := uniqueSlug(ctx, name, s.categories.SlugExists)
+	slug, err := s.categorySlug(ctx, name, in.Slug)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +44,7 @@ func (s *CategoryService) Create(ctx context.Context, in CreateCategoryInput) (*
 	now := time.Now()
 	c := &domain.Category{
 		ID: id, ParentID: in.ParentID, Name: name, Slug: slug,
-		Description: strings.TrimSpace(in.Description), CreatedAt: now, UpdatedAt: now,
+		Description: strings.TrimSpace(in.Description), Translations: translations, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.categories.Create(ctx, c); err != nil {
 		return nil, err
@@ -46,8 +53,9 @@ func (s *CategoryService) Create(ctx context.Context, in CreateCategoryInput) (*
 }
 
 type UpdateCategoryInput struct {
-	Name        *string
-	Description *string
+	Name         *string
+	Description  *string
+	Translations json.RawMessage // non-empty replaces the translations object
 }
 
 // Update never changes the slug or the parent, so URLs stay stable and the tree stays acyclic.
@@ -61,6 +69,13 @@ func (s *CategoryService) Update(ctx context.Context, id uuid.UUID, in UpdateCat
 	}
 	if in.Description != nil {
 		c.Description = strings.TrimSpace(*in.Description)
+	}
+	if len(in.Translations) > 0 {
+		t, err := domain.NormalizeObject(in.Translations)
+		if err != nil {
+			return nil, err
+		}
+		c.Translations = t
 	}
 	if err := s.categories.Update(ctx, c); err != nil {
 		return nil, err
@@ -78,4 +93,22 @@ func (s *CategoryService) List(ctx context.Context) ([]domain.Category, error) {
 
 func (s *CategoryService) GetBySlug(ctx context.Context, slug string) (*domain.Category, error) {
 	return s.categories.GetBySlug(ctx, slug)
+}
+
+func (s *CategoryService) categorySlug(ctx context.Context, name, explicit string) (string, error) {
+	explicit = strings.TrimSpace(explicit)
+	if explicit == "" {
+		return uniqueSlug(ctx, name, s.categories.SlugExists)
+	}
+	if !domain.ValidSlug(explicit) {
+		return "", domain.ErrInvalidSlug
+	}
+	taken, err := s.categories.SlugExists(ctx, explicit)
+	if err != nil {
+		return "", err
+	}
+	if taken {
+		return "", domain.ErrSlugTaken
+	}
+	return explicit, nil
 }

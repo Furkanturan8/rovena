@@ -173,7 +173,12 @@ func (r productRepo) List(_ context.Context, f domain.ProductFilter) ([]domain.P
 				price := v.PriceCents
 				sum.PriceFromCents = &price
 			}
+			if v.Active {
+				sum.Variants = append(sum.Variants, v)
+			}
 		}
+		sum.Images = p.Images
+		sum.Translations, sum.Attributes = p.Translations, p.Attributes
 		if len(p.Images) > 0 {
 			sum.ThumbnailURL = p.Images[0].URL
 		}

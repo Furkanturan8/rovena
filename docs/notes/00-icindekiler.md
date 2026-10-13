@@ -25,6 +25,7 @@ Bu notlar, mikroservis mimarisini hiç bilmeyen biri için yazılmış, projeyle
 | 17 | [İade, iptal ve temizlik](17-iade-iptal-ve-temizlik.md) | Para iadesi akışı, müşteri iptali, sepetin geri gelmesi, outbox temizliği, iki sekmede oturum, gateway hata gövdeleri; erteleme/karar gerekçeleri |
 | 18 | [Gözlemlenebilirlik laboratuvarı](18-gozlemlenebilirlik-laboratuvari.md) | Prometheus, Grafana, Jaeger ve RabbitMQ'yu kullanmayı öğreten interaktif laboratuvar; senaryolar ve dersler |
 | 19 | [Saga laboratuvarı](19-saga-laboratuvari.md) | Checkout Saga'sını animasyon, hata senaryoları, choreography/orchestration karşılaştırması, kod ve testlerle öğreten laboratuvar |
+| 20 | [Frontend'i backend'e bağlamak](20-frontend-baglantisi.md) | Next.js mağazasının gateway üzerinden gerçek servislere bağlanması: katalog şeması genişletmesi, seed, oturum çerezleri, sepetten siparişe akış, bilinen boşluklar |
 | 99 | [Sözlük](99-sozluk.md) | Terimlerin kısa açıklamaları |
 
 ## Nasıl okunmalı?
@@ -51,4 +52,4 @@ Sıradaki işlerin planı: [`docs/todo.md`](../todo.md).
 | Cilalama ve borçlar (Faz 6) | Tamamlandı | İade akışı (Payment + Order), müşteri iptali, sepet geri yükleme, outbox/inbox temizliği, refresh token hoşgörü süresi, gateway JSON hataları, `httpx`/`auth` testleri, DB span'ları, Grafana, uyarı kuralları; iki karar belgelendi |
 | Gözlemlenebilirlik laboratuvarı | Tamamlandı | `frontend/observability-lab/`: animasyonlu akış, 5 tanı senaryosu, araç rehberi; simüle veri, gerçek metrik adları |
 | Saga laboratuvarı | Tamamlandı | `frontend/saga-lab/`: Saga akışı, 5 hata senaryosu, mimari karşılaştırma, kod/test/gözlem laboratuvarları; Rovena modeline dayalı simülatör |
-| Frontend (mağaza) | Planlı | Önce backend |
+| Frontend (mağaza) | Tamamlandı | `frontend/web`: Next.js, TR/EN, gerçek katalog, stok, üyelik, sepetten siparişe akış (bkz. 20) |
