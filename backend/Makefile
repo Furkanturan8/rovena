@@ -1,12 +1,15 @@
 SERVICES := identity catalog inventory payment order
 
-.PHONY: up down logs build lint tidy-check deps e2e test test-env test-integration vet seed-admin seed-catalog seed-inventory
+.PHONY: up down prod-up logs build lint tidy-check deps e2e test test-env test-integration vet seed-admin seed-catalog seed-inventory
 
 up:
 	docker compose up -d --build
 
 down:
 	docker compose down
+
+# Production server (docs/deploy.md). The gateway listens on 127.0.0.1:8080 only; the server's nginx adds HTTPS in front of it.
+prod-up: up
 
 logs:
 	docker compose logs -f
