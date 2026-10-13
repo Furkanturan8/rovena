@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CredentialsForms } from "@/components/account/credentials-forms";
 import { ProfileForm } from "@/components/account/profile-form";
 import { requireUser } from "@/lib/auth/session";
 import { getI18n } from "@/lib/i18n/server";
@@ -15,6 +16,7 @@ export default async function ProfilePage({ params }: PageProps<"/[locale]/accou
   return (
     <div className="max-w-2xl space-y-14">
       <ProfileForm user={{ firstName: user.first_name, lastName: user.last_name, email: user.email }} />
+      <CredentialsForms />
       <section>
         <h2 className="headline-md mb-6">{t.preferences}</h2>
         <div className="space-y-4">

@@ -52,7 +52,7 @@ export default async function OrderDetailPage({ params }: PageProps<"/[locale]/a
             {t.cancelled} {order.refund === "pending" ? t.refundPending : order.refund === "refunded" ? t.refunded : ""}
           </p>
         ) : (
-          <ol className="grid gap-6 md:grid-cols-4">
+          <ol className="grid gap-6 md:grid-cols-3 lg:grid-cols-6">
             {d.confirmation.steps.map((s, i) => {
               const done = reached.has(s.status);
               return (
@@ -72,6 +72,33 @@ export default async function OrderDetailPage({ params }: PageProps<"/[locale]/a
           </ol>
         )}
       </section>
+
+      {(order.shipping_address || order.tracking_code) && (
+        <div className="mt-10 grid gap-8 md:grid-cols-2">
+          {order.shipping_address && (
+            <section>
+              <h3 className="headline-sm mb-4">{t.shipTo}</h3>
+              <address className="space-y-0.5 border border-travertine p-5 text-[13px] not-italic">
+                <p>{order.shipping_address.full_name}</p>
+                <p className="text-umber">{order.shipping_address.line1}{order.shipping_address.line2 ? `, ${order.shipping_address.line2}` : ""}</p>
+                <p className="text-umber">{order.shipping_address.district} / {order.shipping_address.city} {order.shipping_address.postal_code}</p>
+                <p className="text-umber">{order.shipping_address.phone}</p>
+              </address>
+            </section>
+          )}
+          {order.tracking_code && (
+            <section>
+              <h3 className="headline-sm mb-4">{t.shipment}</h3>
+              <dl className="space-y-2 border border-travertine p-5 text-[13px]">
+                <div className="flex justify-between"><dt className="text-umber">{t.carrier}</dt><dd>{order.carrier}</dd></div>
+                <div className="flex justify-between"><dt className="text-umber">{t.trackingCode}</dt><dd className="label-mono">{order.tracking_code}</dd></div>
+                {order.shipped_at && <div className="flex justify-between"><dt className="text-umber">{t.shippedOn}</dt><dd>{dateTime.format(new Date(order.shipped_at))}</dd></div>}
+                {order.delivered_at && <div className="flex justify-between"><dt className="text-umber">{t.deliveredOn}</dt><dd>{dateTime.format(new Date(order.delivered_at))}</dd></div>}
+              </dl>
+            </section>
+          )}
+        </div>
+      )}
 
       <section className="mt-10">
         <h3 className="headline-sm mb-4">{t.products}</h3>

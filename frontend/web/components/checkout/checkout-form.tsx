@@ -6,7 +6,8 @@ import { Check, CreditCard, Lock } from "lucide-react";
 import { Link } from "@/components/ui/link";
 import { useStore } from "@/components/cart/store";
 import { OrderSummary } from "@/components/cart/order-summary";
-import { addresses } from "@/lib/mock/account";
+import { AddressForm } from "@/components/account/address-form";
+import type { ApiAddress } from "@/lib/api/types";
 import { Photo } from "@/components/ui/photo";
 import { useCartLines } from "@/components/cart/use-cart-lines";
 import { placeOrderAction } from "@/lib/orders/actions";
@@ -39,17 +40,20 @@ function Step({ n, title, done, children }: { n: number; title: string; done?: b
   );
 }
 
-export function CheckoutForm({ user }: { user: { firstName: string; lastName: string; email: string } }) {
+export function CheckoutForm({ user, addresses }: { user: { firstName: string; lastName: string; email: string }; addresses: ApiAddress[] }) {
   const d = useDict();
   const locale = useLocale();
   const t = d.checkout;
   const router = useRouter();
-  const { items, clear, hydrated } = useStore();
+  const { items, hydrated } = useStore();
   const { lines, ready } = useCartLines();
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [shipping, setShipping] = useState<ShippingId>("standard");
-  const [addressId, setAddressId] = useState(addresses[0].id);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  // Falls back to the default address (listed first) until the customer picks another one.
+  const addressId = addresses.find((a) => a.id === picked)?.id ?? addresses[0]?.id ?? null;
   const [giftNote, setGiftNote] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -64,16 +68,21 @@ export function CheckoutForm({ user }: { user: { firstName: string; lastName: st
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!addressId) {
+      setError(t.noAddress);
+      return;
+    }
     const cardNumber = String(new FormData(e.currentTarget).get("card_number") ?? "");
     setBusy(true);
     setError(null);
     const result = await placeOrderAction({
       locale,
       paymentMethod: paymentToken(cardNumber),
+      addressId,
       items: items.map((i) => ({ variantId: i.variantId, quantity: i.qty })),
     });
     if (result.ok) {
-      clear();
+      // The cart is emptied on the confirmation page once the payment went through, so a failed payment keeps it.
       router.push(`/${locale}/order-confirmation/${result.orderId}`);
       return;
     }
@@ -95,31 +104,41 @@ export function CheckoutForm({ user }: { user: { firstName: string; lastName: st
           </div>
         </Step>
 
-        <Step n={2} title={t.address}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {addresses.map((a) => (
-              <label key={a.id} className={cn("cursor-pointer border p-5 transition-colors", addressId === a.id ? "border-ink bg-paper" : "border-travertine hover:border-ink")}>
-                <input type="radio" name="address" className="sr-only" checked={addressId === a.id} onChange={() => setAddressId(a.id)} />
-                <div className="flex items-center justify-between">
-                  <span className="label-caps text-[10px]">{d.account.addresses.titles[a.title]}</span>
-                  {addressId === a.id && <Check size={14} />}
-                </div>
-                <p className="mt-3 text-[13px]">{a.name}</p>
-                {a.lines.map((l) => <p key={l} className="text-[13px] text-umber">{l}</p>)}
-                <p className="mt-2 text-[12px] text-umber">{a.phone}</p>
-              </label>
-            ))}
-          </div>
-          <details className="mt-4 border border-travertine p-5">
-            <summary className="label-caps cursor-pointer text-[10px]">{t.newAddress}</summary>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div><label className="field-label">{t.firstName}</label><input className="field" /></div>
-              <div><label className="field-label">{t.lastName}</label><input className="field" /></div>
-              <div className="sm:col-span-2"><label className="field-label">{t.addressLine}</label><input className="field" /></div>
-              <div><label className="field-label">{t.district}</label><input className="field" /></div>
-              <div><label className="field-label">{t.city}</label><input className="field" /></div>
+        <Step n={2} title={t.address} done={Boolean(addressId)}>
+          {addresses.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {addresses.map((a) => (
+                <label key={a.id} className={cn("cursor-pointer border p-5 transition-colors", addressId === a.id ? "border-ink bg-paper" : "border-travertine hover:border-ink")}>
+                  <input type="radio" name="address" className="sr-only" checked={addressId === a.id} onChange={() => setPicked(a.id)} />
+                  <div className="flex items-center justify-between">
+                    <span className="label-caps text-[10px]">{a.title}</span>
+                    {addressId === a.id && <Check size={14} />}
+                  </div>
+                  <p className="mt-3 text-[13px]">{a.full_name}</p>
+                  <p className="text-[13px] text-umber">{a.line1}{a.line2 ? `, ${a.line2}` : ""}</p>
+                  <p className="text-[13px] text-umber">{a.district} / {a.city} {a.postal_code}</p>
+                  <p className="mt-2 text-[12px] text-umber">{a.phone}</p>
+                </label>
+              ))}
             </div>
-          </details>
+          )}
+          {addresses.length === 0 && !adding && <p className="mb-4 text-[13px] text-umber">{t.noAddress}</p>}
+          {adding || addresses.length === 0 ? (
+            <div className="mt-4 border border-travertine p-5">
+              <AddressForm
+                offerDefault={addresses.length > 0}
+                defaultName={`${user.firstName} ${user.lastName}`.trim()}
+                onSaved={(id) => {
+                  setPicked(id);
+                  setAdding(false);
+                  router.refresh();
+                }}
+                onCancel={addresses.length > 0 ? () => setAdding(false) : undefined}
+              />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setAdding(true)} className="label-caps mt-4 text-[10px] underline underline-offset-4 hover:text-bronze-deep">{t.newAddress}</button>
+          )}
         </Step>
 
         <Step n={3} title={t.delivery}>

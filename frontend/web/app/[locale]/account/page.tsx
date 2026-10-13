@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { Link } from "@/components/ui/link";
-import { addresses } from "@/lib/mock/account";
 import { StatusBadge } from "@/components/account/status-badge";
 import { displayStatus } from "@/lib/order-status";
 import { Photo } from "@/components/ui/photo";
 import { getI18n } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/auth/session";
 import { getMyOrders } from "@/lib/data/orders";
+import { getMyAddresses } from "@/lib/data/addresses";
 import { productsForOrders } from "@/lib/data/order-products";
 import { formatPrice } from "@/lib/utils";
 
@@ -20,10 +20,10 @@ export default async function AccountOverview({ params }: PageProps<"/[locale]/a
   const { locale, d } = await getI18n(params);
   const { user, token } = await requireUser(locale, `/${locale}/account`);
   const o = d.account.overview;
-  const orders = await getMyOrders(token);
+  const [orders, addresses] = await Promise.all([getMyOrders(token), getMyAddresses(token)]);
   const products = await productsForOrders(orders, locale);
-  const active = orders.find((x) => x.status === "pending" || x.status === "awaiting_payment" || x.status === "paid");
-  const spent = orders.filter((x) => x.status === "confirmed").reduce((n, x) => n + x.total_cents / 100, 0);
+  const active = orders.find((x) => x.status === "pending" || x.status === "awaiting_payment" || x.status === "paid" || x.status === "confirmed" || x.status === "shipped");
+  const spent = orders.filter((x) => x.status === "confirmed" || x.status === "shipped" || x.status === "delivered").reduce((n, x) => n + x.total_cents / 100, 0);
 
   return (
     <div className="space-y-12">

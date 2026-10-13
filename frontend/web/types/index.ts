@@ -61,12 +61,3 @@ export interface CartItem {
   color: string;
   qty: number;
 }
-
-export interface Address {
-  id: string;
-  title: "home" | "office";
-  name: string;
-  lines: string[];
-  phone: string;
-  isDefault?: boolean;
-}

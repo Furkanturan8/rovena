@@ -9,6 +9,8 @@ const tone: Record<DisplayStatus, "neutral" | "active" | "done" | "bad"> = {
   awaiting_payment: "neutral",
   paid: "active",
   confirmed: "done",
+  shipped: "active",
+  delivered: "done",
   cancelled: "bad",
   refunded: "bad",
 };

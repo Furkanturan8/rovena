@@ -102,7 +102,32 @@ export interface ApiAuthResult {
   tokens: ApiTokens;
 }
 
-export type ApiOrderStatus = "pending" | "awaiting_payment" | "paid" | "confirmed" | "cancelled";
+export type ApiOrderStatus = "pending" | "awaiting_payment" | "paid" | "confirmed" | "shipped" | "delivered" | "cancelled";
+
+export interface ApiAddress {
+  id: string;
+  title: string;
+  full_name: string;
+  phone: string;
+  line1: string;
+  line2: string;
+  district: string;
+  city: string;
+  postal_code: string;
+  country: string;
+  is_default: boolean;
+}
+
+export interface ApiShippingAddress {
+  full_name: string;
+  phone: string;
+  line1: string;
+  line2?: string;
+  district: string;
+  city: string;
+  postal_code?: string;
+  country?: string;
+}
 
 export interface ApiOrderItem {
   variant_id: string;
@@ -125,6 +150,11 @@ export interface ApiOrder {
   failure_code?: string;
   failure_message?: string;
   refund?: "pending" | "refunded";
+  shipping_address?: ApiShippingAddress;
+  carrier?: string;
+  tracking_code?: string;
+  shipped_at?: string;
+  delivered_at?: string;
   created_at: string;
   updated_at: string;
   history?: { status: ApiOrderStatus; at: string }[];

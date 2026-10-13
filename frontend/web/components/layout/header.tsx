@@ -101,7 +101,7 @@ export function Header({ categories }: { categories: Category[] }) {
               <Heart size={20} strokeWidth={1.4} />
               {hydrated && wishlist.length > 0 && <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-bronze" />}
             </Link>
-            <Link href="/login" className="hidden p-2 transition-opacity hover:opacity-60 sm:block" aria-label={d.header.account}>
+            <Link href="/account" className="hidden p-2 transition-opacity hover:opacity-60 sm:block" aria-label={d.header.account}>
               <User size={20} strokeWidth={1.4} />
             </Link>
             <button className="relative p-2 transition-opacity hover:opacity-60" aria-label={d.header.cart(count)} onClick={openDrawer}>

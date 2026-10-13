@@ -2,6 +2,7 @@ import { Link } from "@/components/ui/link";
 import { Logo } from "./logo";
 import { NewsletterForm } from "./newsletter-form";
 import { LanguageSwitcher } from "./language-switcher";
+import { legalSlugs } from "@/lib/legal/content";
 import type { Dictionary } from "@/lib/i18n/dictionaries/tr";
 import type { Category } from "@/types";
 
@@ -71,8 +72,8 @@ export function Footer({ d, categories }: { d: Dictionary; categories: Category[
         <div className="container-page flex flex-col gap-4 text-[11px] text-umber md:flex-row md:items-center md:justify-between">
           <p className="label-caps text-[10px]">{f.rights}</p>
           <div className="label-caps flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px]">
-            {f.legal.map((l) => (
-              <Link key={l} href="#" className="hover:text-ink">
+            {f.legal.map((l, i) => (
+              <Link key={l} href={`/legal/${legalSlugs[i]}`} className="hover:text-ink">
                 {l}
               </Link>
             ))}

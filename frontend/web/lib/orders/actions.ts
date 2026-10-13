@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { apiFetch, ApiError } from "@/lib/api/server";
-import type { ApiOrder } from "@/lib/api/types";
+import type { ApiAddress, ApiOrder } from "@/lib/api/types";
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
 import { getAccessToken } from "@/lib/auth/session";
@@ -12,6 +12,8 @@ export interface PlaceOrderInput {
   items: { variantId: string; quantity: number }[];
   /** A payment provider token (never a card number). */
   paymentMethod: string;
+  /** One of the customer's saved addresses; the order stores a copy of it. */
+  addressId: string;
 }
 
 export type PlaceOrderResult = { ok: true; orderId: string } | { ok: false; reason: "auth" | "failed"; message?: string };
@@ -28,6 +30,10 @@ export async function placeOrderAction(input: PlaceOrderInput): Promise<PlaceOrd
   if (input.items.length === 0) return { ok: false, reason: "failed", message: d.checkout.errors.emptyCart };
 
   try {
+    const addresses = await apiFetch<ApiAddress[]>("/users/me/addresses", { token });
+    const address = addresses.find((a) => a.id === input.addressId);
+    if (!address) return { ok: false, reason: "failed", message: d.checkout.selectAddress };
+
     await apiFetch("/cart", { method: "DELETE", token });
     for (const item of input.items) {
       const quantity = Math.max(1, Math.min(99, Math.floor(item.quantity)));
@@ -37,7 +43,19 @@ export async function placeOrderAction(input: PlaceOrderInput): Promise<PlaceOrd
       method: "POST",
       token,
       headers: { "Idempotency-Key": randomUUID() },
-      body: { payment_method: input.paymentMethod },
+      body: {
+        payment_method: input.paymentMethod,
+        shipping_address: {
+          full_name: address.full_name,
+          phone: address.phone,
+          line1: address.line1,
+          line2: address.line2,
+          district: address.district,
+          city: address.city,
+          postal_code: address.postal_code,
+          country: address.country,
+        },
+      },
     });
     return { ok: true, orderId: order.id };
   } catch (e) {
