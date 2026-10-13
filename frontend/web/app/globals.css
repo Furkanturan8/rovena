@@ -1,0 +1,301 @@
+@import "tailwindcss";
+
+/* Editorial Maison tasarım sistemi (bkz. example-design-referans DESIGN.md) */
+@theme {
+  --color-canvas: #f8f7f4;
+  --color-paper: #ffffff;
+  --color-ink: #121212;
+  --color-umber: #5a554e;
+  --color-bronze: #c2a383;
+  --color-bronze-deep: #735a3e;
+  --color-travertine: #e6e2da;
+  --color-sand: #efeeeb;
+  --color-sand-deep: #e3e2df;
+  --color-danger: #ba1a1a;
+  --color-success: #3f5b45;
+
+  --font-serif: var(--font-playfair), "Times New Roman", serif;
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+
+  --radius: 0px;
+
+  --text-caps: 11px;
+  --text-caps--line-height: 16px;
+  --text-caps--letter-spacing: 0.14em;
+  --text-caps--font-weight: 600;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 22px;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+  button {
+    cursor: pointer;
+  }
+  img {
+    border-radius: 0;
+  }
+  input,
+  select,
+  textarea {
+    border-radius: 0;
+  }
+}
+
+@layer components {
+  .label-caps {
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .label-mono {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .container-page {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 1680px;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+  @media (min-width: 1280px) {
+    .container-page {
+      padding-inline: 4rem;
+    }
+  }
+  .display-hero {
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-size: 40px;
+    line-height: 48px;
+    letter-spacing: -0.01em;
+  }
+  .headline-xl {
+    font-family: var(--font-serif);
+    font-size: 32px;
+    line-height: 40px;
+    letter-spacing: -0.01em;
+  }
+  .headline-lg {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    line-height: 34px;
+  }
+  .headline-md {
+    font-family: var(--font-serif);
+    font-size: 24px;
+    line-height: 32px;
+  }
+  .headline-sm {
+    font-family: var(--font-serif);
+    font-size: 20px;
+    line-height: 28px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  @media (min-width: 768px) {
+    .display-hero {
+      font-size: 72px;
+      line-height: 80px;
+      letter-spacing: -0.02em;
+    }
+    .headline-xl {
+      font-size: 48px;
+      line-height: 56px;
+      letter-spacing: -0.02em;
+    }
+    .headline-lg {
+      font-size: 36px;
+      line-height: 44px;
+    }
+  }
+
+  /* Butonlar */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 14px 28px;
+    border: 1px solid var(--color-ink);
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+    transition: background-color 0.25s, color 0.25s, border-color 0.25s;
+  }
+  .btn-primary {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+  .btn-primary:hover {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--color-ink);
+  }
+  .btn-secondary:hover {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+  .btn-light {
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    border-color: var(--color-canvas);
+  }
+  .btn-light:hover {
+    background: transparent;
+    color: var(--color-canvas);
+  }
+  .btn:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .link-underline {
+    display: inline-block;
+    border-bottom: 1px solid currentColor;
+    padding-bottom: 4px;
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+    transition: opacity 0.2s;
+  }
+  .link-underline:hover {
+    opacity: 0.55;
+  }
+
+  /* Form */
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-travertine);
+    background: transparent;
+    padding: 13px 14px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-ink);
+  }
+  .field::placeholder {
+    color: #9a948b;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-umber);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-travertine);
+    padding: 4px 10px;
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-umber);
+    background: color-mix(in srgb, var(--color-canvas) 92%, transparent);
+  }
+  .chip-solid {
+    background: var(--color-ink);
+    border-color: var(--color-ink);
+    color: var(--color-canvas);
+  }
+}
+
+/* İnce kaydırma çubuğu ve yardımcılar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-fade-up {
+  animation: fade-up 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-marquee {
+    animation: none;
+  }
+}
+
+/* Erişilebilirlik ve cila */
+:focus-visible {
+  outline: 1px solid var(--color-ink);
+  outline-offset: 3px;
+}
+.bg-ink :focus-visible,
+.text-canvas :focus-visible {
+  outline-color: var(--color-canvas);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-canvas);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-sand-deep);
+  border: 2px solid var(--color-canvas);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-umber);
+}

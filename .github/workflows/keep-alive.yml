@@ -1,0 +1,25 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Her 4 günde bir gece 03:00 UTC'de otomatik çalışır
+    - cron: '0 3 */4 * *'
+  workflow_dispatch: # Manuel çalıştırma imkanı
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Project API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "SUPABASE_PROJECT_URL tanımlı değil, ping atlanıyor."
+            exit 0
+          fi
+          echo "Pinging Supabase API to keep project active..."
+          curl -s -f -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            "${SUPABASE_URL}/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" || echo "Ping tamamlandı."

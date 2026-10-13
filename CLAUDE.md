@@ -8,7 +8,8 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - `backend/shared/` → servisler arası ortak Go modülü (errorx, response, httpx, auth/JWT doğrulama, logging). Servisler `replace` direktifiyle bağlanır.
 - `backend/infrastructure/` → Postgres init, Nginx gateway
 - `backend/docker-compose.yml` → yerel ortam. `make` ve `docker compose` komutları `backend/` içinden çalışır. Compose proje adı `rovena` olarak sabit (klasör adına bağlı değil; yoksa volume kaybolur).
-- `docs/` kökte kalır (backend + ileride frontend ortak). Frontend eklenince `frontend/` kökte `backend/` ile yan yana olur.
+- `docs/` kökte kalır (backend + frontend ortak).
+- `frontend/web/` → mağaza vitrini: Next.js 16 (App Router) + TypeScript + Tailwind v4. Şimdilik yalnızca mock data (`lib/mock/`), backend'e bağlı değil; `npm run dev` ile çalışır. Tasarım dili "Editorial Maison" (`frontend/example-design-referans/*/DESIGN.md`): 0px radius, Playfair Display + Plus Jakarta Sans, token'lar `app/globals.css` `@theme`. Çok dilli (TR/EN): rotalar `/{tr|en}/...` (`collection`, `product/[slug]`, `cart`, `checkout`, `account/*`, `gallery`, `about`). Metinler `lib/i18n/dictionaries/{tr,en}.ts` içinde (yeni metin eklerken ikisine de ekle, `en` tipi `tr`'den gelir); sunucuda `getI18n(params)`, istemcide `useDict()/useLocale()`, linkler için `components/ui/link.tsx`. Ürün metinleri `lib/mock/catalog.ts` içinde dil bazlı. Animasyonlar `motion` ile (`components/motion/`); ürün verisi/fotoğrafları Khaite kataloğundan (sahibinin izniyle, demo; `lib/mock/catalog.ts`, `public/media/products/<handle>/`), videolar Pexels (ücretsiz lisans) kaynaklı, `public/media/video` altında ve `lib/media.ts`'den tanımlı.
 
 ## Mimari kararlar (stacks/go'dan sapmalar)
 
@@ -19,7 +20,8 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - Servisler birbirinin tablosuna dokunmaz. Servisler arası: REST + RabbitMQ eventleri.
 - Access token HS256 JWT (`JWT_SECRET` tüm servislerde aynı), refresh token opak + DB'de hash'li.
 
-- `frontend/observability-lab/` → Prometheus/Grafana/Jaeger/RabbitMQ'yu öğreten bağımsız, derlemesiz interaktif laboratuvar (`python3 -m http.server`). Metrik/kuyruk adlarını değiştirirsen `js/scenarios*.js`, `js/guide.js` ve `js/architecture.js`'i güncelle. Detay: `docs/notes/18`.
+- `docs/observability-lab/` → Prometheus/Grafana/Jaeger/RabbitMQ'yu öğreten bağımsız, derlemesiz interaktif laboratuvar (`python3 -m http.server`). Metrik/kuyruk adlarını değiştirirsen `js/scenarios*.js`, `js/guide.js` ve `js/architecture.js`'i güncelle. Detay: `docs/notes/18`.
+- `docs/saga-lab/` → checkout Saga'sını öğreten laboratuvar (`docs/` kökünden servis edilir; `../observability-lab/js` ortak dosyalarını kullanır). Saga davranışı (durumlar, telafiler, kurtarma kuralları) değişirse `js/sim.js` ve `js/code.js`'i güncelle. Detay: `docs/notes/19`.
 
 ## Yol haritası
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Rovena">
+  <rect width="64" height="64" fill="#121212"/>
+  <g fill="none" stroke="#f8f7f4" stroke-width="2.6" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M23 49V15h12.5a9.5 9.5 0 0 1 0 19H23"/>
+    <path d="M35 34l9.5 15"/>
+  </g>
+  <rect x="23" y="53.5" width="21.5" height="1.6" fill="#c2a383"/>
+</svg>
