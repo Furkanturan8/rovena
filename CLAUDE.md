@@ -17,6 +17,7 @@ Moda ve aksesuar e-ticaret marketplace'i. Portföy/öğrenme projesi: Go mikrose
 - Fiber v2 + Bun kullanılır. PK'ler UUID (v7).
 - API mesajları İngilizce.
 - Application katmanı domain hataları döner; `backend/shared/httpx` ErrorHandler'ı servise özgü mapper ile bunları `errorx.AppError`'a çevirir. Handler'lar `return err` yapar.
+- Sipariş `confirmed → shipped → delivered` ile ilerler (son ikisi admin uçlarıyla, Saga dışında). Checkout `shipping_address` ister; sipariş adresin kopyasını saklar. Identity adres defteri, şifre ve e-posta uçlarını `/users/me/*` altında sunar.
 - Servisler birbirinin tablosuna dokunmaz. Servisler arası: REST + RabbitMQ eventleri.
 - Access token HS256 JWT (`JWT_SECRET` tüm servislerde aynı), refresh token opak + DB'de hash'li.
 
