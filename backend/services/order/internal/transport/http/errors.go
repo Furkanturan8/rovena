@@ -23,7 +23,11 @@ func MapDomainError(err error) (*errorx.AppError, bool) {
 	case errors.Is(err, domain.ErrOrderNotFound):
 		return errorx.WithMessage(errorx.ErrNotFound, "Order not found"), true
 	case errors.Is(err, domain.ErrCannotCancel):
-		return errorx.WithMessage(errorx.ErrConflict, "This order is already paid and can no longer be cancelled"), true
+		return errorx.WithMessage(errorx.ErrConflict, "This order is already paid or on its way and can no longer be cancelled"), true
+	case errors.Is(err, domain.ErrCannotShip):
+		return errorx.WithMessage(errorx.ErrConflict, "Only a confirmed order can be shipped"), true
+	case errors.Is(err, domain.ErrCannotDeliver):
+		return errorx.WithMessage(errorx.ErrConflict, "Only a shipped order can be marked delivered"), true
 	case errors.Is(err, domain.ErrCartEmpty):
 		return errorx.WithMessage(errorx.ErrValidation, "The cart is empty"), true
 	case errors.Is(err, domain.ErrCartChanged):

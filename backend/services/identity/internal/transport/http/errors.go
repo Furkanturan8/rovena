@@ -24,6 +24,16 @@ func MapDomainError(err error) (*errorx.AppError, bool) {
 		return errorx.WithMessage(errorx.ErrConflict, "Cannot demote the last admin"), true
 	case errors.Is(err, domain.ErrPasswordTooLong):
 		return errorx.WithMessage(errorx.ErrValidation, "Password must be at most 72 bytes"), true
+	case errors.Is(err, domain.ErrAddressNotFound):
+		return errorx.WithMessage(errorx.ErrNotFound, "Address not found"), true
+	case errors.Is(err, domain.ErrTooManyAddresses):
+		return errorx.WithMessage(errorx.ErrConflict, "Address limit reached"), true
+	case errors.Is(err, domain.ErrWrongPassword):
+		return errorx.WithMessage(errorx.ErrValidation, "Current password is incorrect"), true
+	case errors.Is(err, domain.ErrSamePassword):
+		return errorx.WithMessage(errorx.ErrValidation, "New password must differ from the current one"), true
+	case errors.Is(err, domain.ErrEmailUnchanged):
+		return errorx.WithMessage(errorx.ErrValidation, "New email must differ from the current one"), true
 	}
 	return nil, false
 }

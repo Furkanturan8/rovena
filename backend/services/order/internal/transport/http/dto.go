@@ -16,6 +16,35 @@ type SetCartItemRequest struct {
 type CheckoutRequest struct {
 	// PaymentMethod is a provider token for the card, never a card number.
 	PaymentMethod string `json:"payment_method" validate:"required,max=128"`
+	// ShippingAddress is copied into the order; later address edits do not touch it.
+	ShippingAddress ShippingAddressDTO `json:"shipping_address" validate:"required"`
+}
+
+type ShippingAddressDTO struct {
+	FullName   string `json:"full_name" validate:"required,max=100"`
+	Phone      string `json:"phone" validate:"required,min=7,max=24"`
+	Line1      string `json:"line1" validate:"required,max=200"`
+	Line2      string `json:"line2" validate:"max=200"`
+	District   string `json:"district" validate:"required,max=80"`
+	City       string `json:"city" validate:"required,max=80"`
+	PostalCode string `json:"postal_code" validate:"max=16"`
+	Country    string `json:"country" validate:"max=2"`
+}
+
+func (a ShippingAddressDTO) toDomain() domain.ShippingAddress {
+	country := a.Country
+	if country == "" {
+		country = "TR"
+	}
+	return domain.ShippingAddress{
+		FullName: a.FullName, Phone: a.Phone, Line1: a.Line1, Line2: a.Line2,
+		District: a.District, City: a.City, PostalCode: a.PostalCode, Country: country,
+	}
+}
+
+type ShipRequest struct {
+	Carrier      string `json:"carrier" validate:"required,max=60"`
+	TrackingCode string `json:"tracking_code" validate:"required,max=60"`
 }
 
 // ---- responses ----
@@ -71,9 +100,14 @@ type OrderResponse struct {
 	FailureMessage string              `json:"failure_message,omitempty"`
 	// Refund is present only on a cancelled order whose payment went through: "pending" while the
 	// money is on its way back, "refunded" once it is.
-	Refund    string    `json:"refund,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Refund          string             `json:"refund,omitempty"`
+	ShippingAddress ShippingAddressDTO `json:"shipping_address"`
+	Carrier         string             `json:"carrier,omitempty"`
+	TrackingCode    string             `json:"tracking_code,omitempty"`
+	ShippedAt       *time.Time         `json:"shipped_at,omitempty"`
+	DeliveredAt     *time.Time         `json:"delivered_at,omitempty"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
 }
 
 func ToOrderResponse(o *domain.Order) OrderResponse {
@@ -88,6 +122,12 @@ func ToOrderResponse(o *domain.Order) OrderResponse {
 	return OrderResponse{
 		ID: o.ID.String(), Status: string(o.Status), TotalCents: o.TotalCents, Currency: o.Currency,
 		Items: items, FailureCode: o.FailureCode, FailureMessage: o.FailureMessage, Refund: refundLabel(o.RefundState),
+		ShippingAddress: ShippingAddressDTO{
+			FullName: o.ShippingAddress.FullName, Phone: o.ShippingAddress.Phone, Line1: o.ShippingAddress.Line1,
+			Line2: o.ShippingAddress.Line2, District: o.ShippingAddress.District, City: o.ShippingAddress.City,
+			PostalCode: o.ShippingAddress.PostalCode, Country: o.ShippingAddress.Country,
+		},
+		Carrier: o.Carrier, TrackingCode: o.TrackingCode, ShippedAt: o.ShippedAt, DeliveredAt: o.DeliveredAt,
 		CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt,
 	}
 }

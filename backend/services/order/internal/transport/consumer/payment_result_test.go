@@ -44,7 +44,7 @@ func newFixture(t *testing.T, inv inventory) *fixture {
 	svc := application.NewOrderService(repo, catalog{variant}, inv, slog.New(slog.NewTextHandler(io.Discard, nil)), application.Config{})
 	customer := uuid.New()
 	_ = repo.SetCartItem(context.Background(), customer, domain.CartItem{VariantID: variant, Quantity: 2})
-	o, _, err := svc.Checkout(context.Background(), application.CheckoutInput{CustomerID: customer, IdempotencyKey: "k", PaymentMethod: "tok_visa"})
+	o, _, err := svc.Checkout(context.Background(), application.CheckoutInput{CustomerID: customer, IdempotencyKey: "k", PaymentMethod: "tok_visa", Shipping: testShipping})
 	if err != nil || o.Status != domain.StatusAwaitingPayment {
 		t.Fatalf("setup: %+v %v", o, err)
 	}
@@ -167,4 +167,8 @@ func TestRefundedClosesTheRefundOfACancelledOrder(t *testing.T) {
 	if o.Status != domain.StatusCancelled || o.RefundState != domain.RefundRefunded {
 		t.Fatalf("order = %+v", o)
 	}
+}
+
+var testShipping = domain.ShippingAddress{
+	FullName: "Jane Doe", Phone: "05320000000", Line1: "Moda Cad. 1", District: "Kadikoy", City: "Istanbul", Country: "TR",
 }

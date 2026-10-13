@@ -640,7 +640,7 @@ func TestSaga_ConcurrentDuplicatePaymentResultsConfirmOnce(t *testing.T) {
 
 	c := h.customer()
 	h.fillCart(t, c, 2)
-	o, created, err := svc.Checkout(h.ctx, application.CheckoutInput{CustomerID: c, IdempotencyKey: "saga-1", PaymentMethod: "tok_visa"})
+	o, created, err := svc.Checkout(h.ctx, application.CheckoutInput{CustomerID: c, IdempotencyKey: "saga-1", PaymentMethod: "tok_visa", Shipping: testShipping})
 	if err != nil || !created || o.Status != domain.StatusAwaitingPayment {
 		t.Fatalf("checkout: %+v created=%v err=%v", o, created, err)
 	}
@@ -685,7 +685,7 @@ func TestSaga_ConcurrentCheckoutRetriesWithOneKeyReserveOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			o, created, err := svc.Checkout(h.ctx, application.CheckoutInput{CustomerID: c, IdempotencyKey: "one-key", PaymentMethod: "tok_visa"})
+			o, created, err := svc.Checkout(h.ctx, application.CheckoutInput{CustomerID: c, IdempotencyKey: "one-key", PaymentMethod: "tok_visa", Shipping: testShipping})
 			if err != nil {
 				t.Error(err)
 				return
@@ -921,4 +921,8 @@ func TestRestoreCart_WorksForACustomerWhoseCartRowIsGone(t *testing.T) {
 	if items, _ := h.repo.GetCart(h.ctx, c); len(items) != 1 || items[0].Quantity != 3 {
 		t.Fatalf("items = %+v", items)
 	}
+}
+
+var testShipping = domain.ShippingAddress{
+	FullName: "Jane Doe", Phone: "05320000000", Line1: "Moda Cad. 1", District: "Kadikoy", City: "Istanbul", Country: "TR",
 }

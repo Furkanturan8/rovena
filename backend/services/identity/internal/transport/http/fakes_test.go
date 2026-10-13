@@ -188,3 +188,30 @@ func (r tokenRepo) RevokeAllForUser(_ context.Context, userID uuid.UUID) error {
 	}
 	return nil
 }
+
+func (r userRepo) UpdateEmail(_ context.Context, id uuid.UUID, email string) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	u, ok := r.s.users[id]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	for _, o := range r.s.users {
+		if o.Email == email {
+			return domain.ErrEmailTaken
+		}
+	}
+	u.Email = email
+	return nil
+}
+
+func (r userRepo) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	u, ok := r.s.users[id]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	u.PasswordHash = hash
+	return nil
+}

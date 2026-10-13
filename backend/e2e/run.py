@@ -127,7 +127,8 @@ def checkout(vid, qty=1, method="tok_visa", key=None, fill=True):
     if fill:
         fill_cart(vid, qty)
     r = requests.post(f"{G}/api/v1/checkout", headers={**ctx["user"]["h"], "Idempotency-Key": key or str(uuid.uuid4())},
-                      json={"payment_method": method})
+                      json={"payment_method": method, "shipping_address": {
+                          "full_name": "E2E User", "phone": "05320000000", "line1": "Test Cad. 1", "district": "Kadikoy", "city": "Istanbul"}})
     check(r.status_code in (200, 201), f"checkout answered {r.status_code} {r.text}")
     o = r.json()["data"]
     if r.status_code == 201:

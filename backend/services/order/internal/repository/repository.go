@@ -41,6 +41,10 @@ type OrderRepository interface {
 	Confirm(ctx context.Context, id uuid.UUID, confirmed messaging.Envelope) (changed bool, err error)
 	// Cancel moves the order from any status in from to cancelled and queues OrderCancelled.
 	Cancel(ctx context.Context, id uuid.UUID, from []domain.Status, code, message string, cancelled messaging.Envelope) (changed bool, err error)
+	// Ship: confirmed -> shipped, with the carrier and tracking code.
+	Ship(ctx context.Context, id uuid.UUID, carrier, trackingCode string) (changed bool, err error)
+	// Deliver: shipped -> delivered.
+	Deliver(ctx context.Context, id uuid.UUID) (changed bool, err error)
 	// MarkReleased: a cancelled order's held reservation -> released.
 	MarkReleased(ctx context.Context, id uuid.UUID) (changed bool, err error)
 	// RequestPaymentAgain queues another PaymentRequested for an order still awaiting payment.

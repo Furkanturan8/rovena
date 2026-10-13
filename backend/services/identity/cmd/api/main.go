@@ -79,8 +79,9 @@ func run() error {
 			"postgres": func(ctx context.Context) error { return db.PingContext(ctx) },
 		},
 	}, transport.Services{
-		Auth:  authSvc,
-		Users: application.NewUserService(userRepo),
+		Auth:      authSvc,
+		Users:     application.NewUserService(userRepo),
+		Addresses: application.NewAddressService(postgres.NewAddressRepository(db)),
 	})
 
 	ln, err := net.Listen("tcp", ":"+cfg.HTTPPort)

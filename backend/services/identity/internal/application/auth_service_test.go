@@ -287,3 +287,49 @@ func TestRefresh_ConcurrentRefreshesOfOneTokenAllSucceedWithinTheGrace(t *testin
 		t.Fatalf("active tokens = %d, want %d", got, n)
 	}
 }
+
+func TestChangePassword_RevokesOldRefreshTokens(t *testing.T) {
+	e := newEnv(t)
+	res := register(t, e)
+	ctx := context.Background()
+
+	if _, err := e.svc.ChangePassword(ctx, res.User.ID, "wrong-pass", "n3wsecretpass"); !errors.Is(err, domain.ErrWrongPassword) {
+		t.Fatalf("wrong current: err = %v", err)
+	}
+	if _, err := e.svc.ChangePassword(ctx, res.User.ID, "s3cretpass", "s3cretpass"); !errors.Is(err, domain.ErrSamePassword) {
+		t.Fatalf("same password: err = %v", err)
+	}
+	pair, err := e.svc.ChangePassword(ctx, res.User.ID, "s3cretpass", "n3wsecretpass")
+	if err != nil {
+		t.Fatalf("change: %v", err)
+	}
+	if pair.RefreshToken == "" || pair.RefreshToken == res.Tokens.RefreshToken {
+		t.Error("expected a fresh refresh token")
+	}
+	if _, err := e.svc.Refresh(ctx, res.Tokens.RefreshToken); err == nil {
+		t.Error("old refresh token must be revoked")
+	}
+	if _, err := e.svc.Login(ctx, "jane@example.com", "n3wsecretpass"); err != nil {
+		t.Errorf("login with new password: %v", err)
+	}
+}
+
+func TestChangeEmail(t *testing.T) {
+	e := newEnv(t)
+	res := register(t, e)
+	ctx := context.Background()
+
+	if _, err := e.svc.ChangeEmail(ctx, res.User.ID, "x@example.com", "wrong-pass"); !errors.Is(err, domain.ErrWrongPassword) {
+		t.Fatalf("wrong password: err = %v", err)
+	}
+	if _, err := e.svc.ChangeEmail(ctx, res.User.ID, " JANE@example.com ", "s3cretpass"); !errors.Is(err, domain.ErrEmailUnchanged) {
+		t.Fatalf("unchanged: err = %v", err)
+	}
+	u, err := e.svc.ChangeEmail(ctx, res.User.ID, " New@Example.com ", "s3cretpass")
+	if err != nil {
+		t.Fatalf("change: %v", err)
+	}
+	if u.Email != "new@example.com" {
+		t.Errorf("email = %q", u.Email)
+	}
+}

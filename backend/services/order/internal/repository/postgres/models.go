@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/Furkanturan8/rovena/services/order/internal/domain"
@@ -20,29 +21,37 @@ type cartItemRow struct {
 type orderRow struct {
 	bun.BaseModel `bun:"table:orders,alias:o"`
 
-	ID               uuid.UUID  `bun:",pk,type:uuid"`
-	CustomerID       uuid.UUID  `bun:",type:uuid,notnull"`
-	Status           string     `bun:",notnull"`
-	TotalCents       int64      `bun:",notnull"`
-	Currency         string     `bun:",notnull"`
-	IdempotencyKey   string     `bun:",notnull"`
-	PaymentMethod    string     `bun:",notnull"`
-	ReservationID    *uuid.UUID `bun:",type:uuid"`
-	ReservationState string     `bun:",notnull"`
-	PaymentRequests  int        `bun:",notnull"`
-	RefundState      string     `bun:",notnull"`
-	RefundRequests   int        `bun:",notnull"`
-	FailureCode      string     `bun:",notnull"`
-	FailureMessage   string     `bun:",notnull"`
-	CreatedAt        time.Time  `bun:",notnull"`
-	UpdatedAt        time.Time  `bun:",notnull"`
+	ID               uuid.UUID       `bun:",pk,type:uuid"`
+	CustomerID       uuid.UUID       `bun:",type:uuid,notnull"`
+	Status           string          `bun:",notnull"`
+	TotalCents       int64           `bun:",notnull"`
+	Currency         string          `bun:",notnull"`
+	IdempotencyKey   string          `bun:",notnull"`
+	PaymentMethod    string          `bun:",notnull"`
+	ReservationID    *uuid.UUID      `bun:",type:uuid"`
+	ReservationState string          `bun:",notnull"`
+	PaymentRequests  int             `bun:",notnull"`
+	RefundState      string          `bun:",notnull"`
+	RefundRequests   int             `bun:",notnull"`
+	FailureCode      string          `bun:",notnull"`
+	FailureMessage   string          `bun:",notnull"`
+	ShippingAddress  json.RawMessage `bun:"shipping_address,type:jsonb,notnull"`
+	Carrier          string          `bun:",notnull"`
+	TrackingCode     string          `bun:",notnull"`
+	ShippedAt        *time.Time
+	DeliveredAt      *time.Time
+	CreatedAt        time.Time `bun:",notnull"`
+	UpdatedAt        time.Time `bun:",notnull"`
 }
 
 func orderRowFrom(o *domain.Order) *orderRow {
 	if o.RefundState == "" {
 		o.RefundState = domain.RefundNone
 	}
+	addr, _ := json.Marshal(o.ShippingAddress)
 	return &orderRow{
+		ShippingAddress: addr, Carrier: o.Carrier, TrackingCode: o.TrackingCode,
+		ShippedAt: o.ShippedAt, DeliveredAt: o.DeliveredAt,
 		ID: o.ID, CustomerID: o.CustomerID, Status: string(o.Status), TotalCents: o.TotalCents,
 		Currency: o.Currency, IdempotencyKey: o.IdempotencyKey, PaymentMethod: o.PaymentMethod,
 		ReservationID: o.ReservationID, ReservationState: string(o.ReservationState),
@@ -52,7 +61,11 @@ func orderRowFrom(o *domain.Order) *orderRow {
 }
 
 func (r *orderRow) toDomain() domain.Order {
+	var addr domain.ShippingAddress
+	_ = json.Unmarshal(r.ShippingAddress, &addr)
 	return domain.Order{
+		ShippingAddress: addr, Carrier: r.Carrier, TrackingCode: r.TrackingCode,
+		ShippedAt: r.ShippedAt, DeliveredAt: r.DeliveredAt,
 		ID: r.ID, CustomerID: r.CustomerID, Status: domain.Status(r.Status), TotalCents: r.TotalCents,
 		Currency: r.Currency, IdempotencyKey: r.IdempotencyKey, PaymentMethod: r.PaymentMethod,
 		ReservationID: r.ReservationID, ReservationState: domain.ReservationState(r.ReservationState),

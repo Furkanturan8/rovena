@@ -25,14 +25,18 @@ const (
 	StatusAwaitingPayment Status = "awaiting_payment"
 	// StatusPaid: the payment succeeded; committing the stock is still owed to Inventory.
 	StatusPaid Status = "paid"
-	// StatusConfirmed and StatusCancelled are final.
+	// StatusConfirmed: paid and the stock is committed; the shop can now pack the order.
 	StatusConfirmed Status = "confirmed"
+	// StatusShipped and StatusDelivered are set by an operator after the saga is done.
+	StatusShipped   Status = "shipped"
+	StatusDelivered Status = "delivered"
+	// StatusCancelled is final, like delivered.
 	StatusCancelled Status = "cancelled"
 )
 
 func (s Status) Valid() bool {
 	switch s {
-	case StatusPending, StatusAwaitingPayment, StatusPaid, StatusConfirmed, StatusCancelled:
+	case StatusPending, StatusAwaitingPayment, StatusPaid, StatusConfirmed, StatusShipped, StatusDelivered, StatusCancelled:
 		return true
 	}
 	return false
@@ -89,6 +93,18 @@ type OrderItem struct {
 
 func (i OrderItem) LineTotalCents() int64 { return i.UnitPriceCents * int64(i.Quantity) }
 
+// ShippingAddress is the delivery address copied into the order at checkout.
+type ShippingAddress struct {
+	FullName   string `json:"full_name"`
+	Phone      string `json:"phone"`
+	Line1      string `json:"line1"`
+	Line2      string `json:"line2"`
+	District   string `json:"district"`
+	City       string `json:"city"`
+	PostalCode string `json:"postal_code"`
+	Country    string `json:"country"`
+}
+
 type Order struct {
 	ID               uuid.UUID
 	CustomerID       uuid.UUID
@@ -105,6 +121,11 @@ type Order struct {
 	FailureCode      string
 	FailureMessage   string
 	Items            []OrderItem
+	ShippingAddress  ShippingAddress
+	Carrier          string
+	TrackingCode     string
+	ShippedAt        *time.Time
+	DeliveredAt      *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -128,15 +149,18 @@ type Filter struct {
 }
 
 var (
-	ErrOrderNotFound        = errors.New("order not found")
+	ErrOrderNotFound = errors.New("order not found")
+	// ErrCannotShip / ErrCannotDeliver: the order is not in the status that step needs.
+	ErrCannotShip           = errors.New("only a confirmed order can be shipped")
+	ErrCannotDeliver        = errors.New("only a shipped order can be marked delivered")
 	ErrCartEmpty            = errors.New("cart is empty")
 	ErrCartChanged          = errors.New("cart changed during checkout")
 	ErrCartFull             = errors.New("cart has too many different items")
 	ErrInvalidQuantity      = errors.New("quantity out of range")
 	ErrIdempotencyKeyReused = errors.New("idempotency key was used with a different request")
 	ErrInvalidRequest       = errors.New("invalid request")
-	// ErrCannotCancel means the order is already paid for or confirmed: the customer can no
-	// longer cancel it by themselves.
+	// ErrCannotCancel means the order is already paid for, confirmed or on its way: the customer
+	// can no longer cancel it by themselves.
 	ErrCannotCancel = errors.New("order can no longer be cancelled")
 	// ErrDuplicateCheckout is returned by the repository when the (customer, key) pair
 	// already has an order; the service then returns that order.

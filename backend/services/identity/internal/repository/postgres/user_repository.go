@@ -119,3 +119,37 @@ func (r *UserRepository) UpdateRole(ctx context.Context, id uuid.UUID, role doma
 		return err
 	})
 }
+
+func (r *UserRepository) UpdateEmail(ctx context.Context, id uuid.UUID, email string) error {
+	res, err := r.db.NewUpdate().Model((*userRow)(nil)).
+		Set("email = ?", email).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", id).
+		Exec(ctx)
+	var pgErr pgdriver.Error
+	if errors.As(err, &pgErr) && pgErr.Field('C') == uniqueViolation {
+		return domain.ErrEmailTaken
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
+func (r *UserRepository) UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error {
+	res, err := r.db.NewUpdate().Model((*userRow)(nil)).
+		Set("password_hash = ?", hash).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", id).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}

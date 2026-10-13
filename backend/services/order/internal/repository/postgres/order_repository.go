@@ -339,6 +339,22 @@ func (r *OrderRepository) Confirm(ctx context.Context, id uuid.UUID, ev messagin
 	})
 }
 
+func (r *OrderRepository) Ship(ctx context.Context, id uuid.UUID, carrier, trackingCode string) (bool, error) {
+	return r.apply(ctx, id, transition{
+		from: []domain.Status{domain.StatusConfirmed}, to: domain.StatusShipped, reason: "handed to carrier",
+		set: func(q *bun.UpdateQuery) *bun.UpdateQuery {
+			return q.Set("carrier = ?", carrier).Set("tracking_code = ?", trackingCode).Set("shipped_at = now()")
+		},
+	})
+}
+
+func (r *OrderRepository) Deliver(ctx context.Context, id uuid.UUID) (bool, error) {
+	return r.apply(ctx, id, transition{
+		from: []domain.Status{domain.StatusShipped}, to: domain.StatusDelivered, reason: "delivered to customer",
+		set: func(q *bun.UpdateQuery) *bun.UpdateQuery { return q.Set("delivered_at = now()") },
+	})
+}
+
 func (r *OrderRepository) Cancel(ctx context.Context, id uuid.UUID, from []domain.Status, code, message string, ev messaging.Envelope) (bool, error) {
 	return r.apply(ctx, id, transition{
 		from: from, to: domain.StatusCancelled, reason: code, event: &ev,

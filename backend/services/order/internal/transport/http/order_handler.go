@@ -114,6 +114,7 @@ func (h *OrderHandler) Checkout(c *fiber.Ctx) error {
 	ctx := messaging.WithRequestID(c.UserContext(), httpx.RequestID(c))
 	o, created, err := h.orders.Checkout(ctx, application.CheckoutInput{
 		CustomerID: customerID, IdempotencyKey: key, PaymentMethod: req.PaymentMethod,
+		Shipping: req.ShippingAddress.toDomain(),
 	})
 	if err != nil {
 		return err
@@ -215,6 +216,35 @@ func (h *OrderHandler) AdminGet(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, ToAdminOrderDetailResponse(d))
+}
+
+// Ship records the carrier and tracking code of a confirmed order.
+func (h *OrderHandler) AdminShip(c *fiber.Ctx) error {
+	id, err := pathUUID(c, "id")
+	if err != nil {
+		return err
+	}
+	var req ShipRequest
+	if err := httpx.BindAndValidate(c, &req); err != nil {
+		return err
+	}
+	o, err := h.orders.Ship(c.UserContext(), id, req.Carrier, req.TrackingCode)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, ToAdminOrderResponse(o))
+}
+
+func (h *OrderHandler) AdminDeliver(c *fiber.Ctx) error {
+	id, err := pathUUID(c, "id")
+	if err != nil {
+		return err
+	}
+	o, err := h.orders.Deliver(c.UserContext(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, ToAdminOrderResponse(o))
 }
 
 // ---- helpers ----

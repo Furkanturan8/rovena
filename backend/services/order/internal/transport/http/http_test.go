@@ -193,7 +193,9 @@ func (e *env) checkout(u user, key, method string) result {
 	if key != "" {
 		h["Idempotency-Key"] = key
 	}
-	return e.do("POST", "/api/v1/checkout", &u, h, map[string]any{"payment_method": method})
+	return e.do("POST", "/api/v1/checkout", &u, h, map[string]any{"payment_method": method, "shipping_address": map[string]any{
+		"full_name": "Jane Doe", "phone": "05320000000", "line1": "Moda Cad. 1", "district": "Kadikoy", "city": "Istanbul",
+	}})
 }
 
 // ---------------------------------------------------------------- access control
@@ -636,5 +638,15 @@ func TestRefundStateIsShownToTheCustomerAndInDetailToAdmins(t *testing.T) {
 	}
 	if got := e.do("GET", "/api/v1/orders/"+oid.String(), &c, nil, nil).data()["refund"]; got != "refunded" {
 		t.Fatalf("refund = %v", got)
+	}
+}
+
+func TestCheckout_NeedsAShippingAddress(t *testing.T) {
+	e := newEnv(t)
+	c := e.user("customer")
+	h := map[string]string{"Idempotency-Key": "k"}
+	res := e.do("POST", "/api/v1/checkout", &c, h, map[string]any{"payment_method": "tok_visa"})
+	if res.Status != 422 {
+		t.Fatalf("status = %d, want 422: %s", res.Status, res.Body)
 	}
 }

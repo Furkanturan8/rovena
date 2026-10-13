@@ -48,7 +48,7 @@ func (h *harness) put(variant uuid.UUID, qty int) {
 }
 
 func (h *harness) checkout(key string) (*domain.Order, bool, error) {
-	return h.svc.Checkout(context.Background(), CheckoutInput{CustomerID: h.customer, IdempotencyKey: key, PaymentMethod: "tok_visa"})
+	return h.svc.Checkout(context.Background(), CheckoutInput{CustomerID: h.customer, IdempotencyKey: key, PaymentMethod: "tok_visa", Shipping: testShipping})
 }
 
 // placed returns an order that reached awaiting_payment.
@@ -226,7 +226,7 @@ func TestCheckout_SameKeyWithAnotherPaymentMethodIsRefused(t *testing.T) {
 	if _, _, err := h.checkout("k"); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := h.svc.Checkout(context.Background(), CheckoutInput{CustomerID: h.customer, IdempotencyKey: "k", PaymentMethod: "tok_other"})
+	_, _, err := h.svc.Checkout(context.Background(), CheckoutInput{CustomerID: h.customer, IdempotencyKey: "k", PaymentMethod: "tok_other", Shipping: testShipping})
 	if !errors.Is(err, domain.ErrIdempotencyKeyReused) {
 		t.Fatalf("err = %v", err)
 	}
@@ -254,11 +254,12 @@ func TestCheckout_ValidatesKeyAndPaymentMethod(t *testing.T) {
 	h := newHarness(t)
 	h.put(h.catalog.add("Shirt", 1000), 1)
 	for name, in := range map[string]CheckoutInput{
-		"empty key":      {IdempotencyKey: "", PaymentMethod: "tok_visa"},
-		"long key":       {IdempotencyKey: strings.Repeat("k", 65), PaymentMethod: "tok_visa"},
-		"key with space": {IdempotencyKey: "a b", PaymentMethod: "tok_visa"},
-		"no method":      {IdempotencyKey: "k", PaymentMethod: ""},
-		"long method":    {IdempotencyKey: "k", PaymentMethod: strings.Repeat("m", 129)},
+		"empty key":      {IdempotencyKey: "", PaymentMethod: "tok_visa", Shipping: testShipping},
+		"long key":       {IdempotencyKey: strings.Repeat("k", 65), PaymentMethod: "tok_visa", Shipping: testShipping},
+		"key with space": {IdempotencyKey: "a b", PaymentMethod: "tok_visa", Shipping: testShipping},
+		"no method":      {IdempotencyKey: "k", PaymentMethod: "", Shipping: testShipping},
+		"long method":    {IdempotencyKey: "k", PaymentMethod: strings.Repeat("m", 129), Shipping: testShipping},
+		"no address":     {IdempotencyKey: "k", PaymentMethod: "tok_visa"},
 	} {
 		in.CustomerID = h.customer
 		if _, _, err := h.svc.Checkout(context.Background(), in); !errors.Is(err, domain.ErrInvalidRequest) {
@@ -1167,5 +1168,73 @@ func TestCheckout_ARetryThatSeesTheCartEmptiedByItsTwinGetsTheTwinsOrder(t *test
 	// A cart that is really empty is still refused.
 	if _, _, err := h.checkout("another"); !errors.Is(err, domain.ErrCartEmpty) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+var testShipping = domain.ShippingAddress{
+	FullName: "Jane Doe", Phone: "05320000000", Line1: "Moda Cad. 1", District: "Kadikoy", City: "Istanbul", Country: "TR",
+}
+
+// ---------------------------------------------------------------- shipping
+
+func (h *harness) confirmed() *domain.Order {
+	h.t.Helper()
+	o := h.placed()
+	if err := h.svc.OnPaymentSucceeded(context.Background(), succeeded(o)); err != nil {
+		h.t.Fatal(err)
+	}
+	return h.order(o.ID)
+}
+
+func TestCheckout_StoresTheShippingAddress(t *testing.T) {
+	h := newHarness(t)
+	o := h.placed()
+	if got := h.order(o.ID).ShippingAddress; got != testShipping {
+		t.Fatalf("address = %+v", got)
+	}
+}
+
+func TestShipAndDeliver_FollowTheOrderStates(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+
+	pending := h.placed()
+	if _, err := h.svc.Ship(ctx, pending.ID, "Yurtici", "TRK1"); !errors.Is(err, domain.ErrCannotShip) {
+		t.Fatalf("shipping an unpaid order: err = %v", err)
+	}
+
+	o := h.confirmed()
+	if _, err := h.svc.Deliver(ctx, o.ID); !errors.Is(err, domain.ErrCannotDeliver) {
+		t.Fatalf("delivering before shipping: err = %v", err)
+	}
+	if _, err := h.svc.Ship(ctx, o.ID, "", "TRK1"); !errors.Is(err, domain.ErrInvalidRequest) {
+		t.Fatalf("missing carrier: err = %v", err)
+	}
+	shipped, err := h.svc.Ship(ctx, o.ID, "Yurtici", "TRK1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shipped.Status != domain.StatusShipped || shipped.TrackingCode != "TRK1" || shipped.ShippedAt == nil {
+		t.Fatalf("order = %+v", shipped)
+	}
+	if _, err := h.svc.Ship(ctx, o.ID, "Yurtici", "TRK1"); err != nil {
+		t.Fatalf("repeating the same shipment: %v", err)
+	}
+	if _, err := h.svc.Ship(ctx, o.ID, "Aras", "OTHER"); !errors.Is(err, domain.ErrCannotShip) {
+		t.Fatalf("shipping twice with other data: err = %v", err)
+	}
+	if _, err := h.svc.CancelByCustomer(ctx, o.ID, h.customer); !errors.Is(err, domain.ErrCannotCancel) {
+		t.Fatalf("cancelling a shipped order: err = %v", err)
+	}
+
+	delivered, err := h.svc.Deliver(ctx, o.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delivered.Status != domain.StatusDelivered || delivered.DeliveredAt == nil {
+		t.Fatalf("order = %+v", delivered)
+	}
+	if _, err := h.svc.Deliver(ctx, o.ID); err != nil {
+		t.Fatalf("repeating delivery: %v", err)
 	}
 }

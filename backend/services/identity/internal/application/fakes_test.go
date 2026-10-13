@@ -190,3 +190,30 @@ type stubIssuer struct{}
 func (stubIssuer) Issue(u *domain.User) (string, time.Time, error) {
 	return "access-" + u.ID.String(), time.Now().Add(15 * time.Minute), nil
 }
+
+func (f *fakeUsers) UpdateEmail(_ context.Context, id uuid.UUID, email string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.byID[id]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	for _, o := range f.byID {
+		if o.Email == email {
+			return domain.ErrEmailTaken
+		}
+	}
+	u.Email = email
+	return nil
+}
+
+func (f *fakeUsers) UpdatePasswordHash(_ context.Context, id uuid.UUID, hash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.byID[id]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	u.PasswordHash = hash
+	return nil
+}

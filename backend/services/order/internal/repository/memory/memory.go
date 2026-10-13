@@ -220,6 +220,20 @@ func (r *Repo) Confirm(_ context.Context, id uuid.UUID, ev messaging.Envelope) (
 	})
 }
 
+func (r *Repo) Ship(_ context.Context, id uuid.UUID, carrier, trackingCode string) (bool, error) {
+	return r.transition(id, []domain.Status{domain.StatusConfirmed}, "", domain.StatusShipped, "shipped", nil, func(o *domain.Order) {
+		now := r.now()
+		o.Carrier, o.TrackingCode, o.ShippedAt = carrier, trackingCode, &now
+	})
+}
+
+func (r *Repo) Deliver(_ context.Context, id uuid.UUID) (bool, error) {
+	return r.transition(id, []domain.Status{domain.StatusShipped}, "", domain.StatusDelivered, "delivered", nil, func(o *domain.Order) {
+		now := r.now()
+		o.DeliveredAt = &now
+	})
+}
+
 func (r *Repo) Cancel(_ context.Context, id uuid.UUID, from []domain.Status, code, msg string, ev messaging.Envelope) (bool, error) {
 	return r.transition(id, from, "", domain.StatusCancelled, code, &ev, func(o *domain.Order) {
 		o.FailureCode, o.FailureMessage = code, msg

@@ -37,7 +37,7 @@ func (s *OrderService) OnPaymentSucceeded(ctx context.Context, p events.PaymentS
 		}
 	case domain.StatusPaid:
 		// A redelivery, or a retry after the stock commit failed.
-	case domain.StatusConfirmed:
+	case domain.StatusConfirmed, domain.StatusShipped, domain.StatusDelivered:
 		return nil
 	case domain.StatusCancelled:
 		// The payment arrived after the order was cancelled (timeout, customer, ...). The order

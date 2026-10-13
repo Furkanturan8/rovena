@@ -24,6 +24,23 @@ type UserRepository interface {
 	// remove the last admin. The check and the write happen atomically, even across
 	// concurrent callers.
 	UpdateRole(ctx context.Context, id uuid.UUID, role domain.Role) error
+	// UpdateEmail returns ErrEmailTaken when another account already uses the email.
+	UpdateEmail(ctx context.Context, id uuid.UUID, email string) error
+	UpdatePasswordHash(ctx context.Context, id uuid.UUID, hash string) error
+}
+
+type AddressRepository interface {
+	List(ctx context.Context, userID uuid.UUID) ([]domain.Address, error)
+	// Create stores the address. The user's first address becomes the default; a new default
+	// replaces the old one. Returns ErrTooManyAddresses beyond domain.MaxAddressesPerUser.
+	Create(ctx context.Context, a *domain.Address) error
+	// Update changes the editable fields (and the default flag when MakeDefault is set).
+	// ErrAddressNotFound covers unknown ids and addresses that belong to someone else.
+	Update(ctx context.Context, a *domain.Address, makeDefault bool) error
+	// Delete removes the address; when it was the default, the newest remaining one takes over.
+	Delete(ctx context.Context, userID, id uuid.UUID) error
+	SetDefault(ctx context.Context, userID, id uuid.UUID) (*domain.Address, error)
+	Get(ctx context.Context, userID, id uuid.UUID) (*domain.Address, error)
 }
 
 type RefreshTokenRepository interface {

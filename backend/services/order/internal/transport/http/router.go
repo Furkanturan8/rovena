@@ -77,6 +77,8 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	admin := v1.Group("/admin", auth.Middleware(opts.Verifier), auth.RequireRole(auth.RoleAdmin))
 	admin.Get("/orders", h.AdminList)
 	admin.Get("/orders/:id", h.AdminGet)
+	admin.Post("/orders/:id/ship", h.AdminShip)
+	admin.Post("/orders/:id/deliver", h.AdminDeliver)
 
 	return app
 }

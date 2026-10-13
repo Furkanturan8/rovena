@@ -26,8 +26,9 @@ type Options struct {
 }
 
 type Services struct {
-	Auth  *application.AuthService
-	Users *application.UserService
+	Auth      *application.AuthService
+	Users     *application.UserService
+	Addresses *application.AddressService
 }
 
 func NewApp(opts Options, svc Services) *fiber.App {
@@ -51,7 +52,7 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	app.Use(helmet.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     opts.AllowedOrigins,
-		AllowMethods:     strings.Join([]string{"GET", "POST", "PATCH", "OPTIONS"}, ","),
+		AllowMethods:     strings.Join([]string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"}, ","),
 		AllowHeaders:     "Content-Type, Authorization, X-Request-ID",
 		AllowCredentials: true,
 	}))
@@ -61,6 +62,7 @@ func NewApp(opts Options, svc Services) *fiber.App {
 
 	authHandler := NewAuthHandler(svc.Auth)
 	userHandler := NewUserHandler(svc.Users)
+	accountHandler := NewAccountHandler(svc.Auth, svc.Addresses)
 	authenticated := auth.Middleware(opts.Verifier)
 	adminOnly := auth.RequireRole(auth.RoleAdmin)
 
@@ -84,6 +86,21 @@ func NewApp(opts Options, svc Services) *fiber.App {
 	users := v1.Group("/users", authenticated)
 	users.Get("/me", userHandler.Me)
 	users.Patch("/me", userHandler.UpdateMe)
+	sensitive := limiter.New(limiter.Config{
+		Max:          10,
+		Expiration:   time.Minute,
+		KeyGenerator: func(c *fiber.Ctx) string { return c.IP() },
+		LimitReached: func(c *fiber.Ctx) error {
+			return fiber.NewError(fiber.StatusTooManyRequests, "Too many requests, try again later")
+		},
+	})
+	users.Post("/me/password", sensitive, accountHandler.ChangePassword)
+	users.Post("/me/email", sensitive, accountHandler.ChangeEmail)
+	users.Get("/me/addresses", accountHandler.ListAddresses)
+	users.Post("/me/addresses", accountHandler.CreateAddress)
+	users.Patch("/me/addresses/:id", accountHandler.UpdateAddress)
+	users.Delete("/me/addresses/:id", accountHandler.DeleteAddress)
+	users.Post("/me/addresses/:id/default", accountHandler.SetDefaultAddress)
 	users.Get("/", adminOnly, userHandler.List)
 	users.Get("/:id", adminOnly, userHandler.GetByID)
 	users.Patch("/:id/role", adminOnly, userHandler.ChangeRole)

@@ -249,3 +249,57 @@ func hashToken(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
+
+// ChangePassword replaces the password after checking the current one. Every refresh token of the
+// user is revoked (other devices are signed out) and the caller gets a fresh pair for this session.
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, current, next string) (*TokenPair, error) {
+	if len(next) > maxPasswordBytes {
+		return nil, domain.ErrPasswordTooLong
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hasher.Compare(user.PasswordHash, current); err != nil {
+		return nil, domain.ErrWrongPassword
+	}
+	if current == next {
+		return nil, domain.ErrSamePassword
+	}
+	hash, err := s.hasher.Hash(next)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+	if err := s.users.UpdatePasswordHash(ctx, userID, hash); err != nil {
+		return nil, err
+	}
+	if err := s.tokens.RevokeAllForUser(ctx, userID); err != nil {
+		return nil, err
+	}
+	pair, err := s.issuePair(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+	return &pair, nil
+}
+
+// ChangeEmail switches the sign-in email after checking the password. Access tokens already issued keep
+// the old address until they expire (15 minutes); the next token carries the new one.
+func (s *AuthService) ChangeEmail(ctx context.Context, userID uuid.UUID, email, password string) (*domain.User, error) {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.hasher.Compare(user.PasswordHash, password); err != nil {
+		return nil, domain.ErrWrongPassword
+	}
+	email = NormalizeEmail(email)
+	if email == user.Email {
+		return nil, domain.ErrEmailUnchanged
+	}
+	if err := s.users.UpdateEmail(ctx, userID, email); err != nil {
+		return nil, err
+	}
+	user.Email = email
+	return user, nil
+}

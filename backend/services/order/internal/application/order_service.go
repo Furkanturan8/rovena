@@ -98,6 +98,7 @@ type CheckoutInput struct {
 	CustomerID     uuid.UUID
 	IdempotencyKey string
 	PaymentMethod  string
+	Shipping       domain.ShippingAddress
 }
 
 // Checkout turns the customer's cart into an order and starts the saga. created is
@@ -138,7 +139,7 @@ func (s *OrderService) Checkout(ctx context.Context, in CheckoutInput) (order *d
 	o := &domain.Order{
 		ID: id, CustomerID: in.CustomerID, Status: domain.StatusPending,
 		TotalCents: total, Currency: currency, IdempotencyKey: in.IdempotencyKey,
-		PaymentMethod: in.PaymentMethod, ReservationState: domain.ReservationNone, RefundState: domain.RefundNone,
+		PaymentMethod: in.PaymentMethod, ShippingAddress: in.Shipping, ReservationState: domain.ReservationNone, RefundState: domain.RefundNone,
 		Items: items, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.repo.Create(ctx, o, cart); err != nil {
@@ -167,6 +168,10 @@ func validateCheckout(in CheckoutInput) error {
 	}
 	if in.PaymentMethod == "" || len(in.PaymentMethod) > maxPaymentMethodLen {
 		return fmt.Errorf("%w: payment method must be 1-%d characters", domain.ErrInvalidRequest, maxPaymentMethodLen)
+	}
+	a := in.Shipping
+	if a.FullName == "" || a.Phone == "" || a.Line1 == "" || a.District == "" || a.City == "" {
+		return fmt.Errorf("%w: a complete shipping address is required", domain.ErrInvalidRequest)
 	}
 	return nil
 }
@@ -347,7 +352,7 @@ func (s *OrderService) CancelByCustomer(ctx context.Context, orderID, customerID
 	switch o.Status {
 	case domain.StatusCancelled:
 		return o, nil
-	case domain.StatusPaid, domain.StatusConfirmed:
+	case domain.StatusPaid, domain.StatusConfirmed, domain.StatusShipped, domain.StatusDelivered:
 		return nil, domain.ErrCannotCancel
 	}
 
@@ -381,4 +386,45 @@ func (s *OrderService) paymentRequested(ctx context.Context, o *domain.Order) (m
 // line of one checkout can be found together.
 func (s *OrderService) event(ctx context.Context, o *domain.Order, eventType string, version int, payload any) (messaging.Envelope, error) {
 	return messaging.NewEnvelope(messaging.WithCorrelationID(ctx, o.ID.String()), eventType, version, payload)
+}
+
+// Ship hands a confirmed order to the carrier. Repeating it with the same tracking code is harmless.
+func (s *OrderService) Ship(ctx context.Context, id uuid.UUID, carrier, trackingCode string) (*domain.Order, error) {
+	if carrier == "" || len(carrier) > 60 || trackingCode == "" || len(trackingCode) > 60 {
+		return nil, fmt.Errorf("%w: carrier and tracking code are required (at most 60 characters)", domain.ErrInvalidRequest)
+	}
+	o, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status == domain.StatusShipped && o.Carrier == carrier && o.TrackingCode == trackingCode {
+		return o, nil
+	}
+	changed, err := s.repo.Ship(ctx, id, carrier, trackingCode)
+	if err != nil {
+		return nil, err
+	}
+	if !changed {
+		return nil, domain.ErrCannotShip
+	}
+	return s.repo.GetByID(ctx, id)
+}
+
+// Deliver marks a shipped order as delivered. Repeating it is harmless.
+func (s *OrderService) Deliver(ctx context.Context, id uuid.UUID) (*domain.Order, error) {
+	o, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status == domain.StatusDelivered {
+		return o, nil
+	}
+	changed, err := s.repo.Deliver(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !changed {
+		return nil, domain.ErrCannotDeliver
+	}
+	return s.repo.GetByID(ctx, id)
 }
