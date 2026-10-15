@@ -159,3 +159,93 @@ export interface ApiOrder {
   updated_at: string;
   history?: { status: ApiOrderStatus; at: string }[];
 }
+
+// ---- Admin endpoints (docs/openapi/{order,catalog,inventory,identity}.yaml) ----
+
+export type ApiRole = ApiUser["role"];
+
+export type ApiReservationState = "none" | "held" | "committed" | "released";
+export type ApiRefundState = "none" | "requested" | "refunded";
+
+/** Order as seen by an admin: the customer order plus the saga bookkeeping. */
+export interface ApiAdminOrder extends ApiOrder {
+  customer_id: string;
+  reservation_id: string | null;
+  reservation_state: ApiReservationState;
+  payment_requests: number;
+  refund_state: ApiRefundState;
+  refund_requests: number;
+}
+
+export interface ApiAdminHistoryEntry {
+  from: string | null;
+  to: string;
+  reason: string;
+  at: string;
+}
+
+/** Admin order detail replaces the customer's status history with the full transition log. */
+export interface ApiAdminOrderDetail extends Omit<ApiAdminOrder, "history"> {
+  history: ApiAdminHistoryEntry[];
+}
+
+export interface ApiShipRequest {
+  carrier: string;
+  tracking_code: string;
+}
+
+export type ApiProductStatus = "draft" | "active" | "archived";
+
+export interface ApiAdminProduct {
+  id: string;
+  category_id: string;
+  name: string;
+  slug: string;
+  description: string;
+  brand: string;
+  status: ApiProductStatus;
+  price_from_cents: number | null;
+  currency: string;
+  thumbnail_url: string;
+  translations: Record<string, ApiLocalizedText>;
+  attributes: ApiProductAttributes;
+  images: ApiImage[];
+  variants: ApiVariant[];
+}
+
+export interface ApiStock {
+  variant_id: string;
+  sku: string;
+  on_hand: number;
+  reserved: number;
+  available: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ApiStockMovement {
+  id: string;
+  variant_id: string;
+  type: "receipt" | "adjustment" | "sale";
+  quantity_delta: number;
+  reason: string;
+  reservation_id: string | null;
+  created_at: string;
+}
+
+export interface ApiCreateStockRequest {
+  variant_id: string;
+  sku: string;
+  on_hand?: number;
+  reason?: string;
+}
+
+export interface ApiReceiveStockRequest {
+  quantity: number;
+  reason?: string;
+}
+
+export interface ApiAdjustStockRequest {
+  delta: number;
+  reason: string;
+}
