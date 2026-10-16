@@ -45,4 +45,11 @@ export async function requireUser(locale: Locale, next: string): Promise<{ user:
   return { user, token };
 }
 
+/** For the admin area: visitors without a session go to sign-in, signed-in customers back to the storefront. */
+export async function requireAdmin(locale: Locale, next: string): Promise<{ user: ApiUser; token: string }> {
+  const session = await requireUser(locale, next);
+  if (session.user.role !== "admin") redirect(`/${locale}`);
+  return session;
+}
+
 export type { ApiAuthResult };
