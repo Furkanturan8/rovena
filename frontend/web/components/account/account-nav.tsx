@@ -8,7 +8,7 @@ import { logoutAction } from "@/lib/auth/actions";
 import { useLocale } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-export function AccountNav() {
+export function AccountNav({ isAdmin = false }: { isAdmin?: boolean }) {
   const d = useDict();
   const locale = useLocale();
   const n = d.account.nav;
@@ -38,6 +38,14 @@ export function AccountNav() {
           </Link>
         );
       })}
+      {isAdmin && (
+        <Link
+          href="/admin"
+          className="label-caps shrink-0 border border-travertine px-4 py-3 text-[10px] text-bronze-deep transition-colors hover:text-ink lg:mt-6 lg:border-0 lg:border-l-2 lg:border-transparent lg:px-5 lg:py-3.5"
+        >
+          {n.admin}
+        </Link>
+      )}
       <form action={logoutAction} className="shrink-0 lg:mt-6">
         <input type="hidden" name="locale" value={locale} />
         <button className="label-caps border border-travertine px-4 py-3 text-[10px] text-umber hover:text-ink lg:border-0 lg:px-5">{n.logout}</button>

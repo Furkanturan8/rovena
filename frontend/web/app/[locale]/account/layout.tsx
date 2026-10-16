@@ -13,7 +13,7 @@ export default async function AccountLayout({ children, params }: LayoutProps<"/
         <h1 className="headline-xl">{d.account.welcome(user.first_name || user.email)}</h1>
       </header>
       <div className="grid gap-10 lg:grid-cols-[240px_1fr] lg:gap-16">
-        <AccountNav />
+        <AccountNav isAdmin={user.role === "admin"} />
         <div className="min-w-0">{children}</div>
       </div>
     </div>
