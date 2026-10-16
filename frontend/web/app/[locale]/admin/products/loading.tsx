@@ -1,0 +1,17 @@
+export default function AdminProductsLoading() {
+  return (
+    <div className="animate-pulse space-y-8" aria-busy="true">
+      <div className="h-7 w-40 bg-travertine" />
+      <div className="flex gap-1">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-8 w-24 bg-travertine" />
+        ))}
+      </div>
+      <div className="space-y-px border border-travertine bg-travertine">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-14 bg-canvas" />
+        ))}
+      </div>
+    </div>
+  );
+}
