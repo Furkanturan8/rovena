@@ -39,7 +39,10 @@ export default async function AdminProductsPage({ params, searchParams }: Props)
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h2 className="headline-md">{p.title}</h2>
-        <p className="text-umber">{p.total(result.total)}</p>
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-umber">{p.total(result.total)}</p>
+          <Link href="/admin/products/new" className="btn btn-primary">{p.newProduct}</Link>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

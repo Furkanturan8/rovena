@@ -1,6 +1,7 @@
 import "server-only";
 import { apiFetch } from "@/lib/api/server";
-import type { ApiAdminProduct, ApiPage, ApiProductStatus } from "@/lib/api/types";
+import type { ApiAdminProduct, ApiCategory, ApiPage, ApiProductStatus } from "@/lib/api/types";
+import type { Locale } from "@/lib/i18n/config";
 
 export interface AdminProductFilters {
   status?: ApiProductStatus;
@@ -9,6 +10,50 @@ export interface AdminProductFilters {
   sort?: "newest" | "price_asc" | "price_desc" | "name";
   page?: number;
   pageSize?: number;
+}
+
+export interface CategoryOption {
+  id: string;
+  label: string;
+}
+
+/** Categories as a flat, tree-ordered select list; children are indented with a dash prefix. */
+export async function getCategoryOptions(locale: Locale): Promise<CategoryOption[]> {
+  const all = await apiFetch<ApiCategory[]>("/categories");
+  const byParent = new Map<string | null, ApiCategory[]>();
+  for (const c of all) {
+    const list = byParent.get(c.parent_id) ?? [];
+    list.push(c);
+    byParent.set(c.parent_id, list);
+  }
+  const out: CategoryOption[] = [];
+  const walk = (parent: string | null, depth: number, seen: Set<string>) => {
+    for (const c of byParent.get(parent) ?? []) {
+      if (seen.has(c.id)) continue;
+      seen.add(c.id);
+      out.push({ id: c.id, label: `${"— ".repeat(depth)}${c.translations?.[locale]?.name || c.name}` });
+      walk(c.id, depth + 1, seen);
+    }
+  };
+  walk(null, 0, new Set());
+  return out;
+}
+
+export interface CreateProductBody {
+  name: string;
+  brand: string;
+  description: string;
+  category_id: string;
+  status: ApiProductStatus;
+  translations?: Record<string, { name?: string; description?: string }>;
+  attributes?: Record<string, string | number>;
+  images: { url: string; alt: string }[];
+  variants: { sku: string; size: string; color: string; price_cents: number }[];
+}
+
+/** Creates a product together with its images and variants in one transaction. */
+export async function createAdminProduct(token: string, body: CreateProductBody): Promise<ApiAdminProduct> {
+  return apiFetch<ApiAdminProduct>("/admin/products", { method: "POST", token, body });
 }
 
 /** One page of products of every status (draft and archived included). */

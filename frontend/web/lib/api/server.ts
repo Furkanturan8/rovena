@@ -7,6 +7,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** Field path to message; present on validation (422) errors only. */
+    public fields?: Record<string, string>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -45,7 +47,7 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
   if (res.status === 204) return undefined as T;
   const json = (await res.json().catch(() => null)) as ApiEnvelope<T> | null;
   if (!res.ok || !json?.success) {
-    throw new ApiError(res.status, json?.message ?? `Request failed (${res.status})`);
+    throw new ApiError(res.status, json?.message ?? `Request failed (${res.status})`, json?.fields);
   }
   return json.data;
 }
