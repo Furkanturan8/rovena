@@ -1,5 +1,5 @@
 import "server-only";
-import { apiFetch } from "@/lib/api/server";
+import { ApiError, apiFetch } from "@/lib/api/server";
 import type { ApiAdminProduct, ApiCategory, ApiPage, ApiProductStatus } from "@/lib/api/types";
 import type { Locale } from "@/lib/i18n/config";
 
@@ -54,6 +54,23 @@ export interface CreateProductBody {
 /** Creates a product together with its images and variants in one transaction. */
 export async function createAdminProduct(token: string, body: CreateProductBody): Promise<ApiAdminProduct> {
   return apiFetch<ApiAdminProduct>("/admin/products", { method: "POST", token, body });
+}
+
+export type UpdateProductBody = Omit<CreateProductBody, "variants">;
+
+/** One product of any status; null when it does not exist (or the id is malformed). */
+export async function getAdminProduct(token: string, id: string): Promise<ApiAdminProduct | null> {
+  try {
+    return await apiFetch<ApiAdminProduct>(`/admin/products/${encodeURIComponent(id)}`, { token });
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 400)) return null;
+    throw e;
+  }
+}
+
+/** Updates a product's fields; `images`, when sent, replace the whole list. The slug never changes. */
+export async function updateAdminProduct(token: string, id: string, body: UpdateProductBody): Promise<ApiAdminProduct> {
+  return apiFetch<ApiAdminProduct>(`/admin/products/${encodeURIComponent(id)}`, { method: "PATCH", token, body });
 }
 
 /** One page of products of every status (draft and archived included). */

@@ -92,8 +92,13 @@ export default async function AdminProductsPage({ params, searchParams }: Props)
               {result.items.map((product) => (
                 <tr key={product.id} className="border-t border-travertine align-top">
                   <td className="px-4 py-3">
-                    {product.name}
+                    <Link href={`/admin/products/${product.id}`} className="text-bronze-deep underline-offset-4 hover:underline">
+                      {product.name}
+                    </Link>
                     <span className="block font-mono text-[12px] text-umber">{product.slug}</span>
+                    <Link href={`/admin/products/${product.id}`} className="label-caps mt-1 inline-block text-[10px] text-bronze-deep">
+                      {p.edit}
+                    </Link>
                   </td>
                   <td className="px-4 py-3">{product.brand || "—"}</td>
                   <td className="px-4 py-3">{p.statuses[product.status]}</td>

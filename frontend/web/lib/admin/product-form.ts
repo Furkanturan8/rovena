@@ -85,7 +85,8 @@ export function attributeValue(raw: string): string | number {
   return /^-?\d{1,9}(\.\d{1,4})?$/.test(raw) ? Number(raw) : raw;
 }
 
-export function validateProduct(p: ProductPayload, m: ProductErrorMessages): FieldErrors {
+/** In edit mode variants are managed elsewhere, so they are not validated. */
+export function validateProduct(p: ProductPayload, m: ProductErrorMessages, mode: "create" | "edit" = "create"): FieldErrors {
   const e: FieldErrors = {};
   const name = p.name.trim();
   if (name.length < 2 || name.length > 200) e.name = m.nameInvalid;
@@ -124,5 +125,10 @@ export function validateProduct(p: ProductPayload, m: ProductErrorMessages): Fie
     if (v.color.length > 32) e[`variants[${i}].color`] = m.tooLong;
     if (!Number.isInteger(v.priceCents) || v.priceCents < 1) e[`variants[${i}].price_cents`] = m.priceInvalid;
   });
+  if (mode === "edit") {
+    for (const key of Object.keys(e)) {
+      if (key === "variants" || key.startsWith("variants[")) delete e[key];
+    }
+  }
   return e;
 }
