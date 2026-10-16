@@ -42,6 +42,8 @@ interface Props {
   initial?: Partial<ProductFormValues>;
   /** Extra hidden fields posted with the form (e.g. the product id in edit mode). */
   hidden?: Record<string, string>;
+  /** Edit mode: shown read-only, the slug cannot be changed. */
+  slug?: string;
   cancelHref: string;
 }
 
@@ -70,7 +72,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 const iconBtn = "label-caps border border-travertine px-2 py-1 text-[10px] text-umber transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-umber";
 
-export function ProductForm({ action, categories, mode = "create", initial, hidden, cancelHref }: Props) {
+export function ProductForm({ action, categories, mode = "create", initial, hidden, slug, cancelHref }: Props) {
   const f = useDict().admin.productForm;
   const locale = useLocale();
   const [state, run, pending] = useActionState(action, idle);
@@ -136,7 +138,7 @@ export function ProductForm({ action, categories, mode = "create", initial, hidd
         priceCents: tlToCents(v.price) ?? 0,
       })),
     };
-    const found = validateProduct(payload, f.errors);
+    const found = validateProduct(payload, f.errors, mode);
     if (Object.keys(found).length > 0) {
       setClientErrors(found);
       return;
@@ -162,11 +164,20 @@ export function ProductForm({ action, categories, mode = "create", initial, hidd
             </ul>
           ) : null}
         </div>
+      ) : state.status === "success" && !pending && !clientErrors ? (
+        <div role="status" className="border border-travertine bg-paper p-4 text-[14px] text-ink">{f.messages.saved}</div>
       ) : null}
 
       <section className="space-y-4 border border-travertine bg-paper p-6">
         <h3 className="label-caps text-[10px] text-umber">{f.sections.basics}</h3>
         <div className="grid gap-4 md:grid-cols-2">
+          {mode === "edit" && slug ? (
+            <div className="md:col-span-2">
+              <label className="field-label" htmlFor="pf-slug">{f.slug}</label>
+              <input id="pf-slug" value={slug} readOnly aria-describedby="pf-slug-hint" className="field font-mono text-umber" />
+              <p id="pf-slug-hint" className="mt-1 text-[12px] text-umber">{f.slugHint}</p>
+            </div>
+          ) : null}
           <div>
             <label className="field-label" htmlFor="pf-name">{f.name}</label>
             <input id="pf-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} required aria-invalid={!!err("name")} aria-describedby={err("name") ? "pf-name-err" : undefined} className="field" />
@@ -337,7 +348,7 @@ export function ProductForm({ action, categories, mode = "create", initial, hidd
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={pending} className="btn btn-primary">{pending ? f.submitting : f.submit}</button>
+        <button type="submit" disabled={pending} className="btn btn-primary">{pending ? (mode === "edit" ? f.saving : f.submitting) : mode === "edit" ? f.save : f.submit}</button>
         <Link href={cancelHref} className="btn btn-secondary">{f.cancel}</Link>
       </div>
     </form>

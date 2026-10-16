@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api/server";
 import { requireAdmin } from "@/lib/auth/session";
-import { createAdminProduct, type CreateProductBody } from "@/lib/data/admin-products";
+import { createAdminProduct, updateAdminProduct, type CreateProductBody, type UpdateProductBody } from "@/lib/data/admin-products";
 import { defaultLocale, isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import { attributeValue, PRODUCT_STATUSES, validateProduct, type FieldErrors, type ProductPayload } from "./product-form";
+import { attributeValue, isUuid, PRODUCT_STATUSES, validateProduct, type FieldErrors, type ProductPayload } from "./product-form";
 
 /** `fields` carries the API's per-field validation messages (path -> message). */
-export type AdminProductActionState = { status: "idle" } | { status: "error"; message: string; fields?: FieldErrors };
+export type AdminProductActionState = { status: "idle" } | { status: "success" } | { status: "error"; message: string; fields?: FieldErrors };
 
 function str(form: FormData, key: string): string {
   const v = form.get(key);
@@ -76,6 +76,84 @@ function toBody(p: ProductPayload): CreateProductBody {
     images: p.images,
     variants: p.variants.map((v) => ({ sku: v.sku.toUpperCase(), size: v.size, color: v.color, price_cents: v.priceCents })),
   };
+}
+
+/** Parses a JSON object posted in a hidden field; empty when absent or malformed. */
+function parseObject(raw: string): Record<string, unknown> {
+  try {
+    const v: unknown = JSON.parse(raw);
+    return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Builds the PATCH body. Attributes and translations the form cannot edit (lists, extra
+ * languages and fields) arrive as hidden JSON and are carried over so a save never drops them.
+ */
+function toUpdateBody(p: ProductPayload, extraAttributes: Record<string, unknown>, extraTranslations: Record<string, unknown>): UpdateProductBody {
+  const base = toBody(p);
+  const translations = extraTranslations as NonNullable<UpdateProductBody["translations"]>;
+  const en: { name?: string; description?: string } = { ...(translations.en ?? {}) };
+  delete en.name;
+  delete en.description;
+  if (p.enName) en.name = p.enName;
+  if (p.enDescription) en.description = p.enDescription;
+  const merged = { ...translations };
+  if (Object.keys(en).length > 0) merged.en = en;
+  else delete merged.en;
+  return {
+    name: base.name,
+    brand: base.brand,
+    description: base.description,
+    category_id: base.category_id,
+    status: base.status,
+    translations: merged,
+    attributes: { ...extraAttributes, ...base.attributes } as Record<string, string | number>,
+    images: base.images,
+  };
+}
+
+/**
+ * Saves the editable fields of a product (PATCH). The slug and variants are never sent; images are always
+ * sent in full because the API replaces the whole list. Re-checks the admin role: server actions are public.
+ */
+export async function updateProduct(_prev: AdminProductActionState, form: FormData): Promise<AdminProductActionState> {
+  const rawLocale = str(form, "locale");
+  const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+  const id = str(form, "id");
+  const { token } = await requireAdmin(locale, `/${locale}/admin/products/${id}`);
+  const m = (await getDictionary(locale)).admin.productForm;
+
+  if (!isUuid(id)) return { status: "error", message: m.messages.notFound };
+  const payload = parsePayload(str(form, "payload"));
+  if (!payload) return { status: "error", message: m.messages.generic };
+  const fields = validateProduct(payload, m.errors, "edit");
+  if (Object.keys(fields).length > 0) return { status: "error", message: m.messages.fixFields, fields };
+
+  const body = toUpdateBody(payload, parseObject(str(form, "extraAttributes")), parseObject(str(form, "extraTranslations")));
+  try {
+    await updateAdminProduct(token, id, body);
+  } catch (e) {
+    if (e instanceof ApiError) {
+      if (e.status === 422 && e.fields && Object.keys(e.fields).length > 0) {
+        return { status: "error", message: m.messages.fixFields, fields: e.fields };
+      }
+      if (e.status === 404) {
+        // Either the product or the chosen category is gone; the message tells which.
+        return /categor/i.test(e.message)
+          ? { status: "error", message: m.messages.categoryNotFound, fields: { category_id: m.messages.categoryNotFound } }
+          : { status: "error", message: m.messages.notFound };
+      }
+      if (e.status === 409) return { status: "error", message: m.messages.conflict };
+    }
+    return { status: "error", message: m.messages.generic };
+  }
+  revalidatePath(`/${locale}/admin/products`);
+  revalidatePath(`/${locale}/admin/products/${id}`);
+  revalidatePath(`/${locale}/admin`);
+  return { status: "success" };
 }
 
 /**
