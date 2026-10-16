@@ -11,6 +11,7 @@ import { CartDrawer } from "@/components/cart/cart-drawer";
 import { AnnouncementBar } from "@/components/layout/announcement-bar";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { StoreShell } from "@/components/layout/store-shell";
 import { getCategoriesSafe } from "@/lib/data/catalog";
 
 const playfair = Playfair_Display({
@@ -51,11 +52,15 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
         <I18nProvider locale={locale}>
           <MotionProvider>
             <StoreProvider>
-              <AnnouncementBar messages={d.announcement} />
-              <Header categories={categories} />
-              <main className="flex-1">{children}</main>
-              <Footer d={d} categories={categories} />
-              <CartDrawer />
+              <StoreShell
+                locale={locale}
+                announcement={<AnnouncementBar messages={d.announcement} />}
+                header={<Header categories={categories} />}
+                footer={<Footer d={d} categories={categories} />}
+                cartDrawer={<CartDrawer />}
+              >
+                {children}
+              </StoreShell>
             </StoreProvider>
           </MotionProvider>
         </I18nProvider>
