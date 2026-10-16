@@ -8,7 +8,7 @@ import { getI18n } from "@/lib/i18n/server";
 
 const LOW_STOCK_BELOW = 5;
 
-export default async function AdminOverview({ params }: PageProps<"/[locale]/admin">) {
+export default async function AdminOverview({ params }: { params: Promise<{ locale: string }> }) {
   const { locale, d } = await getI18n(params);
   const { token } = await requireAdmin(locale, `/${locale}/admin`);
   const o = d.admin.overview;

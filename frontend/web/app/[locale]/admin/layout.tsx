@@ -3,12 +3,14 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { requireAdmin } from "@/lib/auth/session";
 import { getI18n } from "@/lib/i18n/server";
 
-export async function generateMetadata({ params }: LayoutProps<"/[locale]/admin">): Promise<Metadata> {
+type AdminLayoutProps = { children: React.ReactNode; params: Promise<{ locale: string }> };
+
+export async function generateMetadata({ params }: Pick<AdminLayoutProps, "params">): Promise<Metadata> {
   const { d } = await getI18n(params);
   return { title: d.admin.metaTitle, robots: { index: false, follow: false } };
 }
 
-export default async function AdminLayout({ children, params }: LayoutProps<"/[locale]/admin">) {
+export default async function AdminLayout({ children, params }: AdminLayoutProps) {
   const { locale, d } = await getI18n(params);
   await requireAdmin(locale, `/${locale}/admin`);
   return (
