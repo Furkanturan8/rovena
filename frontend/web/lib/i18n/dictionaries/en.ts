@@ -580,6 +580,33 @@ export const en: Dictionary = {
     },
   },
 
+  admin: {
+    metaTitle: "Admin",
+    eyebrow: "Admin Panel",
+    title: "Administration",
+    nav: {
+      label: "Admin menu",
+      overview: "Overview",
+      orders: "Orders",
+      products: "Products",
+      stock: "Stock",
+      users: "Users",
+      backToStore: "Back to store",
+    },
+    overview: {
+      subtitle: "The store at a glance.",
+      orders: "Total orders",
+      products: "Products",
+      lowStock: "Low stock",
+      users: "Users",
+      lowStockHint: (n: number) => `Fewer than ${n} left`,
+      empty: "No data yet.",
+      errorTitle: "Could not load the overview",
+      errorText: "The admin data could not be reached. Please try again.",
+      retry: "Try again",
+    },
+  },
+
   account: {
     layoutTitle: "My Account",
     memberSince: (tier: string, year: string) => `${tier} · since ${year}`,

@@ -29,7 +29,7 @@ async function renewTokens(refreshToken: string): Promise<TokenCookies | null> {
   }
 }
 
-const PROTECTED = /^\/(account|checkout|order-confirmation)(\/|$)/;
+const PROTECTED = /^\/(account|checkout|order-confirmation|admin)(\/|$)/;
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

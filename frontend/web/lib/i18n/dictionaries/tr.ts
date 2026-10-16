@@ -581,6 +581,33 @@ export const tr = {
     },
   },
 
+  admin: {
+    metaTitle: "Yönetim",
+    eyebrow: "Yönetim Paneli",
+    title: "Yönetim",
+    nav: {
+      label: "Yönetim menüsü",
+      overview: "Özet",
+      orders: "Siparişler",
+      products: "Ürünler",
+      stock: "Stok",
+      users: "Kullanıcılar",
+      backToStore: "Mağazaya dön",
+    },
+    overview: {
+      subtitle: "Mağazanın anlık durumu.",
+      orders: "Toplam sipariş",
+      products: "Ürünler",
+      lowStock: "Azalan stok",
+      users: "Kullanıcılar",
+      lowStockHint: (n: number) => `${n} adetten az kalanlar`,
+      empty: "Henüz veri yok.",
+      errorTitle: "Özet yüklenemedi",
+      errorText: "Yönetim verilerine ulaşılamadı. Lütfen tekrar deneyin.",
+      retry: "Tekrar dene",
+    },
+  },
+
   account: {
     layoutTitle: "Hesabım",
     memberSince: (tier: string, year: string) => `${tier} · ${year}'den beri`,
