@@ -46,7 +46,8 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
       body: { email: String(formData.get("email") ?? "").trim(), password: String(formData.get("password") ?? "") },
     });
     await setSession(res.tokens);
-    destination = safeNext(formData.get("next"), `/${locale}/account`);
+    const home = res.user.role === "admin" ? `/${locale}/admin` : `/${locale}/account`;
+    destination = safeNext(formData.get("next"), home);
   } catch (e) {
     return { error: await errorText(e, locale, "login") };
   }
