@@ -1,6 +1,6 @@
 import "server-only";
 import { ApiError, apiFetch } from "@/lib/api/server";
-import type { ApiAdminProduct, ApiCategory, ApiPage, ApiProductStatus } from "@/lib/api/types";
+import type { ApiAdminProduct, ApiCategory, ApiPage, ApiProductStatus, ApiVariant } from "@/lib/api/types";
 import type { Locale } from "@/lib/i18n/config";
 
 export interface AdminProductFilters {
@@ -71,6 +71,30 @@ export async function getAdminProduct(token: string, id: string): Promise<ApiAdm
 /** Updates a product's fields; `images`, when sent, replace the whole list. The slug never changes. */
 export async function updateAdminProduct(token: string, id: string, body: UpdateProductBody): Promise<ApiAdminProduct> {
   return apiFetch<ApiAdminProduct>(`/admin/products/${encodeURIComponent(id)}`, { method: "PATCH", token, body });
+}
+
+export interface CreateVariantBody {
+  sku: string;
+  size: string;
+  color: string;
+  price_cents: number;
+}
+
+export interface UpdateVariantBody {
+  size?: string;
+  color?: string;
+  price_cents?: number;
+  active?: boolean;
+}
+
+/** Adds a variant to an existing product. */
+export async function createAdminVariant(token: string, productId: string, body: CreateVariantBody): Promise<ApiVariant> {
+  return apiFetch<ApiVariant>(`/admin/products/${encodeURIComponent(productId)}/variants`, { method: "POST", token, body });
+}
+
+/** Updates size, color, price or the active flag of a variant. The SKU never changes. */
+export async function updateAdminVariant(token: string, productId: string, variantId: string, body: UpdateVariantBody): Promise<ApiVariant> {
+  return apiFetch<ApiVariant>(`/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`, { method: "PATCH", token, body });
 }
 
 /** One page of products of every status (draft and archived included). */

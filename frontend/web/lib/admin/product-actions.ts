@@ -4,10 +4,17 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ApiError } from "@/lib/api/server";
 import { requireAdmin } from "@/lib/auth/session";
-import { createAdminProduct, updateAdminProduct, type CreateProductBody, type UpdateProductBody } from "@/lib/data/admin-products";
+import {
+  createAdminProduct,
+  createAdminVariant,
+  updateAdminProduct,
+  updateAdminVariant,
+  type CreateProductBody,
+  type UpdateProductBody,
+} from "@/lib/data/admin-products";
 import { defaultLocale, isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/get-dictionary";
-import { attributeValue, isUuid, PRODUCT_STATUSES, validateProduct, type FieldErrors, type ProductPayload } from "./product-form";
+import { attributeValue, isUuid, isValidSku, PRODUCT_STATUSES, tlToCents, validateProduct, type FieldErrors, type ProductPayload } from "./product-form";
 
 /** `fields` carries the API's per-field validation messages (path -> message). */
 export type AdminProductActionState = { status: "idle" } | { status: "success" } | { status: "error"; message: string; fields?: FieldErrors };
@@ -153,6 +160,104 @@ export async function updateProduct(_prev: AdminProductActionState, form: FormDa
   revalidatePath(`/${locale}/admin/products`);
   revalidatePath(`/${locale}/admin/products/${id}`);
   revalidatePath(`/${locale}/admin`);
+  return { status: "success" };
+}
+
+/** Result of a variant add/edit/toggle; `fields` uses the API's paths (sku, size, color, price_cents). */
+export type AdminVariantActionState =
+  | { status: "idle" }
+  | { status: "success" }
+  | { status: "error"; message: string; fields?: FieldErrors };
+
+type VariantMessages = Awaited<ReturnType<typeof getDictionary>>["admin"]["productForm"]["variantAdmin"]["messages"];
+
+function variantFailure(e: unknown, m: VariantMessages, hasSku: boolean): AdminVariantActionState {
+  if (e instanceof ApiError) {
+    if (e.status === 422 && e.fields && Object.keys(e.fields).length > 0) {
+      return { status: "error", message: m.fixFields, fields: e.fields };
+    }
+    if (e.status === 409) {
+      if (hasSku && /sku/i.test(e.message)) return { status: "error", message: m.fixFields, fields: { sku: m.skuTaken } };
+      return { status: "error", message: m.conflict };
+    }
+    if (e.status === 404) return { status: "error", message: m.notFound };
+  }
+  return { status: "error", message: m.generic };
+}
+
+function revalidateProduct(locale: string, id: string) {
+  revalidatePath(`/${locale}/admin/products`);
+  revalidatePath(`/${locale}/admin/products/${id}`);
+  revalidatePath(`/${locale}/admin/stock`);
+  revalidatePath(`/${locale}/admin`);
+}
+
+/** Adds a variant (SKU, size, color, price in TL) to an existing product. Re-checks the admin role: server actions are public. */
+export async function createVariant(_prev: AdminVariantActionState, form: FormData): Promise<AdminVariantActionState> {
+  const rawLocale = str(form, "locale");
+  const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+  const productId = str(form, "productId");
+  const { token } = await requireAdmin(locale, `/${locale}/admin/products/${productId}`);
+  const d = (await getDictionary(locale)).admin.productForm;
+  const m = d.variantAdmin.messages;
+
+  if (!isUuid(productId)) return { status: "error", message: m.notFound };
+  const sku = str(form, "sku").toUpperCase();
+  const size = str(form, "size");
+  const color = str(form, "color");
+  const cents = tlToCents(str(form, "price"));
+  const fields: FieldErrors = {};
+  if (!isValidSku(sku)) fields.sku = d.errors.skuInvalid;
+  if (size.length > 32) fields.size = d.errors.tooLong;
+  if (color.length > 32) fields.color = d.errors.tooLong;
+  if (cents === null) fields.price_cents = d.errors.priceInvalid;
+  if (Object.keys(fields).length > 0 || cents === null) return { status: "error", message: m.fixFields, fields };
+
+  try {
+    await createAdminVariant(token, productId, { sku, size, color, price_cents: cents });
+  } catch (e) {
+    return variantFailure(e, m, true);
+  }
+  revalidateProduct(locale, productId);
+  return { status: "success" };
+}
+
+/**
+ * Edits size, color and price of a variant, or flips its active flag (`intent=toggle`).
+ * The SKU is never sent. Re-checks the admin role on every call.
+ */
+export async function updateVariant(_prev: AdminVariantActionState, form: FormData): Promise<AdminVariantActionState> {
+  const rawLocale = str(form, "locale");
+  const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+  const productId = str(form, "productId");
+  const variantId = str(form, "variantId");
+  const { token } = await requireAdmin(locale, `/${locale}/admin/products/${productId}`);
+  const d = (await getDictionary(locale)).admin.productForm;
+  const m = d.variantAdmin.messages;
+
+  if (!isUuid(productId) || !isUuid(variantId)) return { status: "error", message: m.notFound };
+
+  let body: { size?: string; color?: string; price_cents?: number; active?: boolean };
+  if (str(form, "intent") === "toggle") {
+    body = { active: str(form, "active") === "true" };
+  } else {
+    const size = str(form, "size");
+    const color = str(form, "color");
+    const cents = tlToCents(str(form, "price"));
+    const fields: FieldErrors = {};
+    if (size.length > 32) fields.size = d.errors.tooLong;
+    if (color.length > 32) fields.color = d.errors.tooLong;
+    if (cents === null) fields.price_cents = d.errors.priceInvalid;
+    if (Object.keys(fields).length > 0 || cents === null) return { status: "error", message: m.fixFields, fields };
+    body = { size, color, price_cents: cents };
+  }
+
+  try {
+    await updateAdminVariant(token, productId, variantId, body);
+  } catch (e) {
+    return variantFailure(e, m, false);
+  }
+  revalidateProduct(locale, productId);
   return { status: "success" };
 }
 

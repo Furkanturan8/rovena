@@ -40,6 +40,10 @@ export type FieldErrors = Record<string, string>;
 const SKU_PATTERN = /^[A-Za-z0-9_-]{2,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function isValidSku(sku: string): boolean {
+  return SKU_PATTERN.test(sku);
+}
+
 export function isUuid(v: string): boolean {
   return UUID_PATTERN.test(v);
 }

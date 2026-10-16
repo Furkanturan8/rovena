@@ -1,4 +1,5 @@
 import { ProductForm, type ProductFormValues } from "@/components/admin/product-form";
+import { VariantManager } from "@/components/admin/variant-manager";
 import { Link } from "@/components/ui/link";
 import { updateProduct } from "@/lib/admin/product-actions";
 import { requireAdmin } from "@/lib/auth/session";
@@ -68,6 +69,7 @@ export default async function AdminEditProductPage({ params }: Props) {
         }}
         cancelHref="/admin/products"
       />
+      <VariantManager productId={product.id} variants={product.variants ?? []} />
     </div>
   );
 }
