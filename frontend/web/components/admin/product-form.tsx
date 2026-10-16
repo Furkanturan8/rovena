@@ -74,7 +74,8 @@ export function ProductForm({ action, categories, mode = "create", initial, hidd
   const f = useDict().admin.productForm;
   const locale = useLocale();
   const [state, run, pending] = useActionState(action, idle);
-  const nextId = useRef(1);
+  // Initial rows get their index as id; rows added later count up from 1000 (event handlers only).
+  const nextId = useRef(1000);
   const newId = () => nextId.current++;
 
   const [name, setName] = useState(initial?.name ?? "");
@@ -84,12 +85,12 @@ export function ProductForm({ action, categories, mode = "create", initial, hidd
   const [status, setStatus] = useState<ApiProductStatus>(initial?.status ?? "draft");
   const [enName, setEnName] = useState(initial?.enName ?? "");
   const [enDescription, setEnDescription] = useState(initial?.enDescription ?? "");
-  const [attributes, setAttributes] = useState<AttrRow[]>(() => (initial?.attributes ?? []).map((a) => ({ ...a, id: newId() })));
-  const [images, setImages] = useState<ImageRow[]>(() => (initial?.images ?? []).map((i) => ({ ...i, id: newId() })));
+  const [attributes, setAttributes] = useState<AttrRow[]>(() => (initial?.attributes ?? []).map((a, i) => ({ ...a, id: i })));
+  const [images, setImages] = useState<ImageRow[]>(() => (initial?.images ?? []).map((img, i) => ({ ...img, id: i })));
   const [variants, setVariants] = useState<VariantRow[]>(() =>
     mode === "create"
-      ? (initial?.variants ?? [{ sku: "", size: "", color: "", priceCents: 0 }]).map((v) => ({
-          id: newId(),
+      ? (initial?.variants ?? [{ sku: "", size: "", color: "", priceCents: 0 }]).map((v, i) => ({
+          id: i,
           sku: v.sku,
           size: v.size,
           color: v.color,
