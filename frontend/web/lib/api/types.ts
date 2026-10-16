@@ -4,6 +4,7 @@ export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
   message?: string;
+  fields?: Record<string, string>;
 }
 
 export interface ApiPage<T> {
