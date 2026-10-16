@@ -786,6 +786,7 @@ export const en: Dictionary = {
       addresses: "My Addresses",
       profile: "Account Details",
       logout: "Sign Out",
+      admin: "Admin",
       label: "Account",
     },
     overview: {

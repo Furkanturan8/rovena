@@ -787,6 +787,7 @@ export const tr = {
       addresses: "Adreslerim",
       profile: "Hesap Bilgileri",
       logout: "Çıkış Yap",
+      admin: "Yönetim",
       label: "Hesap",
     },
     overview: {
