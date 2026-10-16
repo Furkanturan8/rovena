@@ -83,7 +83,8 @@ export async function logoutAction(formData: FormData) {
     await apiFetch("/auth/logout", { method: "POST", body: { refresh_token: refresh } }).catch(() => undefined);
   }
   await clearSession();
-  redirect(`/${locale}`);
+  // Admin sign-out sends the admin back to the login page; everyone else lands on the storefront.
+  redirect(formData.get("to") === "login" ? `/${locale}/login` : `/${locale}`);
 }
 
 export async function updateProfileAction(_prev: FormState, formData: FormData): Promise<FormState> {
