@@ -582,8 +582,12 @@ export const en: Dictionary = {
 
   admin: {
     metaTitle: "Admin",
-    eyebrow: "Admin Panel",
     title: "Administration",
+    menu: {
+      account: "Account",
+      myAccount: "My account",
+      logout: "Sign Out",
+    },
     nav: {
       label: "Admin menu",
       overview: "Overview",
@@ -591,7 +595,6 @@ export const en: Dictionary = {
       products: "Products",
       stock: "Stock",
       users: "Users",
-      backToStore: "Back to store",
     },
     overview: {
       subtitle: "The store at a glance.",
