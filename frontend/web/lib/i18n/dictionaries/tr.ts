@@ -583,8 +583,12 @@ export const tr = {
 
   admin: {
     metaTitle: "Yönetim",
-    eyebrow: "Yönetim Paneli",
     title: "Yönetim",
+    menu: {
+      account: "Hesap",
+      myAccount: "Hesabım",
+      logout: "Çıkış Yap",
+    },
     nav: {
       label: "Yönetim menüsü",
       overview: "Özet",
@@ -592,7 +596,6 @@ export const tr = {
       products: "Ürünler",
       stock: "Stok",
       users: "Kullanıcılar",
-      backToStore: "Mağazaya dön",
     },
     overview: {
       subtitle: "Mağazanın anlık durumu.",

@@ -34,9 +34,6 @@ export function AdminNav() {
           </Link>
         );
       })}
-      <Link href="/" className="label-caps shrink-0 border border-travertine px-4 py-3 text-[10px] text-umber hover:text-ink lg:mt-6 lg:border-0 lg:px-5">
-        {n.backToStore}
-      </Link>
     </nav>
   );
 }
