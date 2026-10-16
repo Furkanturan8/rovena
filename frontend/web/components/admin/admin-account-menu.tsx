@@ -50,6 +50,7 @@ export function AdminAccountMenu() {
           </Link>
           <form action={logoutAction}>
             <input type="hidden" name="locale" value={locale} />
+            <input type="hidden" name="to" value="login" />
             <button role="menuitem" className="label-caps block w-full px-4 py-3 text-left text-[10px] text-umber transition-colors hover:text-ink">
               {m.logout}
             </button>
